@@ -24,6 +24,7 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
         concentration = _assess_concentration(items, clusters, rule)
         reproduction = _assess_reproduction(items, clusters, rule, habitat_assessment)
         transit_assessment = _assess_transit(species, items, clusters, rule, habitat_assessment)
+        recommendation = _build_recommendation(concentration, habitat_assessment, transit_assessment, reproduction)
         summary = _render_species_summary(
             species,
             items,
@@ -32,6 +33,7 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
             habitat_assessment,
             transit_assessment,
             reproduction,
+            recommendation,
             rule,
         )
         species_results.append(
@@ -43,6 +45,7 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
                 habitat_assessment=habitat_assessment,
                 reproduction_assessment=reproduction,
                 concentration_assessment=concentration,
+                recommendation=recommendation,
                 text_summary=summary,
             )
         )
@@ -131,6 +134,7 @@ def _render_species_summary(
     habitat: str,
     transit: str,
     reproduction: str,
+    recommendation: str,
     rule: SpeciesRule | None,
 ) -> str:
     parts = [
@@ -139,6 +143,7 @@ def _render_species_summary(
         f"Habitatbewertung: {habitat}.",
         f"Transitbewertung: {transit}.",
         f"Brut-/Reproduktionsbewertung: {reproduction}.",
+        f"Empfehlung: {recommendation}.",
     ]
     if rule and rule.notes:
         parts.append(rule.notes)
@@ -253,3 +258,15 @@ def _build_final_conclusion(species_results: list[SpeciesAnalysis], executive_su
         parts.append(f"Für die Fledermausarten {', '.join(relevant_transit)} ist die Transitbewertung zu berücksichtigen.")
     parts.append("Die Ergebnisse sollten fachlich gegengeprüft und bei Bedarf kartografisch ergänzt werden.")
     return " ".join(parts)
+
+
+def _build_recommendation(concentration: str, habitat_assessment: str, transit_assessment: str, reproduction: str) -> str:
+    if "Brutverdacht plausibel" in reproduction or "Brutverdacht möglich" in reproduction:
+        return "fachliche Vertiefung und kartografische Nachprüfung empfohlen"
+    if transit_assessment.startswith("Transit"):
+        return "Leitstrukturen und Transitkorridore kartografisch prüfen"
+    if "Konzentrationszone" in concentration or "Konzentrationsbereich" in concentration:
+        return "räumliche Konzentration kartografisch nachprüfen"
+    if "eher unplausibel" in habitat_assessment:
+        return "fachliche Plausibilisierung des Habitats empfohlen"
+    return "derzeit keine vertiefte Maßnahme erforderlich"

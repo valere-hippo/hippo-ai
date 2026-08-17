@@ -48,6 +48,7 @@ class ExporterTests(unittest.TestCase):
                     habitat_assessment="habitatlich plausibel für Amsel",
                     reproduction_assessment="vorläufig zu prüfen",
                     concentration_assessment="Verdacht auf Konzentrationszone",
+                    recommendation="räumliche Konzentration kartografisch nachprüfen",
                     text_summary="Art Amsel: 3 Nachweise im Untersuchungsgebiet.",
                 )
             ],
@@ -67,6 +68,7 @@ class ExporterTests(unittest.TestCase):
                 self.assertIn("Amsel", document_xml)
                 self.assertIn("<w:tbl>", document_xml)
                 self.assertIn("Brut", document_xml)
+                self.assertIn("Empfehlung", document_xml)
                 self.assertIn("headerReference", document_xml)
                 self.assertIn("footerReference", document_xml)
                 self.assertIn("fldCharType=\"begin\"", document_xml)

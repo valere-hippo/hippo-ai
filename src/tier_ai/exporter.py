@@ -293,8 +293,8 @@ def _toc_field_paragraph() -> str:
 
 
 def _species_overview_table_xml(species_results: list[SpeciesAnalysis]) -> str:
-    widths = [2400, 1200, 1200, 2200, 2000]
-    headers = ["Art", "Nachweise", "Cluster", "Brut", "Transit"]
+    widths = [2200, 1050, 1050, 1950, 1650, 2200]
+    headers = ["Art", "Nachweise", "Cluster", "Brut", "Transit", "Empfehlung"]
     rows = [
         headers,
         *[
@@ -304,6 +304,7 @@ def _species_overview_table_xml(species_results: list[SpeciesAnalysis]) -> str:
                 str(len(species_result.clusters)),
                 species_result.reproduction_assessment,
                 species_result.transit_assessment,
+                species_result.recommendation,
             ]
             for species_result in species_results
         ],

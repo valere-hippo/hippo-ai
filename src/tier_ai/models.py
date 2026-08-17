@@ -48,6 +48,7 @@ class SpeciesAnalysis:
     habitat_assessment: str = "unbewertet"
     reproduction_assessment: str = "unbewertet"
     concentration_assessment: str = "unbewertet"
+    recommendation: str = "nicht bewertet"
     text_summary: str = ""
 
 

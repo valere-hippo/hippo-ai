@@ -30,6 +30,7 @@ def test_render_report_contains_species():
                 habitat_assessment="habitatlich plausibel für Amsel",
                 reproduction_assessment="vorläufig zu prüfen",
                 concentration_assessment="Verdacht auf Konzentrationszone",
+                recommendation="räumliche Konzentration kartografisch nachprüfen",
                 text_summary="Art Amsel: 3 Nachweise im Untersuchungsgebiet.",
             )
         ],
@@ -47,5 +48,6 @@ def test_render_report_contains_species():
     assert "Verdacht auf Konzentrationszone" in report
     assert "Habitat" in report
     assert "Transit" in report
+    assert "Empfehlung" in report
     assert "Metadaten" in report
     assert "Validierung" in report
