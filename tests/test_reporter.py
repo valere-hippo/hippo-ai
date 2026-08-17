@@ -5,6 +5,7 @@ from tier_ai.reporter import render_report
 def test_render_report_contains_species():
     result = AnalysisResult(
         source_path="input.gpkg",
+        executive_summary="Im Datensatz wurden 3 Nachweise aus 1 Arten erfasst.",
         metadata=InputMetadata(
             source_name="input.gpkg",
             file_size_bytes=1024,
@@ -38,6 +39,7 @@ def test_render_report_contains_species():
 
     assert "Amsel" in report
     assert "input.gpkg" in report
+    assert "Zusammenfassung" in report
     assert "Verdacht auf Konzentrationszone" in report
     assert "Habitat" in report
     assert "Transit" in report

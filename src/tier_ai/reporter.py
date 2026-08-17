@@ -9,6 +9,11 @@ def render_report(result: AnalysisResult) -> str:
     lines.append(f"Quelle: {result.source_path}")
     lines.append("")
 
+    if result.executive_summary:
+        lines.append("## Zusammenfassung")
+        lines.append(result.executive_summary)
+        lines.append("")
+
     if result.metadata is not None:
         lines.append("## Metadaten")
         lines.append(f"Datei: {result.metadata.source_name}")

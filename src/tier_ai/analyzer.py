@@ -47,7 +47,8 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
             )
         )
 
-    return AnalysisResult(source_path=source_path, species_results=species_results)
+    executive_summary = _build_executive_summary(species_results)
+    return AnalysisResult(source_path=source_path, species_results=species_results, executive_summary=executive_summary)
 
 
 def _build_clusters(items: list[Observation], config: AnalyzerConfig) -> list[ClusterSummary]:
@@ -205,3 +206,25 @@ def _assess_transit(species: str, items: list[Observation], clusters: list[Clust
         return f"Transitdaten für {rule.species} vorhanden, aber noch nicht eindeutig"
 
     return f"kein belastbarer Transitnachweis für {rule.species}"
+
+
+def _build_executive_summary(species_results: list[SpeciesAnalysis]) -> str:
+    if not species_results:
+        return "Keine auswertbaren Nachweise im Untersuchungsgebiet."
+
+    total_observations = sum(result.total_observations for result in species_results)
+    species_count = len(species_results)
+    clustered_species = sum(1 for result in species_results if result.clusters)
+    breeding_species = sum(1 for result in species_results if "Brutverdacht" in result.reproduction_assessment)
+    bat_species = sum(1 for result in species_results if result.transit_assessment != "für Vogelarten nicht relevant")
+
+    parts = [
+        f"Im Datensatz wurden {total_observations} Nachweise aus {species_count} Arten erfasst.",
+        f"Für {clustered_species} Arten wurden räumliche Konzentrationsbereiche erkannt.",
+    ]
+    if breeding_species:
+        parts.append(f"Bei {breeding_species} Arten ergibt sich ein fachlich relevanter Brutverdacht.")
+    if bat_species:
+        parts.append(f"Für {bat_species} taxonomische Einheiten wurde eine Transitbewertung vorgenommen.")
+
+    return " ".join(parts)
