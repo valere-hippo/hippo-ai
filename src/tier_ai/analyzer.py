@@ -19,7 +19,7 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
     species_results: list[SpeciesAnalysis] = []
     for species, items in sorted(grouped.items(), key=lambda pair: pair[0].lower()):
         rule = get_rule(species)
-        taxon_group = rule.taxon_group if rule else "bird"
+        taxon_group = _resolve_taxon_group(species, rule)
         clusters = _build_clusters(items, config, species, taxon_group)
         habitat_assessment = _assess_habitat(species, items, rule)
         concentration = _assess_concentration(items, clusters, rule)
@@ -49,6 +49,7 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
             SpeciesAnalysis(
                 species=species,
                 total_observations=len(items),
+                display_name=_display_species_name(species),
                 taxon_group=taxon_group,
                 clusters=clusters,
                 transit_assessment=transit_assessment,
@@ -152,8 +153,9 @@ def _render_species_summary(
     priority: str,
     rule: SpeciesRule | None,
 ) -> str:
+    species_label = _display_species_name(species)
     parts = [
-        f"Art {species}: {len(items)} Nachweise im Untersuchungsgebiet.",
+        f"{species_label}: {len(items)} Nachweise im Untersuchungsgebiet.",
         f"Bewertung der Verteilung: {concentration}.",
         f"Habitatbewertung: {habitat}.",
         f"Transitbewertung: {transit}.",
@@ -244,9 +246,11 @@ def _build_executive_summary(species_results: list[SpeciesAnalysis]) -> str:
     clustered_species = sum(1 for result in species_results if result.clusters)
     breeding_species = sum(1 for result in species_results if "Brutverdacht" in result.reproduction_assessment)
     bat_species = sum(1 for result in species_results if result.transit_assessment != "für Vogelarten nicht relevant")
+    unclassified_observations = sum(result.total_observations for result in species_results if _is_unclassified_species(result.species))
+    unclassified_species = sum(1 for result in species_results if _is_unclassified_species(result.species))
 
     parts = [
-        f"Im Datensatz wurden {total_observations} Nachweise aus {species_count} Arten erfasst.",
+        _format_executive_summary(total_observations, species_count, unclassified_observations, unclassified_species),
         f"Für {clustered_species} Arten wurden räumliche Konzentrationsbereiche erkannt.",
     ]
     if breeding_species:
@@ -261,16 +265,19 @@ def _build_final_conclusion(species_results: list[SpeciesAnalysis], executive_su
     if not species_results:
         return "Mangels auswertbarer Nachweise kann keine fachliche Schlussbewertung abgeleitet werden."
 
-    relevant_breeding = [result.species for result in species_results if "Brutverdacht" in result.reproduction_assessment]
-    relevant_transit = [result.species for result in species_results if result.transit_assessment.startswith("Transit")]
-    concentrated = [result.species for result in species_results if result.clusters]
+    relevant_breeding = [result.display_name or _display_species_name(result.species) for result in species_results if "Brutverdacht" in result.reproduction_assessment]
+    relevant_transit = [result.display_name or _display_species_name(result.species) for result in species_results if result.transit_assessment.startswith("Transit")]
+    concentrated = [result.display_name or _display_species_name(result.species) for result in species_results if result.clusters]
+    unclassified_only = all(_is_unclassified_species(result.species) for result in species_results)
 
     parts = [executive_summary]
-    if concentrated:
+    if unclassified_only:
+        parts.append("Die Nachweise konnten keiner Art eindeutig zugeordnet werden und sollten mit den Originaldaten fachlich nachvalidiert werden.")
+    elif concentrated:
         parts.append(f"Besonders relevant erscheinen die Arten mit Konzentrationsbereichen: {', '.join(concentrated)}.")
-    if relevant_breeding:
+    if relevant_breeding and not unclassified_only:
         parts.append(f"Ein fachlich vertiefter Brutverdacht liegt insbesondere für {', '.join(relevant_breeding)} vor.")
-    if relevant_transit:
+    if relevant_transit and not unclassified_only:
         parts.append(f"Für die Fledermausarten {', '.join(relevant_transit)} ist die Transitbewertung zu berücksichtigen.")
     parts.append("Die Ergebnisse sollten fachlich gegengeprüft und bei Bedarf kartografisch ergänzt werden.")
     return " ".join(parts)
@@ -326,3 +333,39 @@ def _build_priority(
     if "Konzentrationszone" in concentration or "Konzentrationsbereich" in concentration:
         return priority_if_concentration
     return priority_default
+
+
+def _resolve_taxon_group(species: str, rule: SpeciesRule | None) -> str:
+    if _is_unclassified_species(species):
+        return "unknown"
+    return rule.taxon_group if rule else "bird"
+
+
+def _display_species_name(species: str) -> str:
+    if _is_unclassified_species(species):
+        return "Nicht zuordenbare Nachweise"
+    return species
+
+
+def _is_unclassified_species(species: str) -> bool:
+    normalized = species.strip().casefold()
+    return normalized in {"", "unbekannt", "unknown", "unclassified", "nicht zuordenbar", "nicht zuordenbare nachweise"}
+
+
+def _format_executive_summary(
+    total_observations: int,
+    species_count: int,
+    unclassified_observations: int,
+    unclassified_species: int,
+) -> str:
+    if species_count == unclassified_species and unclassified_species > 0:
+        return (
+            f"Im Datensatz wurden {total_observations} Nachweise erfasst, "
+            "die keiner Art eindeutig zugeordnet werden konnten."
+        )
+    if unclassified_observations > 0:
+        return (
+            f"Im Datensatz wurden {total_observations} Nachweise aus {species_count} Arten erfasst; "
+            f"{unclassified_observations} Nachweise konnten keiner Art eindeutig zugeordnet werden."
+        )
+    return f"Im Datensatz wurden {total_observations} Nachweise aus {species_count} Arten erfasst."

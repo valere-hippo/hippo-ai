@@ -44,8 +44,8 @@ def render_report(result: AnalysisResult) -> str:
         lines.append("")
 
     for species_result in result.species_results:
-        lines.append(f"## {species_result.species}")
-        lines.append(f"Gruppe: {species_result.taxon_group}")
+        lines.append(f"## {species_result.display_name or species_result.species}")
+        lines.append(f"Gruppe: {_display_group_name(species_result.taxon_group)}")
         lines.append(f"Nachweise: {species_result.total_observations}")
         lines.append(f"Konzentration: {species_result.concentration_assessment}")
         lines.append(f"Habitat: {species_result.habitat_assessment}")
@@ -82,7 +82,7 @@ def _build_outline(result: AnalysisResult) -> list[str]:
         outline.append("Metadaten")
     if result.species_results:
         outline.append("Übersicht")
-    outline.extend(f"Art: {species_result.species}" for species_result in result.species_results)
+    outline.extend(f"Art: {species_result.display_name or species_result.species}" for species_result in result.species_results)
     if result.warnings:
         outline.append("Warnungen")
     if result.validation_issues:
@@ -95,8 +95,19 @@ def _render_species_overview(species_results) -> list[str]:
     for species_result in species_results:
         cluster_count = len(species_result.clusters)
         lines.append(
-            f"- {species_result.species} ({species_result.taxon_group}): {species_result.total_observations} Nachweise, "
+            f"- {species_result.display_name or species_result.species} ({_display_group_name(species_result.taxon_group)}): {species_result.total_observations} Nachweise, "
             f"{cluster_count} Konzentrationsbereich(e), Brut={species_result.reproduction_assessment}, "
             f"Empfehlung={species_result.recommendation}, Priorität={species_result.priority}"
         )
     return lines
+
+
+def _display_group_name(group: str) -> str:
+    normalized = group.strip().casefold()
+    if normalized == "unknown":
+        return "unbestimmt"
+    if normalized == "bat":
+        return "Fledermäuse"
+    if normalized == "bird":
+        return "Vögel"
+    return group

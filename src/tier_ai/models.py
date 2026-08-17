@@ -43,6 +43,7 @@ class SpeciesAnalysis:
 
     species: str
     total_observations: int
+    display_name: str | None = None
     taxon_group: str = "bird"
     clusters: list[ClusterSummary] = field(default_factory=list)
     transit_assessment: str = "nicht bewertet"

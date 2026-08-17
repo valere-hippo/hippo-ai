@@ -591,8 +591,8 @@ def _species_overview_table_xml(species_results: list[SpeciesAnalysis]) -> str:
         headers,
         *[
             [
-                species_result.species,
-                species_result.taxon_group,
+                species_result.display_name or species_result.species,
+                _display_group_name(species_result.taxon_group),
                 str(species_result.total_observations),
                 str(len(species_result.clusters)),
                 species_result.reproduction_assessment,
@@ -648,3 +648,14 @@ def _table_cell_xml(text: str, width: int, *, header: bool = False) -> str:
         "</w:p>"
         "</w:tc>"
     )
+
+
+def _display_group_name(group: str) -> str:
+    normalized = group.strip().casefold()
+    if normalized == "unknown":
+        return "unbestimmt"
+    if normalized == "bat":
+        return "Fledermäuse"
+    if normalized == "bird":
+        return "Vögel"
+    return group
