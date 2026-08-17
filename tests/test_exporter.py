@@ -49,6 +49,8 @@ class ExporterTests(unittest.TestCase):
             content = output.read_bytes()
             self.assertTrue(content.startswith(b"%PDF-1.4"))
             self.assertIn(b"Tier-KI Auswertung", content)
+            self.assertIn(b"Zusammenfassung", content)
+            self.assertIn(b"Schlussbewertung", content)
 
     def test_exports_docx(self) -> None:
         result = AnalysisResult(

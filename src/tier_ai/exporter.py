@@ -43,7 +43,7 @@ def _write_docx(path: Path, result: AnalysisResult, report_text: str) -> None:
 
 
 def _write_pdf(path: Path, report_text: str) -> None:
-    pages = _paginate_report(report_text)
+    pages = _build_pdf_pages(report_text)
     pdf_bytes = _build_pdf_document(pages)
     path.write_bytes(pdf_bytes)
 
@@ -301,27 +301,133 @@ def _toc_field_paragraph() -> str:
     )
 
 
-def _paginate_report(report_text: str) -> list[list[str]]:
-    max_lines_per_page = 46
-    max_chars_per_line = 92
-    lines: list[str] = []
-    for raw_line in report_text.rstrip("\n").split("\n"):
-        if not raw_line.strip():
-            lines.append("")
-            continue
-        wrapped = textwrap.wrap(raw_line, width=max_chars_per_line) or [""]
-        lines.extend(wrapped)
-
+def _build_pdf_pages(report_text: str) -> list[list[str]]:
+    sections = _parse_report_sections(report_text)
     pages: list[list[str]] = []
-    current_page: list[str] = []
-    for line in lines:
-        if len(current_page) >= max_lines_per_page:
-            pages.append(current_page)
-            current_page = []
-        current_page.append(line)
-    if current_page:
-        pages.append(current_page)
-    return pages or [[]]
+    pages.append(_pdf_cover_page(sections))
+    if sections["overview_table"]:
+        pages.append(_pdf_overview_page(sections))
+    for block in sections["species_blocks"]:
+        pages.append(_pdf_species_page(block))
+    if sections["warnings"]:
+        pages.append(_pdf_list_page("Warnungen", sections["warnings"]))
+    if sections["validation"]:
+        pages.append(_pdf_list_page("Validierung", sections["validation"]))
+    return pages or [["Tier-KI Auswertung"]]
+
+
+def _parse_report_sections(report_text: str) -> dict[str, object]:
+    lines = [line.rstrip() for line in report_text.rstrip("\n").split("\n")]
+    sections: dict[str, object] = {
+        "title": lines[0] if lines else "Tier-KI Auswertung",
+        "source": lines[1] if len(lines) > 1 else "",
+        "summary": "",
+        "conclusion": "",
+        "overview_table": [],
+        "species_blocks": [],
+        "warnings": [],
+        "validation": [],
+    }
+
+    current_section: str | None = None
+    current_species: dict[str, list[str]] | None = None
+    pending_lines: list[str] = []
+
+    def flush_pending() -> None:
+        nonlocal pending_lines, current_section
+        if current_section == "summary":
+            sections["summary"] = " ".join(line.strip() for line in pending_lines if line.strip())
+        elif current_section == "conclusion":
+            sections["conclusion"] = " ".join(line.strip() for line in pending_lines if line.strip())
+        elif current_section == "warnings":
+            sections["warnings"].extend(line for line in pending_lines if line.strip())  # type: ignore[union-attr]
+        elif current_section == "validation":
+            sections["validation"].extend(line for line in pending_lines if line.strip())  # type: ignore[union-attr]
+        pending_lines = []
+        current_section = None
+
+    def flush_species() -> None:
+        nonlocal current_species
+        if current_species is not None:
+            sections["species_blocks"].append(current_species)  # type: ignore[union-attr]
+            current_species = None
+
+    for line in lines[2:]:
+        if line.startswith("## "):
+            flush_pending()
+            heading = line[3:]
+            if current_species is not None and heading != current_species["name"][0]:
+                flush_species()
+
+            if heading == "Zusammenfassung":
+                current_section = "summary"
+            elif heading == "Schlussbewertung":
+                current_section = "conclusion"
+            elif heading == "Übersicht":
+                current_section = "overview"
+            elif heading == "Warnungen":
+                current_section = "warnings"
+            elif heading == "Validierung":
+                current_section = "validation"
+            else:
+                current_species = {"name": [heading], "lines": []}
+                current_section = "species"
+            continue
+
+        if current_section == "overview":
+            sections["overview_table"].append(line)  # type: ignore[union-attr]
+        elif current_section == "species" and current_species is not None:
+            current_species["lines"].append(line)
+        else:
+            pending_lines.append(line)
+
+    flush_pending()
+    flush_species()
+    return sections
+
+
+def _pdf_cover_page(sections: dict[str, object]) -> list[str]:
+    lines = [
+        str(sections["title"]),
+        "",
+        str(sections["source"]),
+        "",
+        "Zusammenfassung",
+        str(sections["summary"]),
+        "",
+        "Schlussbewertung",
+        str(sections["conclusion"]),
+    ]
+    return _wrap_pdf_lines(lines)
+
+
+def _pdf_overview_page(sections: dict[str, object]) -> list[str]:
+    lines = ["Übersicht", ""]
+    lines.extend(str(line) for line in sections["overview_table"])
+    return _wrap_pdf_lines(lines)
+
+
+def _pdf_species_page(block: dict[str, list[str]]) -> list[str]:
+    lines = [block["name"][0], ""]
+    lines.extend(block["lines"])
+    return _wrap_pdf_lines(lines)
+
+
+def _pdf_list_page(title: str, items: list[str]) -> list[str]:
+    lines = [title, ""]
+    lines.extend(items)
+    return _wrap_pdf_lines(lines)
+
+
+def _wrap_pdf_lines(lines: list[str]) -> list[str]:
+    max_chars_per_line = 92
+    wrapped_lines: list[str] = []
+    for raw_line in lines:
+        if not raw_line.strip():
+            wrapped_lines.append("")
+            continue
+        wrapped_lines.extend(textwrap.wrap(raw_line, width=max_chars_per_line) or [""])
+    return wrapped_lines
 
 
 def _build_pdf_document(pages: list[list[str]]) -> bytes:
