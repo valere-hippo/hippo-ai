@@ -13,6 +13,7 @@ def render_report(result: AnalysisResult) -> str:
         lines.append(f"## {species_result.species}")
         lines.append(f"Nachweise: {species_result.total_observations}")
         lines.append(f"Konzentration: {species_result.concentration_assessment}")
+        lines.append(f"Habitat: {species_result.habitat_assessment}")
         lines.append(f"Brutbewertung: {species_result.reproduction_assessment}")
         if species_result.clusters:
             for cluster in species_result.clusters:
@@ -28,4 +29,3 @@ def render_report(result: AnalysisResult) -> str:
         lines.extend(f"- {warning}" for warning in result.warnings)
 
     return "\n".join(lines).strip() + "\n"
-

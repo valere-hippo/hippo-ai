@@ -44,3 +44,17 @@ def normalize_species_name(value: str) -> str:
 def get_rule(species: str) -> SpeciesRule | None:
     return DEFAULT_SPECIES_RULES.get(normalize_species_name(species))
 
+
+def detect_habitat_compatibility(species: str, attrs: dict[str, object]) -> str:
+    rule = get_rule(species)
+    if rule is None:
+        return "unbekannt"
+
+    haystack = " ".join(str(value).casefold() for value in attrs.values() if value is not None)
+    if not haystack.strip():
+        return "vorläufig unklar"
+
+    if any(keyword in haystack for keyword in rule.habitat_keywords):
+        return f"habitatlich plausibel für {rule.species}"
+
+    return f"habitatlich eher unplausibel für {rule.species}"

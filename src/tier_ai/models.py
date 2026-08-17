@@ -44,6 +44,7 @@ class SpeciesAnalysis:
     species: str
     total_observations: int
     clusters: list[ClusterSummary] = field(default_factory=list)
+    habitat_assessment: str = "unbewertet"
     reproduction_assessment: str = "unbewertet"
     concentration_assessment: str = "unbewertet"
     text_summary: str = ""

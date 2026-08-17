@@ -6,7 +6,7 @@ from statistics import mean
 
 from .config import AnalyzerConfig
 from .models import AnalysisResult, ClusterSummary, Observation, SpeciesAnalysis
-from .rules import SpeciesRule, get_rule
+from .rules import SpeciesRule, detect_habitat_compatibility, get_rule
 
 
 def analyze_observations(observations: list[Observation], source_path: str, config: AnalyzerConfig | None = None) -> AnalysisResult:
@@ -19,14 +19,16 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
     for species, items in sorted(grouped.items(), key=lambda pair: pair[0].lower()):
         clusters = _build_clusters(items, config)
         rule = get_rule(species)
+        habitat_assessment = _assess_habitat(species, items, rule)
         concentration = _assess_concentration(items, clusters, rule)
-        reproduction = _assess_reproduction(items, clusters, rule)
-        summary = _render_species_summary(species, items, clusters, concentration, reproduction, rule)
+        reproduction = _assess_reproduction(items, clusters, rule, habitat_assessment)
+        summary = _render_species_summary(species, items, clusters, concentration, habitat_assessment, reproduction, rule)
         species_results.append(
             SpeciesAnalysis(
                 species=species,
                 total_observations=len(items),
                 clusters=clusters,
+                habitat_assessment=habitat_assessment,
                 reproduction_assessment=reproduction,
                 concentration_assessment=concentration,
                 text_summary=summary,
@@ -50,17 +52,7 @@ def _build_clusters(items: list[Observation], config: AnalyzerConfig) -> list[Cl
     if len(centroids) < config.min_cluster_size:
         return []
 
-    clusters: list[list[tuple[float, float]]] = []
-    for point in centroids:
-        matched_cluster = None
-        for cluster in clusters:
-            if any(hypot(point[0] - existing[0], point[1] - existing[1]) <= config.distance_threshold_m for existing in cluster):
-                matched_cluster = cluster
-                break
-        if matched_cluster is None:
-            clusters.append([point])
-        else:
-            matched_cluster.append(point)
+    clusters = _connected_components(centroids, config.distance_threshold_m)
 
     summaries: list[ClusterSummary] = []
     for index, cluster in enumerate(clusters, start=1):
@@ -80,17 +72,51 @@ def _build_clusters(items: list[Observation], config: AnalyzerConfig) -> list[Cl
     return summaries
 
 
+def _connected_components(points: list[tuple[float, float]], threshold: float) -> list[list[tuple[float, float]]]:
+    if not points:
+        return []
+
+    visited: set[int] = set()
+    components: list[list[tuple[float, float]]] = []
+
+    for start_index in range(len(points)):
+        if start_index in visited:
+            continue
+
+        stack = [start_index]
+        visited.add(start_index)
+        component: list[tuple[float, float]] = []
+
+        while stack:
+            current_index = stack.pop()
+            current_point = points[current_index]
+            component.append(current_point)
+
+            for other_index, other_point in enumerate(points):
+                if other_index in visited:
+                    continue
+                if hypot(current_point[0] - other_point[0], current_point[1] - other_point[1]) <= threshold:
+                    visited.add(other_index)
+                    stack.append(other_index)
+
+        components.append(component)
+
+    return components
+
+
 def _render_species_summary(
     species: str,
     items: list[Observation],
     clusters: list[ClusterSummary],
     concentration: str,
+    habitat: str,
     reproduction: str,
     rule: SpeciesRule | None,
 ) -> str:
     parts = [
         f"Art {species}: {len(items)} Nachweise im Untersuchungsgebiet.",
         f"Bewertung der Verteilung: {concentration}.",
+        f"Habitatbewertung: {habitat}.",
         f"Brut-/Reproduktionsbewertung: {reproduction}.",
     ]
     if rule and rule.notes:
@@ -106,11 +132,22 @@ def _assess_concentration(items: list[Observation], clusters: list[ClusterSummar
     if not clusters:
         return "keine erkennbare Konzentration"
     if rule:
-        return f"Verdacht auf Konzentrationszone bei {rule.species}"
-    return "Verdacht auf Konzentrationszone"
+        return f"{len(clusters)} Konzentrationsbereich(e), Verdacht auf Konzentrationszone bei {rule.species}"
+    return f"{len(clusters)} Konzentrationsbereich(e), Verdacht auf Konzentrationszone"
 
 
-def _assess_reproduction(items: list[Observation], clusters: list[ClusterSummary], rule: SpeciesRule | None) -> str:
+def _assess_habitat(species: str, items: list[Observation], rule: SpeciesRule | None) -> str:
+    if rule is None:
+        return "unbekannt"
+
+    attrs = {}
+    for observation in items:
+        attrs.update({str(key): value for key, value in observation.attrs.items()})
+
+    return detect_habitat_compatibility(species, attrs)
+
+
+def _assess_reproduction(items: list[Observation], clusters: list[ClusterSummary], rule: SpeciesRule | None, habitat_assessment: str) -> str:
     if rule is None:
         return "vorläufig zu prüfen"
 
@@ -120,9 +157,14 @@ def _assess_reproduction(items: list[Observation], clusters: list[ClusterSummary
 
     breeding_overlap = months & rule.breeding_months
     if breeding_overlap and len(items) >= rule.min_contacts_for_reproduction and clusters:
+        if "eher unplausibel" in habitat_assessment:
+            return f"Brutverdacht fraglich für {rule.species}, da das Habitat eher unplausibel wirkt"
         return f"Brutverdacht plausibel für {rule.species}"
 
     if months.isdisjoint(rule.breeding_months):
         return f"außerhalb der Brutzeit, daher kein belastbarer Brutverdacht für {rule.species}"
+
+    if clusters and len(items) >= rule.min_contacts_for_reproduction:
+        return f"Brutverdacht möglich für {rule.species}, aber noch nicht belastbar"
 
     return "vorläufig zu prüfen"
