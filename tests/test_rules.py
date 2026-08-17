@@ -15,7 +15,7 @@ class RuleLoaderTests(unittest.TestCase):
     def test_loads_default_rules(self) -> None:
         rules = load_species_rules()
 
-        self.assertGreaterEqual(len(rules), 80)
+        self.assertGreaterEqual(len(rules), 110)
         self.assertIn("amsel", rules)
         self.assertEqual(rules["amsel"].species, "Amsel")
         self.assertIn("zwergfledermaus", rules)
