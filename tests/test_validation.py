@@ -42,7 +42,7 @@ class ValidationTests(unittest.TestCase):
 
         issues = validate_frame(frame, mapping=FieldMapping(species="art", observed_at="datum"))
 
-        self.assertTrue(any(issue.level == "error" for issue in issues))
+        self.assertTrue(any(issue.level == "warning" for issue in issues))
         self.assertTrue(any("Art-Spalte" in issue.message for issue in issues))
 
     def test_reports_invalid_date(self) -> None:
@@ -55,4 +55,3 @@ class ValidationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

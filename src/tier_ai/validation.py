@@ -18,11 +18,27 @@ def validate_frame(frame: Any, mapping: FieldMapping | None = None) -> list[Vali
     mapping = mapping or FieldMapping()
     issues: list[ValidationIssue] = []
 
-    species_column = _find_column(frame.columns, [mapping.species, "species", "art", "artname", "taxon"])
+    species_column = _find_column(
+        frame.columns,
+        [
+            mapping.species,
+            "species",
+            "species_name",
+            "art",
+            "artname",
+            "taxon",
+            "taxon_name",
+            "wissenschaftlicher_name",
+            "deutscher_name",
+            "objektart",
+            "bezeichnung",
+            "name",
+        ],
+    )
     date_column = _find_column(frame.columns, [mapping.observed_at, "date", "datum", "observed_at", "beobachtet_am"])
 
     if species_column is None:
-        issues.append(ValidationIssue(level="error", message="Keine Art-Spalte gefunden."))
+        issues.append(ValidationIssue(level="warning", message="Keine Art-Spalte gefunden. Es wird 'unbekannt' verwendet."))
     if date_column is None:
         issues.append(ValidationIssue(level="warning", message="Keine Datums-Spalte gefunden."))
     if "geometry" not in {str(column).lower() for column in frame.columns} and getattr(frame, "geometry", None) is None:

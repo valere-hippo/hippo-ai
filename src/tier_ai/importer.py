@@ -72,7 +72,23 @@ def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> 
         joined = "; ".join(issue.message for issue in fatal_issues)
         raise ImportErrorWithContext(joined)
 
-    species_column = _find_column(frame.columns, [mapping.species, "species", "art", "artname", "taxon"])
+    species_column = _find_column(
+        frame.columns,
+        [
+            mapping.species,
+            "species",
+            "species_name",
+            "art",
+            "artname",
+            "taxon",
+            "taxon_name",
+            "wissenschaftlicher_name",
+            "deutscher_name",
+            "objektart",
+            "bezeichnung",
+            "name",
+        ],
+    )
     date_column = _find_column(frame.columns, [mapping.observed_at, "date", "datum", "observed_at", "beobachtet_am"])
 
     observations: list[Observation] = []
@@ -132,7 +148,23 @@ def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None
         joined = "; ".join(issue.message for issue in fatal_issues)
         raise ImportErrorWithContext(joined)
 
-    species_column = _find_column(frame.columns, [mapping.species, "species", "art", "artname", "taxon"])
+    species_column = _find_column(
+        frame.columns,
+        [
+            mapping.species,
+            "species",
+            "species_name",
+            "art",
+            "artname",
+            "taxon",
+            "taxon_name",
+            "wissenschaftlicher_name",
+            "deutscher_name",
+            "objektart",
+            "bezeichnung",
+            "name",
+        ],
+    )
     date_column = _find_column(frame.columns, [mapping.observed_at, "date", "datum", "observed_at", "beobachtet_am"])
 
     observations: list[Observation] = []
