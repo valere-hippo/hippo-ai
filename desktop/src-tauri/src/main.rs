@@ -17,7 +17,7 @@ fn prepare_environment(
   project_root: Option<String>,
 ) -> Result<AnalysisRunResult, String> {
   let python = normalize_python_command(python_executable);
-  let project_root = resolve_project_root(project_root.as_deref());
+  let project_root = resolve_python_project_root(project_root.as_deref());
   let venv_dir = project_root.join(".venv");
   let venv_python = venv_python_path(&venv_dir);
 
@@ -81,7 +81,7 @@ fn run_analysis(
   rules_file: Option<String>,
   docx_template_dir: Option<String>,
 ) -> Result<AnalysisRunResult, String> {
-  let project_root = resolve_project_root(project_root.as_deref());
+  let project_root = resolve_python_project_root(project_root.as_deref());
   let python = resolve_python_executable(python_executable.as_deref(), &project_root);
 
   let src_path = project_root.join("src");
@@ -179,17 +179,35 @@ fn venv_python_path(venv_dir: &PathBuf) -> PathBuf {
   }
 }
 
-fn resolve_project_root(project_root: Option<&str>) -> PathBuf {
+fn resolve_python_project_root(project_root: Option<&str>) -> PathBuf {
   let raw = project_root
     .filter(|value| !value.trim().is_empty())
     .map(PathBuf::from)
     .unwrap_or_else(|| PathBuf::from(".."));
-  if raw.is_absolute() {
+  let mut candidate = if raw.is_absolute() {
     raw
   } else {
     env::current_dir()
       .map(|cwd| cwd.join(raw))
       .unwrap_or_else(|_| PathBuf::from(".."))
+  };
+
+  candidate = candidate
+    .canonicalize()
+    .unwrap_or(candidate);
+
+  locate_python_project_root(candidate)
+}
+
+fn locate_python_project_root(mut start: PathBuf) -> PathBuf {
+  loop {
+    if start.join("pyproject.toml").exists() || start.join("setup.py").exists() {
+      return start;
+    }
+
+    if !start.pop() {
+      return start;
+    }
   }
 }
 
