@@ -58,11 +58,14 @@ class ExporterTests(unittest.TestCase):
 
             self.assertTrue(output.exists())
             with ZipFile(output) as archive:
+                styles_xml = archive.read("word/styles.xml").decode("utf-8")
                 document_xml = archive.read("word/document.xml").decode("utf-8")
                 self.assertIn("Tier-KI Auswertung", document_xml)
                 self.assertIn("Amsel", document_xml)
+                self.assertIn("Title", styles_xml)
+                self.assertIn("Heading1", styles_xml)
+                self.assertIn("ListBullet", styles_xml)
 
 
 if __name__ == "__main__":
     unittest.main()
-

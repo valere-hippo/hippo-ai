@@ -93,11 +93,56 @@ def _styles_xml() -> str:
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
     <w:name w:val="Normal"/>
+    <w:rPr>
+      <w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/>
+      <w:sz w:val="22"/>
+    </w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Title">
+    <w:name w:val="Title"/>
+    <w:basedOn w:val="Normal"/>
+    <w:next w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr>
+      <w:jc w:val="center"/>
+      <w:spacing w:after="180"/>
+    </w:pPr>
+    <w:rPr>
+      <w:b/>
+      <w:sz w:val="34"/>
+    </w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Subtitle">
+    <w:name w:val="Subtitle"/>
+    <w:basedOn w:val="Normal"/>
+    <w:pPr>
+      <w:jc w:val="center"/>
+      <w:spacing w:after="240"/>
+    </w:pPr>
+    <w:rPr>
+      <w:i/>
+      <w:sz w:val="20"/>
+    </w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading1">
     <w:name w:val="heading 1"/>
     <w:basedOn w:val="Normal"/>
     <w:qFormat/>
+    <w:pPr>
+      <w:spacing w:before="240" w:after="120"/>
+    </w:pPr>
+    <w:rPr>
+      <w:b/>
+      <w:sz w:val="28"/>
+    </w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="ListBullet">
+    <w:name w:val="List Bullet"/>
+    <w:basedOn w:val="Normal"/>
+    <w:pPr>
+      <w:ind w:left="720" w:hanging="360"/>
+      <w:spacing w:after="60"/>
+    </w:pPr>
   </w:style>
 </w:styles>
 """
@@ -105,16 +150,12 @@ def _styles_xml() -> str:
 
 def _document_xml(paragraphs: Iterable[str]) -> str:
     body_parts: list[str] = []
-    for line in paragraphs:
+    for index, line in enumerate(paragraphs):
         if not line.strip():
-            body_parts.append("<w:p/>")
+            body_parts.append("<w:p><w:pPr><w:spacing w:after=\"120\"/></w:pPr></w:p>")
             continue
-        style = "Heading1" if line.startswith("## ") or line == "Tier-KI Auswertung" else "Normal"
-        text = line[3:] if line.startswith("## ") else line
-        body_parts.append(
-            "<w:p><w:pPr><w:pStyle w:val=\"%s\"/></w:pPr><w:r><w:t xml:space=\"preserve\">%s</w:t></w:r></w:p>"
-            % (style, escape(text))
-        )
+        paragraph = _paragraph_xml(line, index)
+        body_parts.append(paragraph)
 
     body_parts.append("<w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/><w:pgMar w:top=\"1440\" w:right=\"1440\" w:bottom=\"1440\" w:left=\"1440\"/></w:sectPr>")
     body = "".join(body_parts)
@@ -138,3 +179,23 @@ def _document_xml(paragraphs: Iterable[str]) -> str:
   <w:body>%s</w:body>
 </w:document>
 """ % body
+
+
+def _paragraph_xml(line: str, index: int) -> str:
+    if index == 0:
+        return _styled_paragraph("Title", line)
+    if index == 1 and line.startswith("Quelle:"):
+        return _styled_paragraph("Subtitle", line)
+    if line.startswith("## "):
+        return _styled_paragraph("Heading1", line[3:])
+    if line.startswith("- "):
+        return _styled_paragraph("ListBullet", f"• {line[2:]}")
+    return _styled_paragraph("Normal", line)
+
+
+def _styled_paragraph(style_id: str, text: str) -> str:
+    return (
+        "<w:p><w:pPr><w:pStyle w:val=\"%s\"/></w:pPr>"
+        "<w:r><w:t xml:space=\"preserve\">%s</w:t></w:r></w:p>"
+        % (style_id, escape(text))
+    )
