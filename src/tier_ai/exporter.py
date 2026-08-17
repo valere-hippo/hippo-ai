@@ -33,6 +33,8 @@ def _write_docx(path: Path, result: AnalysisResult, report_text: str) -> None:
         archive.writestr("docProps/app.xml", _app_props_xml())
         archive.writestr("word/styles.xml", _styles_xml())
         archive.writestr("word/numbering.xml", _numbering_xml())
+        archive.writestr("word/header1.xml", _header_xml())
+        archive.writestr("word/footer1.xml", _footer_xml())
         archive.writestr("word/_rels/document.xml.rels", _document_rels_xml())
         archive.writestr("word/document.xml", _document_xml(result, paragraphs))
 
@@ -45,6 +47,8 @@ def _content_types_xml() -> str:
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
   <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+  <Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
   <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
   <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
 </Types>
@@ -63,13 +67,48 @@ def _root_rels_xml() -> str:
 
 def _document_rels_xml() -> str:
     return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>
+</Relationships>
 """
 
 
 def _numbering_xml() -> str:
     return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>
+"""
+
+
+def _header_xml() -> str:
+    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p>
+    <w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:r><w:rPr><w:b/><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">Tier-KI Auswertung</w:t></w:r>
+  </w:p>
+  <w:p>
+    <w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">Geospatiale Fachauswertung für Artenschutzberichte</w:t></w:r>
+  </w:p>
+</w:hdr>
+"""
+
+
+def _footer_xml() -> str:
+    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p>
+    <w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:r><w:t xml:space="preserve">tier-ai</w:t></w:r>
+    <w:r><w:t xml:space="preserve"> | </w:t></w:r>
+    <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+    <w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>
+    <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+    <w:r><w:t>1</w:t></w:r>
+    <w:r><w:fldChar w:fldCharType="end"/></w:r>
+  </w:p>
+</w:ftr>
 """
 
 
@@ -190,7 +229,14 @@ def _document_xml(result: AnalysisResult, paragraphs: Iterable[str]) -> str:
             skip_overview_bullets = False
         body_parts.append(_paragraph_xml(line, index))
 
-    body_parts.append("<w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/><w:pgMar w:top=\"1440\" w:right=\"1440\" w:bottom=\"1440\" w:left=\"1440\"/></w:sectPr>")
+    body_parts.append(
+        "<w:sectPr>"
+        "<w:headerReference w:type=\"default\" r:id=\"rId1\"/>"
+        "<w:footerReference w:type=\"default\" r:id=\"rId2\"/>"
+        "<w:pgSz w:w=\"11906\" w:h=\"16838\"/>"
+        "<w:pgMar w:top=\"1440\" w:right=\"1440\" w:bottom=\"1440\" w:left=\"1440\"/>"
+        "</w:sectPr>"
+    )
     body = "".join(body_parts)
     return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
