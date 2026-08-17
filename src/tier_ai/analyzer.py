@@ -48,7 +48,13 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
         )
 
     executive_summary = _build_executive_summary(species_results)
-    return AnalysisResult(source_path=source_path, species_results=species_results, executive_summary=executive_summary)
+    final_conclusion = _build_final_conclusion(species_results, executive_summary)
+    return AnalysisResult(
+        source_path=source_path,
+        species_results=species_results,
+        executive_summary=executive_summary,
+        final_conclusion=final_conclusion,
+    )
 
 
 def _build_clusters(items: list[Observation], config: AnalyzerConfig) -> list[ClusterSummary]:
@@ -227,4 +233,23 @@ def _build_executive_summary(species_results: list[SpeciesAnalysis]) -> str:
     if bat_species:
         parts.append(f"Für {bat_species} taxonomische Einheiten wurde eine Transitbewertung vorgenommen.")
 
+    return " ".join(parts)
+
+
+def _build_final_conclusion(species_results: list[SpeciesAnalysis], executive_summary: str) -> str:
+    if not species_results:
+        return "Mangels auswertbarer Nachweise kann keine fachliche Schlussbewertung abgeleitet werden."
+
+    relevant_breeding = [result.species for result in species_results if "Brutverdacht" in result.reproduction_assessment]
+    relevant_transit = [result.species for result in species_results if result.transit_assessment.startswith("Transit")]
+    concentrated = [result.species for result in species_results if result.clusters]
+
+    parts = [executive_summary]
+    if concentrated:
+        parts.append(f"Besonders relevant erscheinen die Arten mit Konzentrationsbereichen: {', '.join(concentrated)}.")
+    if relevant_breeding:
+        parts.append(f"Ein fachlich vertiefter Brutverdacht liegt insbesondere für {', '.join(relevant_breeding)} vor.")
+    if relevant_transit:
+        parts.append(f"Für die Fledermausarten {', '.join(relevant_transit)} ist die Transitbewertung zu berücksichtigen.")
+    parts.append("Die Ergebnisse sollten fachlich gegengeprüft und bei Bedarf kartografisch ergänzt werden.")
     return " ".join(parts)

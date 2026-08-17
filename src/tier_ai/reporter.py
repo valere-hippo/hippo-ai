@@ -20,6 +20,11 @@ def render_report(result: AnalysisResult) -> str:
         lines.append(result.executive_summary)
         lines.append("")
 
+    if result.final_conclusion:
+        lines.append("## Schlussbewertung")
+        lines.append(result.final_conclusion)
+        lines.append("")
+
     if result.metadata is not None:
         lines.append("## Metadaten")
         lines.append(f"Datei: {result.metadata.source_name}")
@@ -68,6 +73,8 @@ def render_report(result: AnalysisResult) -> str:
 def _build_outline(result: AnalysisResult) -> list[str]:
     outline: list[str] = []
     outline.append("Zusammenfassung")
+    if result.final_conclusion:
+        outline.append("Schlussbewertung")
     if result.metadata is not None:
         outline.append("Metadaten")
     if result.species_results:
