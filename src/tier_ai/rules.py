@@ -68,12 +68,15 @@ def _load_rule_payload(rule_source: str | Path | None) -> dict[str, Any]:
 
 
 def _parse_species_rule(payload: dict[str, Any]) -> SpeciesRule:
+    min_contacts = payload.get("min_contacts_for_reproduction")
+    if min_contacts is None:
+        min_contacts = payload.get("min_contacts_for_reproduktion", 2)
     return SpeciesRule(
         species=str(payload.get("species", "")).strip(),
         taxon_group=str(payload.get("taxon_group", "bird")).strip().casefold() or "bird",
         breeding_months={int(month) for month in payload.get("breeding_months", [])},
         habitat_keywords={str(keyword).casefold() for keyword in payload.get("habitat_keywords", [])},
-        min_contacts_for_reproduction=int(payload.get("min_contacts_for_reproduction", 2)),
+        min_contacts_for_reproduction=int(min_contacts),
         priority_if_breeding=str(payload.get("priority_if_breeding", "hoch")).strip().casefold() or "hoch",
         priority_if_transit=str(payload.get("priority_if_transit", "mittel")).strip().casefold() or "mittel",
         priority_if_concentration=str(payload.get("priority_if_concentration", "mittel")).strip().casefold() or "mittel",
