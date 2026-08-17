@@ -8,6 +8,7 @@ const output = document.getElementById('result-output');
 const statusPill = document.getElementById('status-pill');
 const pickInputButton = document.querySelector('[data-action="pick-input"]');
 const pickOutputButton = document.querySelector('[data-action="pick-output"]');
+const storageKey = 'tier-ai.desktop.form';
 
 const fieldNames = [
   'python_executable',
@@ -21,12 +22,19 @@ const fieldNames = [
   'docx_template_dir',
 ];
 
+restoreFormState();
+
+fieldNames.forEach((name) => {
+  document.getElementById(name).addEventListener('change', persistFormState);
+});
+
 resetButton.addEventListener('click', () => {
   form.reset();
   document.getElementById('python_executable').value = 'py';
   document.getElementById('project_root').value = '..';
   document.getElementById('species_column').value = 'species';
   document.getElementById('date_column').value = 'observed_at';
+  localStorage.removeItem(storageKey);
   output.textContent = 'Noch keine Analyse gestartet.';
   setStatus('Bereit');
 });
@@ -45,6 +53,7 @@ pickInputButton.addEventListener('click', async () => {
 
   if (typeof selected === 'string' && selected.trim()) {
     document.getElementById('input').value = selected;
+    persistFormState();
   }
 });
 
@@ -60,6 +69,7 @@ pickOutputButton.addEventListener('click', async () => {
 
   if (typeof selected === 'string' && selected.trim()) {
     document.getElementById('output').value = selected;
+    persistFormState();
   }
 });
 
@@ -81,6 +91,7 @@ form.addEventListener('submit', async (event) => {
   output.textContent = 'Analyse wird gestartet...';
 
   try {
+    persistFormState();
     const result = await invoke('run_analysis', payload);
     const lines = [
       `Exit-Code: ${result.exit_code}`,
@@ -111,5 +122,30 @@ function setStatus(label, state = 'ready') {
     statusPill.classList.add('is-running');
   } else if (state === 'error') {
     statusPill.classList.add('is-error');
+  }
+}
+
+function persistFormState() {
+  const state = Object.fromEntries(
+    fieldNames.map((name) => [name, document.getElementById(name).value]),
+  );
+  localStorage.setItem(storageKey, JSON.stringify(state));
+}
+
+function restoreFormState() {
+  const stored = localStorage.getItem(storageKey);
+  if (!stored) {
+    return;
+  }
+
+  try {
+    const state = JSON.parse(stored);
+    fieldNames.forEach((name) => {
+      if (typeof state[name] === 'string') {
+        document.getElementById(name).value = state[name];
+      }
+    });
+  } catch {
+    localStorage.removeItem(storageKey);
   }
 }

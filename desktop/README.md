@@ -36,3 +36,4 @@ Im aktuellen Prototyp wird dafür der Projekt-Root per Formularfeld übergeben.
 - Rust-Command startet die vorhandene Analyse-CLI
 - Windows-only als erster Zielpfad
 - Bundling ist noch deaktiviert
+- Die letzte Formularbelegung wird lokal im Webview gespeichert und beim nächsten Start wiederhergestellt
