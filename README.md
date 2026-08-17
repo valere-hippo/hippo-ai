@@ -26,6 +26,12 @@ Wenn die Spaltennamen abweichen:
 PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg --species-column art --date-column datum
 ```
 
+Analyseparameter laden:
+
+```bash
+PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg --analysis-config-file /pfad/zu/analyse.json
+```
+
 Eigene Artenregeln laden:
 
 ```bash
