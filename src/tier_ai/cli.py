@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 from .config import AnalyzerConfig, FieldMapping
 from .analyzer import analyze_observations
+from .exporter import export_report
 from .importer import load_observations
 from .reporter import render_report
 from .rules import set_rule_source
@@ -32,10 +32,8 @@ def main() -> None:
         set_rule_source(args.rules_file)
     observations = load_observations(args.input, mapping=mapping)
     result = analyze_observations(observations, source_path=args.input, config=config)
-    report = render_report(result)
 
     if args.output:
-        output_path = Path(args.output)
-        output_path.write_text(report, encoding="utf-8")
+        export_report(result, args.output)
     else:
-        print(report)
+        print(render_report(result))

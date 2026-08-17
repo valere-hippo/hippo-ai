@@ -14,6 +14,12 @@ Siehe:
 PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg -o bericht.txt
 ```
 
+Ou en `DOCX`:
+
+```bash
+PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg -o bericht.docx
+```
+
 Wenn die Spaltennamen abweichen:
 
 ```bash
