@@ -1,10 +1,17 @@
-from tier_ai.models import AnalysisResult, ClusterSummary, SpeciesAnalysis
+from tier_ai.models import AnalysisResult, ClusterSummary, InputMetadata, SpeciesAnalysis
 from tier_ai.reporter import render_report
 
 
 def test_render_report_contains_species():
     result = AnalysisResult(
         source_path="input.gpkg",
+        metadata=InputMetadata(
+            source_name="input.gpkg",
+            file_size_bytes=1024,
+            record_count=3,
+            crs="EPSG:25832",
+            geometry_types=["Point"],
+        ),
         species_results=[
             SpeciesAnalysis(
                 species="Amsel",
@@ -34,4 +41,5 @@ def test_render_report_contains_species():
     assert "Verdacht auf Konzentrationszone" in report
     assert "Habitat" in report
     assert "Transit" in report
+    assert "Metadaten" in report
     assert "Validierung" in report

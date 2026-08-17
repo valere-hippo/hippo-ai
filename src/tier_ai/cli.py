@@ -30,9 +30,10 @@ def main() -> None:
     config = AnalyzerConfig(distance_threshold_m=args.distance_threshold_m, min_cluster_size=args.min_cluster_size, field_mapping=mapping)
     if args.rules_file:
         set_rule_source(args.rules_file)
-    observations, validation_issues = load_observations_with_issues(args.input, mapping=mapping)
+    observations, validation_issues, metadata = load_observations_with_issues(args.input, mapping=mapping)
     result = analyze_observations(observations, source_path=args.input, config=config)
     result.validation_issues = validation_issues
+    result.metadata = metadata
 
     if args.output:
         export_report(result, args.output)

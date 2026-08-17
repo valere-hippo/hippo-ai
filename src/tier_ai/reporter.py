@@ -9,6 +9,19 @@ def render_report(result: AnalysisResult) -> str:
     lines.append(f"Quelle: {result.source_path}")
     lines.append("")
 
+    if result.metadata is not None:
+        lines.append("## Metadaten")
+        lines.append(f"Datei: {result.metadata.source_name}")
+        if result.metadata.file_size_bytes is not None:
+            lines.append(f"Dateigröße: {result.metadata.file_size_bytes} Bytes")
+        if result.metadata.record_count is not None:
+            lines.append(f"Datensätze: {result.metadata.record_count}")
+        if result.metadata.crs:
+            lines.append(f"CRS: {result.metadata.crs}")
+        if result.metadata.geometry_types:
+            lines.append(f"Geometrietypen: {', '.join(result.metadata.geometry_types)}")
+        lines.append("")
+
     for species_result in result.species_results:
         lines.append(f"## {species_result.species}")
         lines.append(f"Nachweise: {species_result.total_observations}")

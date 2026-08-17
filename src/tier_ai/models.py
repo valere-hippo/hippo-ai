@@ -56,6 +56,18 @@ class AnalysisResult:
     """Gesamtergebnis für eine Eingabedatei."""
 
     source_path: str
+    metadata: "InputMetadata | None" = None
     species_results: list[SpeciesAnalysis] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     validation_issues: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class InputMetadata:
+    """Metadaten zur Eingabedatei und zum geladenen Layer."""
+
+    source_name: str
+    file_size_bytes: int | None = None
+    record_count: int | None = None
+    crs: str | None = None
+    geometry_types: list[str] = field(default_factory=list)

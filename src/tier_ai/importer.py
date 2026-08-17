@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -8,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from .config import FieldMapping
-from .models import Observation
+from .models import InputMetadata, Observation
 from .validation import validate_frame
 
 
@@ -85,7 +84,7 @@ def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> 
     return observations
 
 
-def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None = None) -> tuple[list[Observation], list[str]]:
+def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None = None) -> tuple[list[Observation], list[str], InputMetadata]:
     source = Path(path)
     if not source.exists():
         raise ImportErrorWithContext(f"Datei nicht gefunden: {source}")
@@ -105,7 +104,8 @@ def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None
         raise ImportErrorWithContext(f"Datei konnte nicht gelesen werden: {source}") from exc
 
     if frame.empty:
-        return [], []
+        metadata = _build_metadata(source, frame)
+        return [], [], metadata
 
     issues = validate_frame(frame, mapping=mapping)
     fatal_issues = [issue for issue in issues if issue.level == "error"]
@@ -134,7 +134,27 @@ def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None
             )
         )
 
-    return observations, [issue.message for issue in issues]
+    metadata = _build_metadata(source, frame)
+    return observations, [issue.message for issue in issues], metadata
+
+
+def _build_metadata(source: Path, frame: Any) -> InputMetadata:
+    crs_value = getattr(frame, "crs", None)
+    geometry_types: list[str] = []
+    if not frame.empty:
+        geometry_series = getattr(frame, "geometry", [])
+        geometry_types = sorted(
+            {str(getattr(geometry, "geom_type", "unknown")) for geometry in geometry_series if geometry is not None}
+        )
+
+    file_size_bytes = source.stat().st_size if source.exists() else None
+    return InputMetadata(
+        source_name=source.name,
+        file_size_bytes=file_size_bytes,
+        record_count=len(frame),
+        crs=str(crs_value) if crs_value is not None else None,
+        geometry_types=geometry_types,
+    )
 
 
 def _find_column(columns: pd.Index, candidates: list[str]) -> str | None:
