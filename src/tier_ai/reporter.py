@@ -33,6 +33,11 @@ def render_report(result: AnalysisResult) -> str:
             lines.append(f"Geometrietypen: {', '.join(result.metadata.geometry_types)}")
         lines.append("")
 
+    if result.species_results:
+        lines.append("## Übersicht")
+        lines.extend(_render_species_overview(result.species_results))
+        lines.append("")
+
     for species_result in result.species_results:
         lines.append(f"## {species_result.species}")
         lines.append(f"Nachweise: {species_result.total_observations}")
@@ -65,9 +70,22 @@ def _build_outline(result: AnalysisResult) -> list[str]:
     outline.append("Zusammenfassung")
     if result.metadata is not None:
         outline.append("Metadaten")
+    if result.species_results:
+        outline.append("Übersicht")
     outline.extend(f"Art: {species_result.species}" for species_result in result.species_results)
     if result.warnings:
         outline.append("Warnungen")
     if result.validation_issues:
         outline.append("Validierung")
     return outline
+
+
+def _render_species_overview(species_results) -> list[str]:
+    lines: list[str] = []
+    for species_result in species_results:
+        cluster_count = len(species_result.clusters)
+        lines.append(
+            f"- {species_result.species}: {species_result.total_observations} Nachweise, "
+            f"{cluster_count} Konzentrationsbereich(e), Brut={species_result.reproduction_assessment}"
+        )
+    return lines
