@@ -62,6 +62,8 @@ class ExporterTests(unittest.TestCase):
                 document_xml = archive.read("word/document.xml").decode("utf-8")
                 self.assertIn("Tier-KI Auswertung", document_xml)
                 self.assertIn("Amsel", document_xml)
+                self.assertIn("<w:tbl>", document_xml)
+                self.assertIn("Brut", document_xml)
                 self.assertIn("Title", styles_xml)
                 self.assertIn("Heading1", styles_xml)
                 self.assertIn("ListBullet", styles_xml)

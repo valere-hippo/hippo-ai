@@ -5,7 +5,7 @@ from typing import Iterable
 from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from .models import AnalysisResult
+from .models import AnalysisResult, SpeciesAnalysis
 from .reporter import render_report
 
 
@@ -16,14 +16,14 @@ def export_report(result: AnalysisResult, output_path: str | Path) -> Path:
     suffix = path.suffix.lower()
 
     if suffix == ".docx":
-        _write_docx(path, render_report(result))
+        _write_docx(path, result, render_report(result))
     else:
         path.write_text(render_report(result), encoding="utf-8")
 
     return path
 
 
-def _write_docx(path: Path, report_text: str) -> None:
+def _write_docx(path: Path, result: AnalysisResult, report_text: str) -> None:
     paragraphs = report_text.rstrip("\n").split("\n")
 
     with ZipFile(path, "w", compression=ZIP_DEFLATED) as archive:
@@ -33,7 +33,7 @@ def _write_docx(path: Path, report_text: str) -> None:
         archive.writestr("docProps/app.xml", _app_props_xml())
         archive.writestr("word/styles.xml", _styles_xml())
         archive.writestr("word/_rels/document.xml.rels", _document_rels_xml())
-        archive.writestr("word/document.xml", _document_xml(paragraphs))
+        archive.writestr("word/document.xml", _document_xml(result, paragraphs))
 
 
 def _content_types_xml() -> str:
@@ -148,14 +148,25 @@ def _styles_xml() -> str:
 """
 
 
-def _document_xml(paragraphs: Iterable[str]) -> str:
+def _document_xml(result: AnalysisResult, paragraphs: Iterable[str]) -> str:
     body_parts: list[str] = []
+    skip_overview_bullets = False
     for index, line in enumerate(paragraphs):
         if not line.strip():
+            if skip_overview_bullets:
+                skip_overview_bullets = False
             body_parts.append("<w:p><w:pPr><w:spacing w:after=\"120\"/></w:pPr></w:p>")
             continue
-        paragraph = _paragraph_xml(line, index)
-        body_parts.append(paragraph)
+        if line == "## Übersicht":
+            body_parts.append(_styled_paragraph("Heading1", "Übersicht"))
+            body_parts.append(_species_overview_table_xml(result.species_results))
+            skip_overview_bullets = True
+            continue
+        if skip_overview_bullets and line.startswith("- "):
+            continue
+        if skip_overview_bullets:
+            skip_overview_bullets = False
+        body_parts.append(_paragraph_xml(line, index))
 
     body_parts.append("<w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/><w:pgMar w:top=\"1440\" w:right=\"1440\" w:bottom=\"1440\" w:left=\"1440\"/></w:sectPr>")
     body = "".join(body_parts)
@@ -198,4 +209,67 @@ def _styled_paragraph(style_id: str, text: str) -> str:
         "<w:p><w:pPr><w:pStyle w:val=\"%s\"/></w:pPr>"
         "<w:r><w:t xml:space=\"preserve\">%s</w:t></w:r></w:p>"
         % (style_id, escape(text))
+    )
+
+
+def _species_overview_table_xml(species_results: list[SpeciesAnalysis]) -> str:
+    widths = [2400, 1200, 1200, 2200, 2000]
+    headers = ["Art", "Nachweise", "Cluster", "Brut", "Transit"]
+    rows = [
+        headers,
+        *[
+            [
+                species_result.species,
+                str(species_result.total_observations),
+                str(len(species_result.clusters)),
+                species_result.reproduction_assessment,
+                species_result.transit_assessment,
+            ]
+            for species_result in species_results
+        ],
+    ]
+
+    tbl_parts = [
+        "<w:tbl>",
+        (
+            "<w:tblPr>"
+            "<w:tblW w:w=\"9000\" w:type=\"dxa\"/>"
+            "<w:tblLayout w:type=\"fixed\"/>"
+            "<w:tblBorders>"
+            "<w:top w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"A6A6A6\"/>"
+            "<w:left w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"A6A6A6\"/>"
+            "<w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"A6A6A6\"/>"
+            "<w:right w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"A6A6A6\"/>"
+            "<w:insideH w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"A6A6A6\"/>"
+            "<w:insideV w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"A6A6A6\"/>"
+            "</w:tblBorders>"
+            "</w:tblPr>"
+        ),
+        "<w:tblGrid>"
+        + "".join(f"<w:gridCol w:w=\"{width}\"/>" for width in widths)
+        + "</w:tblGrid>",
+    ]
+    for row_index, row in enumerate(rows):
+        tbl_parts.append("<w:tr>")
+        for col_index, cell in enumerate(row):
+            tbl_parts.append(_table_cell_xml(cell, widths[col_index], header=row_index == 0))
+        tbl_parts.append("</w:tr>")
+    tbl_parts.append("</w:tbl>")
+    return "".join(tbl_parts)
+
+
+def _table_cell_xml(text: str, width: int, *, header: bool = False) -> str:
+    bold = "<w:b/>" if header else ""
+    shading = "<w:shd w:fill=\"D9E2F3\"/>" if header else ""
+    return (
+        "<w:tc>"
+        "<w:tcPr>"
+        f"<w:tcW w:w=\"{width}\" w:type=\"dxa\"/>"
+        f"{shading}"
+        "</w:tcPr>"
+        "<w:p>"
+        "<w:pPr><w:jc w:val=\"left\"/></w:pPr>"
+        f"<w:r><w:rPr>{bold}</w:rPr><w:t xml:space=\"preserve\">{escape(text)}</w:t></w:r>"
+        "</w:p>"
+        "</w:tc>"
     )
