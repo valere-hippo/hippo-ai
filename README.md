@@ -32,6 +32,23 @@ Analyseparameter laden:
 PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg --analysis-config-file /pfad/zu/analyse.json
 ```
 
+Beispiel für `analyse.json`:
+
+```json
+{
+  "distance_threshold_m": 75,
+  "min_cluster_size": 2,
+  "distance_threshold_by_group": {
+    "bat": 50,
+    "bird": 75
+  },
+  "min_cluster_size_by_group": {
+    "bat": 3,
+    "bird": 2
+  }
+}
+```
+
 Eigene Artenregeln laden:
 
 ```bash

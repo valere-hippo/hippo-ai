@@ -109,6 +109,53 @@ class AnalyzerTests(unittest.TestCase):
         self.assertIn("Zwergfledermaus", species.transit_assessment)
         self.assertEqual(species.priority, "hoch")
 
+    def test_uses_group_specific_cluster_thresholds(self) -> None:
+        observations = [
+            Observation(
+                species="Amsel",
+                observed_at=date(2026, 4, 10),
+                geometry=_Geometry(_Point(0.0, 0.0)),
+                attrs={"habitat": "Hecke"},
+            ),
+            Observation(
+                species="Amsel",
+                observed_at=date(2026, 4, 11),
+                geometry=_Geometry(_Point(20.0, 20.0)),
+                attrs={"habitat": "Hecke"},
+            ),
+            Observation(
+                species="Zwergfledermaus",
+                observed_at=date(2026, 6, 5),
+                geometry=_Geometry(_Point(0.0, 0.0)),
+                attrs={"habitat": "Hecke entlang Weg", "corridor": "Leitlinie"},
+            ),
+            Observation(
+                species="Zwergfledermaus",
+                observed_at=date(2026, 6, 6),
+                geometry=_Geometry(_Point(20.0, 0.0)),
+                attrs={"habitat": "Gewässerrand", "corridor": "Leitlinie"},
+            ),
+            Observation(
+                species="Zwergfledermaus",
+                observed_at=date(2026, 6, 7),
+                geometry=_Geometry(_Point(22.0, 1.0)),
+                attrs={"habitat": "Hecke", "corridor": "Leitlinie"},
+            ),
+        ]
+
+        config = AnalyzerConfig(
+            distance_threshold_m=15.0,
+            min_cluster_size=2,
+            distance_threshold_by_group={"bat": 25.0, "bird": 15.0},
+            min_cluster_size_by_group={"bat": 3, "bird": 2},
+        )
+        result = analyze_observations(observations, source_path="demo.gpkg", config=config)
+        species_by_name = {species.species: species for species in result.species_results}
+
+        self.assertFalse(species_by_name["Amsel"].clusters)
+        self.assertTrue(species_by_name["Zwergfledermaus"].clusters)
+        self.assertEqual(species_by_name["Zwergfledermaus"].clusters[0].notes[0], "Abstandsschwelle 25.0 m")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,12 @@ class AnalyzerConfigTests(unittest.TestCase):
         payload = {
             "distance_threshold_m": 120.0,
             "min_cluster_size": 4,
+            "distance_threshold_by_group": {
+                "bat": 42.0,
+            },
+            "min_cluster_size_by_group": {
+                "bat": 3,
+            },
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -29,6 +35,8 @@ class AnalyzerConfigTests(unittest.TestCase):
 
         self.assertEqual(config.distance_threshold_m, 120.0)
         self.assertEqual(config.min_cluster_size, 4)
+        self.assertEqual(config.distance_threshold_for("bat"), 42.0)
+        self.assertEqual(config.min_cluster_size_for("bat"), 3)
 
 
 if __name__ == "__main__":

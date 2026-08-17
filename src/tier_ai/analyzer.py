@@ -18,13 +18,13 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
 
     species_results: list[SpeciesAnalysis] = []
     for species, items in sorted(grouped.items(), key=lambda pair: pair[0].lower()):
-        clusters = _build_clusters(items, config)
         rule = get_rule(species)
+        taxon_group = rule.taxon_group if rule else "bird"
+        clusters = _build_clusters(items, config, taxon_group)
         habitat_assessment = _assess_habitat(species, items, rule)
         concentration = _assess_concentration(items, clusters, rule)
         reproduction = _assess_reproduction(items, clusters, rule, habitat_assessment)
         transit_assessment = _assess_transit(species, items, clusters, rule, habitat_assessment)
-        taxon_group = rule.taxon_group if rule else "bird"
         recommendation = _build_recommendation(
             taxon_group,
             concentration,
@@ -71,8 +71,11 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
     )
 
 
-def _build_clusters(items: list[Observation], config: AnalyzerConfig) -> list[ClusterSummary]:
-    if len(items) < config.min_cluster_size:
+def _build_clusters(items: list[Observation], config: AnalyzerConfig, taxon_group: str) -> list[ClusterSummary]:
+    min_cluster_size = config.min_cluster_size_for(taxon_group)
+    distance_threshold = config.distance_threshold_for(taxon_group)
+
+    if len(items) < min_cluster_size:
         return []
 
     centroids = []
@@ -82,14 +85,14 @@ def _build_clusters(items: list[Observation], config: AnalyzerConfig) -> list[Cl
             continue
         centroids.append((centroid.x, centroid.y))
 
-    if len(centroids) < config.min_cluster_size:
+    if len(centroids) < min_cluster_size:
         return []
 
-    clusters = _connected_components(centroids, config.distance_threshold_m)
+    clusters = _connected_components(centroids, distance_threshold)
 
     summaries: list[ClusterSummary] = []
     for index, cluster in enumerate(clusters, start=1):
-        if len(cluster) < config.min_cluster_size:
+        if len(cluster) < min_cluster_size:
             continue
         xs = [point[0] for point in cluster]
         ys = [point[1] for point in cluster]
@@ -99,7 +102,7 @@ def _build_clusters(items: list[Observation], config: AnalyzerConfig) -> list[Cl
                 observation_count=len(cluster),
                 centroid_x=mean(xs),
                 centroid_y=mean(ys),
-                notes=[f"Abstandsschwelle {config.distance_threshold_m:.1f} m"],
+                notes=[f"Abstandsschwelle {distance_threshold:.1f} m"],
             )
         )
     return summaries

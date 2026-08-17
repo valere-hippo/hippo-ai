@@ -18,6 +18,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--date-column", default="observed_at", help="Name der Datums-Spalte")
     parser.add_argument("--distance-threshold-m", type=float, default=None, help="Distanzschwelle für Cluster in Metern")
     parser.add_argument("--min-cluster-size", type=int, default=None, help="Minimale Anzahl Beobachtungen für einen Cluster")
+    parser.add_argument("--bat-distance-threshold-m", type=float, default=None, help="Distanzschwelle für Fledermaus-Cluster in Metern")
+    parser.add_argument("--bird-distance-threshold-m", type=float, default=None, help="Distanzschwelle für Vogel-Cluster in Metern")
+    parser.add_argument("--bat-min-cluster-size", type=int, default=None, help="Minimale Clustergröße für Fledermäuse")
+    parser.add_argument("--bird-min-cluster-size", type=int, default=None, help="Minimale Clustergröße für Vögel")
     parser.add_argument("--analysis-config-file", default=None, help="Pfad zu einer JSON-Datei mit Analyseparametern")
     parser.add_argument("--rules-file", default=None, help="Pfad zu einer JSON-Datei mit Artenregeln")
     return parser
@@ -34,6 +38,14 @@ def main() -> None:
         config.distance_threshold_m = args.distance_threshold_m
     if args.min_cluster_size is not None:
         config.min_cluster_size = args.min_cluster_size
+    if args.bat_distance_threshold_m is not None:
+        config.distance_threshold_by_group["bat"] = args.bat_distance_threshold_m
+    if args.bird_distance_threshold_m is not None:
+        config.distance_threshold_by_group["bird"] = args.bird_distance_threshold_m
+    if args.bat_min_cluster_size is not None:
+        config.min_cluster_size_by_group["bat"] = args.bat_min_cluster_size
+    if args.bird_min_cluster_size is not None:
+        config.min_cluster_size_by_group["bird"] = args.bird_min_cluster_size
     if args.rules_file:
         set_rule_source(args.rules_file)
     observations, validation_issues, metadata = load_observations_with_issues(args.input, mapping=mapping)
