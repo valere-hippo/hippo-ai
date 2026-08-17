@@ -156,6 +156,43 @@ class AnalyzerTests(unittest.TestCase):
         self.assertTrue(species_by_name["Zwergfledermaus"].clusters)
         self.assertEqual(species_by_name["Zwergfledermaus"].clusters[0].notes[0], "Abstandsschwelle 25.0 m")
 
+    def test_uses_species_specific_cluster_thresholds_before_group_thresholds(self) -> None:
+        observations = [
+            Observation(
+                species="Amsel",
+                observed_at=date(2026, 4, 10),
+                geometry=_Geometry(_Point(0.0, 0.0)),
+                attrs={"habitat": "Hecke"},
+            ),
+            Observation(
+                species="Amsel",
+                observed_at=date(2026, 4, 11),
+                geometry=_Geometry(_Point(18.0, 0.0)),
+                attrs={"habitat": "Hecke"},
+            ),
+            Observation(
+                species="Amsel",
+                observed_at=date(2026, 4, 12),
+                geometry=_Geometry(_Point(20.0, 1.0)),
+                attrs={"habitat": "Hecke"},
+            ),
+        ]
+
+        config = AnalyzerConfig(
+            distance_threshold_m=10.0,
+            min_cluster_size=2,
+            distance_threshold_by_group={"bird": 10.0},
+            min_cluster_size_by_group={"bird": 2},
+            distance_threshold_by_species={"amsel": 25.0},
+            min_cluster_size_by_species={"amsel": 3},
+        )
+        result = analyze_observations(observations, source_path="demo.gpkg", config=config)
+        species = result.species_results[0]
+
+        self.assertTrue(species.clusters)
+        self.assertEqual(species.clusters[0].notes[0], "Abstandsschwelle 25.0 m")
+        self.assertEqual(species.priority, "hoch")
+
 
 if __name__ == "__main__":
     unittest.main()

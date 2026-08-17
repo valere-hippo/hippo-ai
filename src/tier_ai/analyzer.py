@@ -20,7 +20,7 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
     for species, items in sorted(grouped.items(), key=lambda pair: pair[0].lower()):
         rule = get_rule(species)
         taxon_group = rule.taxon_group if rule else "bird"
-        clusters = _build_clusters(items, config, taxon_group)
+        clusters = _build_clusters(items, config, species, taxon_group)
         habitat_assessment = _assess_habitat(species, items, rule)
         concentration = _assess_concentration(items, clusters, rule)
         reproduction = _assess_reproduction(items, clusters, rule, habitat_assessment)
@@ -71,9 +71,9 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
     )
 
 
-def _build_clusters(items: list[Observation], config: AnalyzerConfig, taxon_group: str) -> list[ClusterSummary]:
-    min_cluster_size = config.min_cluster_size_for(taxon_group)
-    distance_threshold = config.distance_threshold_for(taxon_group)
+def _build_clusters(items: list[Observation], config: AnalyzerConfig, species: str, taxon_group: str) -> list[ClusterSummary]:
+    min_cluster_size = config.min_cluster_size_for_species(species, taxon_group)
+    distance_threshold = config.distance_threshold_for_species(species, taxon_group)
 
     if len(items) < min_cluster_size:
         return []

@@ -45,6 +45,12 @@ Beispiel für `analyse.json`:
   "min_cluster_size_by_group": {
     "bat": 3,
     "bird": 2
+  },
+  "distance_threshold_by_species": {
+    "amsel": 30
+  },
+  "min_cluster_size_by_species": {
+    "amsel": 3
   }
 }
 ```

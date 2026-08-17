@@ -25,6 +25,12 @@ class AnalyzerConfigTests(unittest.TestCase):
             "min_cluster_size_by_group": {
                 "bat": 3,
             },
+            "distance_threshold_by_species": {
+                "amsel": 30.0,
+            },
+            "min_cluster_size_by_species": {
+                "amsel": 5,
+            },
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -37,6 +43,8 @@ class AnalyzerConfigTests(unittest.TestCase):
         self.assertEqual(config.min_cluster_size, 4)
         self.assertEqual(config.distance_threshold_for("bat"), 42.0)
         self.assertEqual(config.min_cluster_size_for("bat"), 3)
+        self.assertEqual(config.distance_threshold_for_species("Amsel", "bird"), 30.0)
+        self.assertEqual(config.min_cluster_size_for_species("Amsel", "bird"), 5)
 
 
 if __name__ == "__main__":
