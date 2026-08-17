@@ -20,6 +20,12 @@ Ou en `DOCX`:
 PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg -o bericht.docx
 ```
 
+Ou en `PDF`:
+
+```bash
+PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg -o bericht.pdf
+```
+
 Wenn die Spaltennamen abweichen:
 
 ```bash

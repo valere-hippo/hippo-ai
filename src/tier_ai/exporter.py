@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import textwrap
 from pathlib import Path
 from typing import Iterable
 from xml.sax.saxutils import escape
@@ -10,13 +11,15 @@ from .reporter import render_report
 
 
 def export_report(result: AnalysisResult, output_path: str | Path) -> Path:
-    """Exportiert den Bericht als TXT oder DOCX."""
+    """Exportiert den Bericht als TXT, DOCX oder PDF."""
 
     path = Path(output_path)
     suffix = path.suffix.lower()
 
     if suffix == ".docx":
         _write_docx(path, result, render_report(result))
+    elif suffix == ".pdf":
+        _write_pdf(path, render_report(result))
     else:
         path.write_text(render_report(result), encoding="utf-8")
 
@@ -37,6 +40,12 @@ def _write_docx(path: Path, result: AnalysisResult, report_text: str) -> None:
         archive.writestr("word/footer1.xml", _footer_xml())
         archive.writestr("word/_rels/document.xml.rels", _document_rels_xml())
         archive.writestr("word/document.xml", _document_xml(result, paragraphs))
+
+
+def _write_pdf(path: Path, report_text: str) -> None:
+    pages = _paginate_report(report_text)
+    pdf_bytes = _build_pdf_document(pages)
+    path.write_bytes(pdf_bytes)
 
 
 def _content_types_xml() -> str:
@@ -290,6 +299,134 @@ def _toc_field_paragraph() -> str:
         "<w:r><w:fldChar w:fldCharType=\"end\"/></w:r>"
         "</w:p>"
     )
+
+
+def _paginate_report(report_text: str) -> list[list[str]]:
+    max_lines_per_page = 46
+    max_chars_per_line = 92
+    lines: list[str] = []
+    for raw_line in report_text.rstrip("\n").split("\n"):
+        if not raw_line.strip():
+            lines.append("")
+            continue
+        wrapped = textwrap.wrap(raw_line, width=max_chars_per_line) or [""]
+        lines.extend(wrapped)
+
+    pages: list[list[str]] = []
+    current_page: list[str] = []
+    for line in lines:
+        if len(current_page) >= max_lines_per_page:
+            pages.append(current_page)
+            current_page = []
+        current_page.append(line)
+    if current_page:
+        pages.append(current_page)
+    return pages or [[]]
+
+
+def _build_pdf_document(pages: list[list[str]]) -> bytes:
+    objects: list[bytes] = []
+
+    def add_object(content: str | bytes) -> int:
+        if isinstance(content, str):
+            content_bytes = content.encode("latin-1")
+        else:
+            content_bytes = content
+        objects.append(content_bytes)
+        return len(objects)
+
+    font_obj = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+
+    content_obj_ids: list[int] = []
+    page_obj_ids: list[int] = []
+    for page_lines in pages:
+        content_stream = _pdf_page_stream(page_lines)
+        content_obj_ids.append(add_object(content_stream))
+        page_obj_ids.append(len(objects) + 1)
+        objects.append(b"")
+
+    pages_obj_id = len(objects) + 1
+    objects.append(b"")
+    catalog_obj_id = len(objects) + 1
+    objects.append(b"")
+    info_obj_id = add_object(
+        "<< /Producer (tier-ai) /Title (Tier-KI Auswertung) /Creator (tier-ai) >>"
+    )
+
+    page_object_templates: list[bytes] = []
+    for content_obj_id in content_obj_ids:
+        page_object_templates.append(
+            (
+                f"<< /Type /Page /Parent {pages_obj_id} 0 R "
+                f"/MediaBox [0 0 595 842] "
+                f"/Resources << /Font << /F1 {font_obj} 0 R >> >> "
+                f"/Contents {content_obj_id} 0 R >>"
+            ).encode("latin-1")
+        )
+
+    kids = " ".join(f"{page_obj_id} 0 R" for page_obj_id in page_obj_ids)
+    pages_object = f"<< /Type /Pages /Kids [{kids}] /Count {len(page_obj_ids)} >>".encode("latin-1")
+    catalog_object = f"<< /Type /Catalog /Pages {pages_obj_id} 0 R >>".encode("latin-1")
+
+    for index, page_object in enumerate(page_object_templates):
+        objects[page_obj_ids[index] - 1] = page_object
+    objects[pages_obj_id - 1] = pages_object
+    objects[catalog_obj_id - 1] = catalog_object
+
+    return _serialize_pdf(objects, catalog_obj_id, info_obj_id)
+
+
+def _pdf_page_stream(page_lines: list[str]) -> bytes:
+    y = 800
+    lines = [
+        "BT",
+        "/F1 11 Tf",
+        "72 800 Td",
+        "13 TL",
+    ]
+    first_line = True
+    for raw_line in page_lines:
+        escaped = _pdf_escape_text(raw_line)
+        if first_line:
+            lines.append(f"({escaped}) Tj")
+            first_line = False
+        elif raw_line:
+            lines.append(f"T* ({escaped}) Tj")
+        else:
+            lines.append("T* () Tj")
+    lines.append("ET")
+    stream = "\n".join(lines).encode("latin-1")
+    return f"<< /Length {len(stream)} >>\nstream\n".encode("latin-1") + stream + b"\nendstream"
+
+
+def _serialize_pdf(objects: list[bytes], catalog_obj_id: int, info_obj_id: int) -> bytes:
+    output = bytearray()
+    output.extend(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+
+    offsets: list[int] = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(output))
+        output.extend(f"{index} 0 obj\n".encode("latin-1"))
+        output.extend(obj)
+        output.extend(b"\nendobj\n")
+
+    xref_offset = len(output)
+    output.extend(f"xref\n0 {len(objects) + 1}\n".encode("latin-1"))
+    output.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        output.extend(f"{offset:010d} 00000 n \n".encode("latin-1"))
+    output.extend(
+        (
+            "trailer\n"
+            f"<< /Size {len(objects) + 1} /Root {catalog_obj_id} 0 R /Info {info_obj_id} 0 R >>\n"
+            f"startxref\n{xref_offset}\n%%EOF\n"
+        ).encode("latin-1")
+    )
+    return bytes(output)
+
+
+def _pdf_escape_text(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
 def _species_overview_table_xml(species_results: list[SpeciesAnalysis]) -> str:

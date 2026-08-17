@@ -30,6 +30,26 @@ class ExporterTests(unittest.TestCase):
             self.assertTrue(output.exists())
             self.assertIn("Amsel", output.read_text(encoding="utf-8"))
 
+    def test_exports_pdf(self) -> None:
+        result = AnalysisResult(
+            source_path="input.gpkg",
+            species_results=[
+                SpeciesAnalysis(
+                    species="Amsel",
+                    total_observations=1,
+                    text_summary="Art Amsel: 1 Nachweis im Untersuchungsgebiet.",
+                )
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = export_report(result, Path(tmpdir) / "bericht.pdf")
+
+            self.assertTrue(output.exists())
+            content = output.read_bytes()
+            self.assertTrue(content.startswith(b"%PDF-1.4"))
+            self.assertIn(b"Tier-KI Auswertung", content)
+
     def test_exports_docx(self) -> None:
         result = AnalysisResult(
             source_path="input.gpkg",
