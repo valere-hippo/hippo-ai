@@ -39,6 +39,7 @@ def test_render_report_contains_species():
 
     assert "Amsel" in report
     assert "input.gpkg" in report
+    assert "Inhaltsverzeichnis" in report
     assert "Zusammenfassung" in report
     assert "Verdacht auf Konzentrationszone" in report
     assert "Habitat" in report

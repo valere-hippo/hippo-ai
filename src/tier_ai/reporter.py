@@ -9,6 +9,12 @@ def render_report(result: AnalysisResult) -> str:
     lines.append(f"Quelle: {result.source_path}")
     lines.append("")
 
+    outline = _build_outline(result)
+    if outline:
+        lines.append("## Inhaltsverzeichnis")
+        lines.extend(f"- {entry}" for entry in outline)
+        lines.append("")
+
     if result.executive_summary:
         lines.append("## Zusammenfassung")
         lines.append(result.executive_summary)
@@ -52,3 +58,16 @@ def render_report(result: AnalysisResult) -> str:
         lines.extend(f"- {issue}" for issue in result.validation_issues)
 
     return "\n".join(lines).strip() + "\n"
+
+
+def _build_outline(result: AnalysisResult) -> list[str]:
+    outline: list[str] = []
+    outline.append("Zusammenfassung")
+    if result.metadata is not None:
+        outline.append("Metadaten")
+    outline.extend(f"Art: {species_result.species}" for species_result in result.species_results)
+    if result.warnings:
+        outline.append("Warnungen")
+    if result.validation_issues:
+        outline.append("Validierung")
+    return outline
