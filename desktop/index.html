@@ -32,12 +32,18 @@
 
           <label class="full">
             <span>Eingabedatei</span>
-            <input id="input" name="input" placeholder="C:\\Pfad\\zur\\datei.gpkg" required />
+            <div class="input-row">
+              <input id="input" name="input" placeholder="C:\\Pfad\\zur\\datei.gpkg" required />
+              <button type="button" class="secondary compact" data-action="pick-input">Wählen</button>
+            </div>
           </label>
 
           <label>
             <span>Ausgabe</span>
-            <input id="output" name="output" placeholder="C:\\Pfad\\bericht.docx" />
+            <div class="input-row">
+              <input id="output" name="output" placeholder="C:\\Pfad\\bericht.docx" />
+              <button type="button" class="secondary compact" data-action="pick-output">Speichern</button>
+            </div>
           </label>
 
           <label>

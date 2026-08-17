@@ -83,6 +83,7 @@ fn run_analysis(
 
 fn main() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![run_analysis])
     .run(tauri::generate_context!())
     .expect("error while running tier-ai desktop app");

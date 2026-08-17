@@ -1,10 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
+import { open, save } from '@tauri-apps/plugin-dialog';
 
 const form = document.getElementById('analysis-form');
 const runButton = document.getElementById('run-button');
 const resetButton = document.getElementById('reset-button');
 const output = document.getElementById('result-output');
 const statusPill = document.getElementById('status-pill');
+const pickInputButton = document.querySelector('[data-action="pick-input"]');
+const pickOutputButton = document.querySelector('[data-action="pick-output"]');
 
 const fieldNames = [
   'python_executable',
@@ -26,6 +29,38 @@ resetButton.addEventListener('click', () => {
   document.getElementById('date_column').value = 'observed_at';
   output.textContent = 'Noch keine Analyse gestartet.';
   setStatus('Bereit');
+});
+
+pickInputButton.addEventListener('click', async () => {
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    title: 'GeoPackage oder Shape auswählen',
+    filters: [
+      { name: 'GeoPackage', extensions: ['gpkg'] },
+      { name: 'Shape', extensions: ['shp'] },
+      { name: 'Alle Dateien', extensions: ['*'] },
+    ],
+  });
+
+  if (typeof selected === 'string' && selected.trim()) {
+    document.getElementById('input').value = selected;
+  }
+});
+
+pickOutputButton.addEventListener('click', async () => {
+  const selected = await save({
+    title: 'Ausgabedatei speichern',
+    filters: [
+      { name: 'Word', extensions: ['docx'] },
+      { name: 'PDF', extensions: ['pdf'] },
+      { name: 'Text', extensions: ['txt'] },
+    ],
+  });
+
+  if (typeof selected === 'string' && selected.trim()) {
+    document.getElementById('output').value = selected;
+  }
 });
 
 form.addEventListener('submit', async (event) => {

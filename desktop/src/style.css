@@ -83,6 +83,13 @@ label {
   gap: 8px;
 }
 
+.input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
 label.full {
   grid-column: 1 / -1;
 }
@@ -129,6 +136,11 @@ button {
 button.secondary {
   background: rgba(40, 50, 68, 0.9);
   color: var(--text);
+}
+
+button.compact {
+  padding-inline: 14px;
+  white-space: nowrap;
 }
 
 button:disabled {
@@ -186,6 +198,10 @@ h2 {
   }
 
   .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .input-row {
     grid-template-columns: 1fr;
   }
 }
