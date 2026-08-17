@@ -102,6 +102,37 @@
         </div>
         <div id="history-list" class="history-list"></div>
       </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Laufdetails</h2>
+          <button type="button" id="load-history-button" class="secondary compact">Laden</button>
+        </div>
+        <div id="detail-empty" class="history-empty">Wähle einen Lauf aus dem Verlauf aus.</div>
+        <div id="detail-view" class="detail-view is-hidden">
+          <div class="detail-grid">
+            <div>
+              <div class="detail-label">Zeitpunkt</div>
+              <div id="detail-timestamp" class="detail-value"></div>
+            </div>
+            <div>
+              <div class="detail-label">Status</div>
+              <div id="detail-status" class="detail-value"></div>
+            </div>
+            <div>
+              <div class="detail-label">Eingabe</div>
+              <div id="detail-input" class="detail-value"></div>
+            </div>
+            <div>
+              <div class="detail-label">Ausgabe</div>
+              <div id="detail-output" class="detail-value"></div>
+            </div>
+          </div>
+          <div class="detail-command" id="detail-command"></div>
+          <div class="detail-stdout" id="detail-stdout"></div>
+          <div class="detail-stderr" id="detail-stderr"></div>
+        </div>
+      </section>
     </main>
   </body>
 </html>

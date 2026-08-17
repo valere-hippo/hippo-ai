@@ -11,10 +11,21 @@ const progressPercent = document.getElementById('progress-percent');
 const progressBar = document.getElementById('progress-bar');
 const historyList = document.getElementById('history-list');
 const clearHistoryButton = document.getElementById('clear-history-button');
+const loadHistoryButton = document.getElementById('load-history-button');
+const detailEmpty = document.getElementById('detail-empty');
+const detailView = document.getElementById('detail-view');
+const detailTimestamp = document.getElementById('detail-timestamp');
+const detailStatus = document.getElementById('detail-status');
+const detailInput = document.getElementById('detail-input');
+const detailOutput = document.getElementById('detail-output');
+const detailCommand = document.getElementById('detail-command');
+const detailStdout = document.getElementById('detail-stdout');
+const detailStderr = document.getElementById('detail-stderr');
 const pickInputButton = document.querySelector('[data-action="pick-input"]');
 const pickOutputButton = document.querySelector('[data-action="pick-output"]');
 const storageKey = 'tier-ai.desktop.form';
 const historyKey = 'tier-ai.desktop.history';
+let selectedHistoryIndex = null;
 
 const fieldNames = [
   'python_executable',
@@ -30,6 +41,7 @@ const fieldNames = [
 
 restoreFormState();
 renderHistory();
+renderDetails(null);
 
 fieldNames.forEach((name) => {
   document.getElementById(name).addEventListener('change', persistFormState);
@@ -49,7 +61,21 @@ resetButton.addEventListener('click', () => {
 
 clearHistoryButton.addEventListener('click', () => {
   localStorage.removeItem(historyKey);
+  selectedHistoryIndex = null;
   renderHistory();
+  renderDetails(null);
+});
+
+loadHistoryButton.addEventListener('click', () => {
+  if (selectedHistoryIndex === null) {
+    return;
+  }
+  const history = loadHistory();
+  const entry = history[selectedHistoryIndex];
+  if (!entry) {
+    return;
+  }
+  loadHistoryEntry(entry);
 });
 
 pickInputButton.addEventListener('click', async () => {
@@ -131,6 +157,15 @@ form.addEventListener('submit', async (event) => {
       output: payload.output || '',
       exitCode: result.exit_code,
       command: result.command,
+      python_executable: payload.python_executable,
+      project_root: payload.project_root,
+      species_column: payload.species_column,
+      date_column: payload.date_column,
+      analysis_config_file: payload.analysis_config_file,
+      rules_file: payload.rules_file,
+      docx_template_dir: payload.docx_template_dir,
+      stdout: result.stdout || '',
+      stderr: result.stderr || '',
     });
   } catch (error) {
     if (progressTimer !== null) {
@@ -232,6 +267,7 @@ function addHistoryEntry(entry) {
   history.unshift(entry);
   saveHistory(history);
   renderHistory();
+  renderDetails({ ...entry, index: 0 });
 }
 
 function renderHistory() {
@@ -242,11 +278,11 @@ function renderHistory() {
   }
 
   historyList.innerHTML = history
-    .map((entry) => {
+    .map((entry, index) => {
       const when = new Date(entry.timestamp).toLocaleString('de-DE');
       const statusText = entry.exitCode === 0 ? 'Erfolgreich' : `Fehler (${entry.exitCode})`;
       return `
-        <article class="history-item">
+        <button type="button" class="history-item" data-history-index="${index}">
           <div class="history-top">
             <div>
               <div class="history-title">${escapeHtml(entry.input || 'Unbekannte Eingabe')}</div>
@@ -255,10 +291,19 @@ function renderHistory() {
             <div class="history-meta">${escapeHtml(entry.output || 'Keine Ausgabe')}</div>
           </div>
           <div class="history-command">${escapeHtml(entry.command || '')}</div>
-        </article>
+        </button>
       `;
     })
     .join('');
+
+  historyList.querySelectorAll('[data-history-index]').forEach((item) => {
+    item.addEventListener('click', () => {
+      const index = Number(item.getAttribute('data-history-index'));
+      selectedHistoryIndex = Number.isNaN(index) ? null : index;
+      const entry = history[index];
+      renderDetails(entry ? { ...entry, index } : null);
+    });
+  });
 }
 
 function escapeHtml(value) {
@@ -268,4 +313,36 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function renderDetails(entry) {
+  if (!entry) {
+    detailEmpty.classList.remove('is-hidden');
+    detailView.classList.add('is-hidden');
+    loadHistoryButton.disabled = true;
+    return;
+  }
+
+  detailEmpty.classList.add('is-hidden');
+  detailView.classList.remove('is-hidden');
+  loadHistoryButton.disabled = false;
+  detailTimestamp.textContent = new Date(entry.timestamp).toLocaleString('de-DE');
+  detailStatus.textContent = entry.exitCode === 0 ? 'Erfolgreich' : `Fehler (${entry.exitCode})`;
+  detailInput.textContent = entry.input || 'Unbekannt';
+  detailOutput.textContent = entry.output || 'Keine Ausgabe';
+  detailCommand.textContent = entry.command || '';
+  detailStdout.textContent = entry.stdout ? `stdout:\n${entry.stdout}` : 'stdout: (leer)';
+  detailStderr.textContent = entry.stderr ? `stderr:\n${entry.stderr}` : 'stderr: (leer)';
+}
+
+function loadHistoryEntry(entry) {
+  fieldNames.forEach((name) => {
+    if (typeof entry[name] === 'string') {
+      document.getElementById(name).value = entry[name];
+    }
+  });
+  persistFormState();
+  setStatus('Bereit');
+  setProgress('Lauf geladen', 100, false);
+  output.textContent = `Geladener Lauf:\n${entry.command || ''}`;
 }
