@@ -65,3 +65,4 @@ Im aktuellen Prototyp wird dafür der Projekt-Root per Formularfeld übergeben.
 - Die letzten Läufe werden lokal als Verlauf gespeichert
 - Die App kann direkt TXT, DOCX und PDF exportieren, ohne Terminal
 - Über „Python vorbereiten“ wird automatisch eine lokale `.venv` eingerichtet und das Projekt installiert
+- Als Eingabe bitte `.gpkg` oder `.shp` wählen; `.cpg` ist nur eine Begleitdatei und keine Analyse-Eingabe

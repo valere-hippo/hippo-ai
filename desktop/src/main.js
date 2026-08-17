@@ -139,13 +139,11 @@ pickInputButton.addEventListener('click', async () => {
     filters: [
       { name: 'GeoPackage', extensions: ['gpkg'] },
       { name: 'Shape', extensions: ['shp'] },
-      { name: 'Alle Dateien', extensions: ['*'] },
     ],
   });
 
   if (typeof selected === 'string' && selected.trim()) {
-    document.getElementById('input').value = selected;
-    persistFormState();
+    setInputPath(selected);
   }
 });
 
@@ -175,6 +173,15 @@ form.addEventListener('submit', async (event) => {
   if (!payload.input) {
     setStatus('Fehler', 'error');
     output.textContent = 'Bitte eine Eingabedatei angeben.';
+    return;
+  }
+
+  if (!isSupportedInputFile(payload.input)) {
+    setStatus('Fehler', 'error');
+    output.textContent = [
+      'Bitte eine GeoPackage- oder Shape-Datei auswählen.',
+      'Dateien mit der Endung .cpg sind nur Begleitdateien und keine Analyse-Eingabe.',
+    ].join('\n');
     return;
   }
 
@@ -232,6 +239,8 @@ form.addEventListener('submit', async (event) => {
         '',
         `Fehler:\n${error}`,
       ].join('\n');
+    } else if (String(error).includes('Keine GeoPackage- oder Shape-Datei')) {
+      output.textContent = 'Bitte eine .gpkg- oder .shp-Datei auswählen. .cpg ist keine Analyse-Eingabe.';
     } else {
       output.textContent = `Fehler beim Starten der Analyse:\n${error}`;
     }
@@ -430,4 +439,13 @@ async function runDirectExport(extension, label) {
   document.getElementById('output').value = selected;
   persistFormState();
   await form.requestSubmit();
+}
+
+function setInputPath(value) {
+  document.getElementById('input').value = value;
+  persistFormState();
+}
+
+function isSupportedInputFile(path) {
+  return /\.(gpkg|shp)$/i.test(path);
 }

@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-prepare-environment"
+description = "Allows the frontend to create and prepare the local Python environment."
+commands.allow = ["prepare_environment"]

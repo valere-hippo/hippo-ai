@@ -118,8 +118,8 @@ fn run_analysis(
   }
 
   let display_command = format!(
-    "{} -m tier_ai {}",
-    format_argv(&python.command, &python.args, std::iter::empty::<&str>()),
+    "{} {}",
+    python.command,
     command
       .get_args()
       .map(|arg| arg.to_string_lossy().into_owned())
