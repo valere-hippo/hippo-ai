@@ -19,3 +19,9 @@ Wenn die Spaltennamen abweichen:
 ```bash
 PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg --species-column art --date-column datum
 ```
+
+Eigene Artenregeln laden:
+
+```bash
+PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg --rules-file /pfad/zu/eigenen_regeln.json
+```

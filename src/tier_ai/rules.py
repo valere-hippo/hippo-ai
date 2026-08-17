@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from functools import lru_cache
+from importlib import resources
+from pathlib import Path
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -14,27 +19,7 @@ class SpeciesRule:
     notes: str = ""
 
 
-DEFAULT_SPECIES_RULES: dict[str, SpeciesRule] = {
-    "amsel": SpeciesRule(
-        species="Amsel",
-        breeding_months={3, 4, 5, 6, 7},
-        habitat_keywords={"gehölz", "gebüsch", "baum", "hecke"},
-        min_contacts_for_reproduction=2,
-        notes="Gebüsch- und Gehölzart; offene Felder sind als Brutplatz unplausibel.",
-    ),
-    "blaumeise": SpeciesRule(
-        species="Blaumeise",
-        breeding_months={3, 4, 5, 6, 7},
-        habitat_keywords={"gehölz", "baum", "park", "hecke"},
-        min_contacts_for_reproduction=2,
-    ),
-    "buntspecht": SpeciesRule(
-        species="Buntspecht",
-        breeding_months={3, 4, 5, 6, 7},
-        habitat_keywords={"wald", "baum", "gehölz", "park"},
-        min_contacts_for_reproduction=2,
-    ),
-}
+_RULE_SOURCE: str | None = None
 
 
 def normalize_species_name(value: str) -> str:
@@ -42,7 +27,49 @@ def normalize_species_name(value: str) -> str:
 
 
 def get_rule(species: str) -> SpeciesRule | None:
-    return DEFAULT_SPECIES_RULES.get(normalize_species_name(species))
+    return _rules_for_source(_RULE_SOURCE).get(normalize_species_name(species))
+
+
+def set_rule_source(rule_source: str | Path | None) -> None:
+    global _RULE_SOURCE
+    _RULE_SOURCE = str(rule_source) if rule_source is not None else None
+    _rules_for_source.cache_clear()
+
+
+def load_species_rules(rule_source: str | Path | None = None) -> dict[str, SpeciesRule]:
+    raw = _load_rule_payload(rule_source)
+    rules: dict[str, SpeciesRule] = {}
+    for key, value in raw.items():
+        rules[normalize_species_name(key)] = _parse_species_rule(value)
+    return rules
+
+
+@lru_cache(maxsize=1)
+def _rules_for_source(rule_source: str | None) -> dict[str, SpeciesRule]:
+    raw = _load_rule_payload(rule_source)
+    rules: dict[str, SpeciesRule] = {}
+    for key, value in raw.items():
+        rules[normalize_species_name(key)] = _parse_species_rule(value)
+    return rules
+
+
+def _load_rule_payload(rule_source: str | Path | None) -> dict[str, Any]:
+    if rule_source is None:
+        resource = resources.files("tier_ai.data").joinpath("species_rules.json")
+        return json.loads(resource.read_text(encoding="utf-8"))
+
+    path = Path(rule_source)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _parse_species_rule(payload: dict[str, Any]) -> SpeciesRule:
+    return SpeciesRule(
+        species=str(payload.get("species", "")).strip(),
+        breeding_months={int(month) for month in payload.get("breeding_months", [])},
+        habitat_keywords={str(keyword).casefold() for keyword in payload.get("habitat_keywords", [])},
+        min_contacts_for_reproduction=int(payload.get("min_contacts_for_reproduction", 2)),
+        notes=str(payload.get("notes", "")).strip(),
+    )
 
 
 def detect_habitat_compatibility(species: str, attrs: dict[str, object]) -> str:

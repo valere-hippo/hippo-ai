@@ -1,0 +1,23 @@
+{
+  "amsel": {
+    "species": "Amsel",
+    "breeding_months": [3, 4, 5, 6, 7],
+    "habitat_keywords": ["gehölz", "gebüsch", "baum", "hecke"],
+    "min_contacts_for_reproduction": 2,
+    "notes": "Gebüsch- und Gehölzart; offene Felder sind als Brutplatz unplausibel."
+  },
+  "blaumeise": {
+    "species": "Blaumeise",
+    "breeding_months": [3, 4, 5, 6, 7],
+    "habitat_keywords": ["gehölz", "baum", "park", "hecke"],
+    "min_contacts_for_reproduction": 2,
+    "notes": ""
+  },
+  "buntspecht": {
+    "species": "Buntspecht",
+    "breeding_months": [3, 4, 5, 6, 7],
+    "habitat_keywords": ["wald", "baum", "gehölz", "park"],
+    "min_contacts_for_reproduction": 2,
+    "notes": ""
+  }
+}
