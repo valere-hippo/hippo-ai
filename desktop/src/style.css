@@ -282,6 +282,11 @@ h2 {
   box-shadow: 0 0 0 2px rgba(123, 211, 137, 0.08);
 }
 
+.history-item.is-active {
+  border-color: rgba(123, 211, 137, 0.75);
+  box-shadow: 0 0 0 2px rgba(123, 211, 137, 0.12);
+}
+
 .history-top {
   display: flex;
   justify-content: space-between;
@@ -309,6 +314,11 @@ h2 {
 .detail-view {
   display: grid;
   gap: 16px;
+}
+
+.detail-section {
+  display: grid;
+  gap: 8px;
 }
 
 .is-hidden {

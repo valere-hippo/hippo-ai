@@ -3,6 +3,9 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 
 const form = document.getElementById('analysis-form');
 const runButton = document.getElementById('run-button');
+const exportTxtButton = document.getElementById('export-txt-button');
+const exportDocxButton = document.getElementById('export-docx-button');
+const exportPdfButton = document.getElementById('export-pdf-button');
 const resetButton = document.getElementById('reset-button');
 const output = document.getElementById('result-output');
 const statusPill = document.getElementById('status-pill');
@@ -58,6 +61,10 @@ resetButton.addEventListener('click', () => {
   setStatus('Bereit');
   setProgress('Bereit zum Starten', 0, false);
 });
+
+exportTxtButton.addEventListener('click', () => runDirectExport('txt', 'Text'));
+exportDocxButton.addEventListener('click', () => runDirectExport('docx', 'Word'));
+exportPdfButton.addEventListener('click', () => runDirectExport('pdf', 'PDF'));
 
 clearHistoryButton.addEventListener('click', () => {
   localStorage.removeItem(historyKey);
@@ -281,8 +288,9 @@ function renderHistory() {
     .map((entry, index) => {
       const when = new Date(entry.timestamp).toLocaleString('de-DE');
       const statusText = entry.exitCode === 0 ? 'Erfolgreich' : `Fehler (${entry.exitCode})`;
+      const isActive = index === selectedHistoryIndex ? ' is-active' : '';
       return `
-        <button type="button" class="history-item" data-history-index="${index}">
+        <button type="button" class="history-item${isActive}" data-history-index="${index}">
           <div class="history-top">
             <div>
               <div class="history-title">${escapeHtml(entry.input || 'Unbekannte Eingabe')}</div>
@@ -302,6 +310,7 @@ function renderHistory() {
       selectedHistoryIndex = Number.isNaN(index) ? null : index;
       const entry = history[index];
       renderDetails(entry ? { ...entry, index } : null);
+      renderHistory();
     });
   });
 }
@@ -345,4 +354,19 @@ function loadHistoryEntry(entry) {
   setStatus('Bereit');
   setProgress('Lauf geladen', 100, false);
   output.textContent = `Geladener Lauf:\n${entry.command || ''}`;
+}
+
+async function runDirectExport(extension, label) {
+  const selected = await save({
+    title: `${label}-Ausgabe speichern`,
+    filters: [{ name: label, extensions: [extension] }],
+  });
+
+  if (typeof selected !== 'string' || !selected.trim()) {
+    return;
+  }
+
+  document.getElementById('output').value = selected;
+  persistFormState();
+  await form.requestSubmit();
 }

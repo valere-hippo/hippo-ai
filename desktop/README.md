@@ -41,6 +41,16 @@ npm install
 npm run tauri dev
 ```
 
+### Windows-Build
+
+Für ein lokales Windows-Paket:
+
+```bash
+npm run tauri build
+```
+
+Das Ergebnis liegt danach im Tauri-Build-Ordner und erzeugt einen Windows-Installer (`.exe`/NSIS), sobald Rust, WebView2 und die C++ Build Tools installiert sind.
+
 Das Fenster spricht das Python-Backend über `python -m tier_ai` an.
 Im aktuellen Prototyp wird dafür der Projekt-Root per Formularfeld übergeben.
 
@@ -53,3 +63,4 @@ Im aktuellen Prototyp wird dafür der Projekt-Root per Formularfeld übergeben.
 - Die letzte Formularbelegung wird lokal im Webview gespeichert und beim nächsten Start wiederhergestellt
 - Ein animierter Fortschrittsbalken zeigt den aktuellen Analysezustand
 - Die letzten Läufe werden lokal als Verlauf gespeichert
+- Die App kann direkt TXT, DOCX und PDF exportieren, ohne Terminal

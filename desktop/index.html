@@ -73,6 +73,9 @@
 
           <div class="actions full">
             <button type="submit" id="run-button">Analyse starten</button>
+            <button type="button" id="export-txt-button" class="secondary">TXT exportieren</button>
+            <button type="button" id="export-docx-button" class="secondary">DOCX exportieren</button>
+            <button type="button" id="export-pdf-button" class="secondary">PDF exportieren</button>
             <button type="button" id="reset-button" class="secondary">Zurücksetzen</button>
           </div>
         </form>
@@ -111,19 +114,19 @@
         <div id="detail-empty" class="history-empty">Wähle einen Lauf aus dem Verlauf aus.</div>
         <div id="detail-view" class="detail-view is-hidden">
           <div class="detail-grid">
-            <div>
+            <div class="detail-section">
               <div class="detail-label">Zeitpunkt</div>
               <div id="detail-timestamp" class="detail-value"></div>
             </div>
-            <div>
+            <div class="detail-section">
               <div class="detail-label">Status</div>
               <div id="detail-status" class="detail-value"></div>
             </div>
-            <div>
+            <div class="detail-section">
               <div class="detail-label">Eingabe</div>
               <div id="detail-input" class="detail-value"></div>
             </div>
-            <div>
+            <div class="detail-section">
               <div class="detail-label">Ausgabe</div>
               <div id="detail-output" class="detail-value"></div>
             </div>
