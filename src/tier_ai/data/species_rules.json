@@ -19,5 +19,40 @@
     "habitat_keywords": ["wald", "baum", "gehölz", "park"],
     "min_contacts_for_reproduction": 2,
     "notes": ""
+  },
+  "dorngrasmücke": {
+    "species": "Dorngrasmücke",
+    "breeding_months": [4, 5, 6, 7],
+    "habitat_keywords": ["gebüsch", "hecke", "saum", "brach"],
+    "min_contacts_for_reproduction": 2,
+    "notes": "Typische Gebüschbrüterin in strukturreichen Offenland- und Saumstrukturen."
+  },
+  "kohlmeise": {
+    "species": "Kohlmeise",
+    "breeding_months": [3, 4, 5, 6, 7],
+    "habitat_keywords": ["gehölz", "baum", "park", "garten", "hecke"],
+    "min_contacts_for_reproduction": 2,
+    "notes": ""
+  },
+  "zwergfledermaus": {
+    "species": "Zwergfledermaus",
+    "breeding_months": [5, 6, 7, 8],
+    "habitat_keywords": ["gebäude", "siedlung", "linie", "hecke", "allee", "gewässer"],
+    "min_contacts_for_reproduction": 3,
+    "notes": "Typische Siedlungs- und Strukturfledermaus mit hoher Aktivität an Leitlinien."
+  },
+  "großer abendsegler": {
+    "species": "Großer Abendsegler",
+    "breeding_months": [5, 6, 7, 8],
+    "habitat_keywords": ["wald", "allee", "gewässer", "offen", "struktur"],
+    "min_contacts_for_reproduction": 3,
+    "notes": "Großräumig jagende Fledermaus; Konzentrationen an Leitlinien und offenen Flugkorridoren sind relevant."
+  },
+  "rauhautfledermaus": {
+    "species": "Rauhautfledermaus",
+    "breeding_months": [5, 6, 7, 8],
+    "habitat_keywords": ["gewässer", "wald", "rand", "hecke", "struktur"],
+    "min_contacts_for_reproduction": 3,
+    "notes": "Oft an linearen Strukturen und Gewässern; saisonale Nutzung beachten."
   }
 }

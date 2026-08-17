@@ -17,6 +17,8 @@ class RuleLoaderTests(unittest.TestCase):
 
         self.assertIn("amsel", rules)
         self.assertEqual(rules["amsel"].species, "Amsel")
+        self.assertIn("zwergfledermaus", rules)
+        self.assertEqual(rules["zwergfledermaus"].min_contacts_for_reproduction, 3)
 
     def test_loads_custom_rule_file(self) -> None:
         payload = {
@@ -43,4 +45,3 @@ class RuleLoaderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
