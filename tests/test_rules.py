@@ -19,6 +19,8 @@ class RuleLoaderTests(unittest.TestCase):
         self.assertEqual(rules["amsel"].species, "Amsel")
         self.assertIn("zwergfledermaus", rules)
         self.assertEqual(rules["zwergfledermaus"].min_contacts_for_reproduction, 3)
+        self.assertEqual(rules["zwergfledermaus"].priority_if_breeding, "hoch")
+        self.assertEqual(rules["amsel"].priority_default, "niedrig")
 
     def test_loads_custom_rule_file(self) -> None:
         payload = {
@@ -27,6 +29,8 @@ class RuleLoaderTests(unittest.TestCase):
                 "breeding_months": [4, 5, 6],
                 "habitat_keywords": ["offen", "feld"],
                 "min_contacts_for_reproduction": 3,
+                "priority_if_breeding": "sehr hoch",
+                "priority_default": "mittel",
                 "notes": "Greifvogelregel",
             }
         }
@@ -41,6 +45,8 @@ class RuleLoaderTests(unittest.TestCase):
         self.assertIsNotNone(rule)
         self.assertEqual(rule.species, "Rotmilan")
         self.assertEqual(rule.min_contacts_for_reproduction, 3)
+        self.assertEqual(rule.priority_if_breeding, "sehr hoch")
+        self.assertEqual(rule.priority_default, "mittel")
 
 
 if __name__ == "__main__":

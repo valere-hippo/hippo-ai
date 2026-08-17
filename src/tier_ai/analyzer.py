@@ -32,7 +32,7 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
             transit_assessment,
             reproduction,
         )
-        priority = _build_priority(taxon_group, concentration, transit_assessment, reproduction)
+        priority = _build_priority(rule, taxon_group, concentration, transit_assessment, reproduction)
         summary = _render_species_summary(
             species,
             items,
@@ -300,15 +300,26 @@ def _build_recommendation(
     return "derzeit keine vertiefte Maßnahme erforderlich"
 
 
-def _build_priority(taxon_group: str, concentration: str, transit_assessment: str, reproduction: str) -> str:
+def _build_priority(
+    rule: SpeciesRule | None,
+    taxon_group: str,
+    concentration: str,
+    transit_assessment: str,
+    reproduction: str,
+) -> str:
+    priority_if_breeding = rule.priority_if_breeding if rule else "hoch"
+    priority_if_transit = rule.priority_if_transit if rule else "mittel"
+    priority_if_concentration = rule.priority_if_concentration if rule else "mittel"
+    priority_default = rule.priority_default if rule else "niedrig"
+
     if "Brutverdacht plausibel" in reproduction:
-        return "hoch"
+        return priority_if_breeding
     if taxon_group == "bat" and transit_assessment.startswith("Transit entlang von Leitstrukturen"):
-        return "hoch"
+        return priority_if_breeding
     if "Brutverdacht möglich" in reproduction:
-        return "mittel"
+        return priority_if_transit if taxon_group == "bat" else priority_if_concentration
     if taxon_group == "bat" and transit_assessment.startswith("Transit"):
-        return "mittel"
+        return priority_if_transit
     if "Konzentrationszone" in concentration or "Konzentrationsbereich" in concentration:
-        return "mittel"
-    return "niedrig"
+        return priority_if_concentration
+    return priority_default

@@ -47,6 +47,7 @@ class AnalyzerTests(unittest.TestCase):
         self.assertIn("Brutverdacht plausibel", species.reproduction_assessment)
         self.assertIn("plausibel", species.habitat_assessment)
         self.assertTrue(species.clusters)
+        self.assertEqual(species.priority, "hoch")
 
     def test_flags_out_of_season_as_non_breeding(self) -> None:
         observations = [
@@ -73,6 +74,7 @@ class AnalyzerTests(unittest.TestCase):
 
         self.assertIn("kein belastbarer Brutverdacht", species.reproduction_assessment)
         self.assertIn("eher unplausibel", species.habitat_assessment)
+        self.assertEqual(species.priority, "mittel")
 
     def test_assesses_bat_transit(self) -> None:
         observations = [
@@ -105,6 +107,7 @@ class AnalyzerTests(unittest.TestCase):
 
         self.assertIn("Transit", species.transit_assessment)
         self.assertIn("Zwergfledermaus", species.transit_assessment)
+        self.assertEqual(species.priority, "hoch")
 
 
 if __name__ == "__main__":

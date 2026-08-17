@@ -31,3 +31,6 @@ Eigene Artenregeln laden:
 ```bash
 PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg --rules-file /pfad/zu/eigenen_regeln.json
 ```
+
+In den Regeln können auch Prioritäten je Art definiert werden, z. B. für Brutverdacht,
+Transit oder Konzentrationsbereiche.

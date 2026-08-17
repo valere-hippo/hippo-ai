@@ -5,6 +5,10 @@
     "breeding_months": [3, 4, 5, 6, 7],
     "habitat_keywords": ["gehölz", "gebüsch", "baum", "hecke"],
     "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
     "notes": "Gebüsch- und Gehölzart; offene Felder sind als Brutplatz unplausibel."
   },
   "blaumeise": {
@@ -13,6 +17,10 @@
     "breeding_months": [3, 4, 5, 6, 7],
     "habitat_keywords": ["gehölz", "baum", "park", "hecke"],
     "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
     "notes": ""
   },
   "buntspecht": {
@@ -21,6 +29,10 @@
     "breeding_months": [3, 4, 5, 6, 7],
     "habitat_keywords": ["wald", "baum", "gehölz", "park"],
     "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
     "notes": ""
   },
   "dorngrasmücke": {
@@ -29,6 +41,10 @@
     "breeding_months": [4, 5, 6, 7],
     "habitat_keywords": ["gebüsch", "hecke", "saum", "brach"],
     "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
     "notes": "Typische Gebüschbrüterin in strukturreichen Offenland- und Saumstrukturen."
   },
   "kohlmeise": {
@@ -37,6 +53,10 @@
     "breeding_months": [3, 4, 5, 6, 7],
     "habitat_keywords": ["gehölz", "baum", "park", "garten", "hecke"],
     "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
     "notes": ""
   },
   "zwergfledermaus": {
@@ -45,6 +65,10 @@
     "breeding_months": [5, 6, 7, 8],
     "habitat_keywords": ["gebäude", "siedlung", "linie", "hecke", "allee", "gewässer"],
     "min_contacts_for_reproduction": 3,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
     "notes": "Typische Siedlungs- und Strukturfledermaus mit hoher Aktivität an Leitlinien."
   },
   "großer abendsegler": {
@@ -53,6 +77,10 @@
     "breeding_months": [5, 6, 7, 8],
     "habitat_keywords": ["wald", "allee", "gewässer", "offen", "struktur"],
     "min_contacts_for_reproduction": 3,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
     "notes": "Großräumig jagende Fledermaus; Konzentrationen an Leitlinien und offenen Flugkorridoren sind relevant."
   },
   "rauhautfledermaus": {
@@ -61,6 +89,10 @@
     "breeding_months": [5, 6, 7, 8],
     "habitat_keywords": ["gewässer", "wald", "rand", "hecke", "struktur"],
     "min_contacts_for_reproduction": 3,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
     "notes": "Oft an linearen Strukturen und Gewässern; saisonale Nutzung beachten."
   }
 }

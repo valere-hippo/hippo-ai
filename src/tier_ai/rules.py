@@ -17,6 +17,10 @@ class SpeciesRule:
     breeding_months: set[int] = field(default_factory=set)
     habitat_keywords: set[str] = field(default_factory=set)
     min_contacts_for_reproduction: int = 2
+    priority_if_breeding: str = "hoch"
+    priority_if_transit: str = "mittel"
+    priority_if_concentration: str = "mittel"
+    priority_default: str = "niedrig"
     notes: str = ""
 
 
@@ -70,6 +74,10 @@ def _parse_species_rule(payload: dict[str, Any]) -> SpeciesRule:
         breeding_months={int(month) for month in payload.get("breeding_months", [])},
         habitat_keywords={str(keyword).casefold() for keyword in payload.get("habitat_keywords", [])},
         min_contacts_for_reproduction=int(payload.get("min_contacts_for_reproduction", 2)),
+        priority_if_breeding=str(payload.get("priority_if_breeding", "hoch")).strip().casefold() or "hoch",
+        priority_if_transit=str(payload.get("priority_if_transit", "mittel")).strip().casefold() or "mittel",
+        priority_if_concentration=str(payload.get("priority_if_concentration", "mittel")).strip().casefold() or "mittel",
+        priority_default=str(payload.get("priority_default", "niedrig")).strip().casefold() or "niedrig",
         notes=str(payload.get("notes", "")).strip(),
     )
 
