@@ -10,6 +10,16 @@ Siehe:
 
 ## Erste Nutzung
 
+### Lokale Ausführung
+
+Das Projekt läuft direkt mit Python, ohne extra Build-Schritt:
+
+```bash
+PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg
+```
+
+Mit Ausgabe in eine Datei:
+
 ```bash
 PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg -o bericht.txt
 ```
@@ -75,3 +85,22 @@ PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg --rules-file /pfad/zu/eige
 
 In den Regeln können auch Prioritäten je Art definiert werden, z. B. für Brutverdacht,
 Transit oder Konzentrationsbereiche.
+
+### Lokal testen
+
+Die Tests laufen mit `unittest`:
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'
+```
+
+Optional kann man zusätzlich die Syntax prüfen:
+
+```bash
+python3 -m compileall src tests
+```
+
+### Hinweise
+
+- Das Standard-Artenverzeichnis wird aus `species_rules.json` und `species_rules_extra.json` zusammengeführt.
+- Eigene Regeln können weiterhin komplett über `--rules-file` ersetzt werden.
