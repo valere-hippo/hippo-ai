@@ -24,7 +24,14 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
         concentration = _assess_concentration(items, clusters, rule)
         reproduction = _assess_reproduction(items, clusters, rule, habitat_assessment)
         transit_assessment = _assess_transit(species, items, clusters, rule, habitat_assessment)
-        recommendation = _build_recommendation(concentration, habitat_assessment, transit_assessment, reproduction)
+        taxon_group = rule.taxon_group if rule else "bird"
+        recommendation = _build_recommendation(
+            taxon_group,
+            concentration,
+            habitat_assessment,
+            transit_assessment,
+            reproduction,
+        )
         summary = _render_species_summary(
             species,
             items,
@@ -40,6 +47,7 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
             SpeciesAnalysis(
                 species=species,
                 total_observations=len(items),
+                taxon_group=taxon_group,
                 clusters=clusters,
                 transit_assessment=transit_assessment,
                 habitat_assessment=habitat_assessment,
@@ -260,13 +268,28 @@ def _build_final_conclusion(species_results: list[SpeciesAnalysis], executive_su
     return " ".join(parts)
 
 
-def _build_recommendation(concentration: str, habitat_assessment: str, transit_assessment: str, reproduction: str) -> str:
+def _build_recommendation(
+    taxon_group: str,
+    concentration: str,
+    habitat_assessment: str,
+    transit_assessment: str,
+    reproduction: str,
+) -> str:
+    if taxon_group == "bat":
+        if transit_assessment.startswith("Transit entlang von Leitstrukturen"):
+            return "Leitstrukturen und Quartierbezüge kartografisch prüfen"
+        if transit_assessment.startswith("Transit"):
+            return "Transitkorridore und strukturgebundene Nutzung prüfen"
+        if "Brutverdacht" in reproduction:
+            return "Quartier- und Reproduktionshinweise fachlich nachprüfen"
+        if "Konzentrationszone" in concentration:
+            return "Konzentrationsbereiche und Flugkorridore nachprüfen"
+        return "für Fledermäuse derzeit keine vertiefte Maßnahme erforderlich"
+
     if "Brutverdacht plausibel" in reproduction or "Brutverdacht möglich" in reproduction:
-        return "fachliche Vertiefung und kartografische Nachprüfung empfohlen"
-    if transit_assessment.startswith("Transit"):
-        return "Leitstrukturen und Transitkorridore kartografisch prüfen"
+        return "Brutrelevante Strukturen kartografisch und fachlich nachprüfen"
     if "Konzentrationszone" in concentration or "Konzentrationsbereich" in concentration:
-        return "räumliche Konzentration kartografisch nachprüfen"
+        return "Revier- oder Konzentrationsraum kartografisch nachprüfen"
     if "eher unplausibel" in habitat_assessment:
-        return "fachliche Plausibilisierung des Habitats empfohlen"
+        return "Habitat fachlich plausibilisieren"
     return "derzeit keine vertiefte Maßnahme erforderlich"

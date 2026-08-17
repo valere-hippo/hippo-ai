@@ -37,6 +37,7 @@ class ExporterTests(unittest.TestCase):
                 SpeciesAnalysis(
                     species="Amsel",
                     total_observations=3,
+                    taxon_group="bird",
                     clusters=[
                         ClusterSummary(
                             label="Cluster 1",
@@ -69,6 +70,7 @@ class ExporterTests(unittest.TestCase):
                 self.assertIn("<w:tbl>", document_xml)
                 self.assertIn("Brut", document_xml)
                 self.assertIn("Empfehlung", document_xml)
+                self.assertIn("Gruppe", document_xml)
                 self.assertIn("headerReference", document_xml)
                 self.assertIn("footerReference", document_xml)
                 self.assertIn("fldCharType=\"begin\"", document_xml)

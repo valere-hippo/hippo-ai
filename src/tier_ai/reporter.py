@@ -45,6 +45,7 @@ def render_report(result: AnalysisResult) -> str:
 
     for species_result in result.species_results:
         lines.append(f"## {species_result.species}")
+        lines.append(f"Gruppe: {species_result.taxon_group}")
         lines.append(f"Nachweise: {species_result.total_observations}")
         lines.append(f"Konzentration: {species_result.concentration_assessment}")
         lines.append(f"Habitat: {species_result.habitat_assessment}")
@@ -93,7 +94,7 @@ def _render_species_overview(species_results) -> list[str]:
     for species_result in species_results:
         cluster_count = len(species_result.clusters)
         lines.append(
-            f"- {species_result.species}: {species_result.total_observations} Nachweise, "
+            f"- {species_result.species} ({species_result.taxon_group}): {species_result.total_observations} Nachweise, "
             f"{cluster_count} Konzentrationsbereich(e), Brut={species_result.reproduction_assessment}, "
             f"Empfehlung={species_result.recommendation}"
         )

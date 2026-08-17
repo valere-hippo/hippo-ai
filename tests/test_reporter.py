@@ -18,6 +18,7 @@ def test_render_report_contains_species():
             SpeciesAnalysis(
                 species="Amsel",
                 total_observations=3,
+                taxon_group="bird",
                 clusters=[
                     ClusterSummary(
                         label="Cluster 1",
@@ -49,5 +50,6 @@ def test_render_report_contains_species():
     assert "Habitat" in report
     assert "Transit" in report
     assert "Empfehlung" in report
+    assert "bird" in report
     assert "Metadaten" in report
     assert "Validierung" in report
