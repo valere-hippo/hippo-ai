@@ -11,6 +11,68 @@ struct AnalysisRunResult {
 }
 
 #[tauri::command]
+fn prepare_environment(
+  python_executable: Option<String>,
+  project_root: Option<String>,
+) -> Result<AnalysisRunResult, String> {
+  let python = normalize_python_command(python_executable);
+  let project_root = project_root
+    .as_deref()
+    .filter(|value| !value.trim().is_empty())
+    .map(PathBuf::from)
+    .unwrap_or_else(|| PathBuf::from(".."));
+  let venv_dir = project_root.join(".venv");
+  let venv_python = venv_python_path(&venv_dir);
+
+  let mut command_steps = Vec::new();
+
+  if !venv_python.exists() {
+    let mut create_venv = Command::new(&python.command);
+    create_venv.current_dir(&project_root);
+    create_venv.args(&python.args);
+    create_venv.args(["-m", "venv"]).arg(&venv_dir);
+    let output = run_command(create_venv)
+      .map_err(|error| format!("Python-Umgebung konnte nicht erstellt werden: {error}"))?;
+    command_steps.push((format_argv(&python.command, &python.args, ["-m", "venv", venv_dir.to_string_lossy().as_ref()]), output));
+  }
+
+  let mut upgrade_pip = Command::new(&venv_python);
+  upgrade_pip.current_dir(&project_root);
+  upgrade_pip.args(["-m", "pip", "install", "--upgrade", "pip"]);
+  let pip_output = run_command(upgrade_pip)
+    .map_err(|error| format!("pip konnte nicht aktualisiert werden: {error}"))?;
+  command_steps.push((format!("{} -m pip install --upgrade pip", venv_python.display()), pip_output));
+
+  let mut install_project = Command::new(&venv_python);
+  install_project.current_dir(&project_root);
+  install_project.args(["-m", "pip", "install", "-e", "."]);
+  let install_output = run_command(install_project)
+    .map_err(|error| format!("Projekt konnte nicht installiert werden: {error}"))?;
+  command_steps.push((format!("{} -m pip install -e .", venv_python.display()), install_output));
+
+  let mut stdout = String::new();
+  let mut stderr = String::new();
+  let mut exit_code = 0;
+  for (command, output) in command_steps {
+    stdout.push_str("Kommando: ");
+    stdout.push_str(&command);
+    stdout.push('\n');
+    stdout.push_str(&String::from_utf8_lossy(&output.stdout));
+    stdout.push('\n');
+    stderr.push_str(&String::from_utf8_lossy(&output.stderr));
+    stderr.push('\n');
+    exit_code = exit_code.max(output.status.code().unwrap_or(-1));
+  }
+
+  Ok(AnalysisRunResult {
+    exit_code,
+    command: format!("{} -m venv .venv && {} -m pip install -e .", python.command, venv_python.display()),
+    stdout,
+    stderr,
+  })
+}
+
+#[tauri::command]
 fn run_analysis(
   input: String,
   output: Option<String>,
@@ -22,20 +84,17 @@ fn run_analysis(
   rules_file: Option<String>,
   docx_template_dir: Option<String>,
 ) -> Result<AnalysisRunResult, String> {
-  let python = python_executable
-    .as_deref()
-    .filter(|value| !value.trim().is_empty())
-    .unwrap_or("py");
-
   let project_root = project_root
     .as_deref()
     .filter(|value| !value.trim().is_empty())
     .map(PathBuf::from)
     .unwrap_or_else(|| PathBuf::from(".."));
+  let python = resolve_python_executable(python_executable.as_deref(), &project_root);
 
   let src_path = project_root.join("src");
-  let mut command = Command::new(python);
+  let mut command = Command::new(&python.command);
   command.current_dir(&project_root);
+  command.args(&python.args);
   command.env("PYTHONPATH", &src_path);
   command.arg("-m").arg("tier_ai").arg(&input);
 
@@ -60,7 +119,7 @@ fn run_analysis(
 
   let display_command = format!(
     "{} -m tier_ai {}",
-    python,
+    format_argv(&python.command, &python.args, std::iter::empty::<&str>()),
     command
       .get_args()
       .map(|arg| arg.to_string_lossy().into_owned())
@@ -84,7 +143,60 @@ fn run_analysis(
 fn main() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
-    .invoke_handler(tauri::generate_handler![run_analysis])
+    .invoke_handler(tauri::generate_handler![run_analysis, prepare_environment])
     .run(tauri::generate_context!())
     .expect("error while running tier-ai desktop app");
+}
+
+#[derive(Clone)]
+struct PythonCommand {
+  command: String,
+  args: Vec<String>,
+}
+
+fn normalize_python_command(python_executable: Option<String>) -> PythonCommand {
+  let command = python_executable
+    .as_deref()
+    .filter(|value| !value.trim().is_empty())
+    .unwrap_or("py")
+    .to_string();
+  let mut args = Vec::new();
+  if command.eq_ignore_ascii_case("py") {
+    args.push("-3".to_string());
+  }
+  PythonCommand { command, args }
+}
+
+fn resolve_python_executable(python_executable: Option<&str>, project_root: &PathBuf) -> PythonCommand {
+  let venv_python = venv_python_path(&project_root.join(".venv"));
+  if venv_python.exists() {
+    return PythonCommand {
+      command: venv_python.to_string_lossy().into_owned(),
+      args: Vec::new(),
+    };
+  }
+  normalize_python_command(python_executable.map(|value| value.to_string()))
+}
+
+fn venv_python_path(venv_dir: &PathBuf) -> PathBuf {
+  if cfg!(target_os = "windows") {
+    venv_dir.join("Scripts").join("python.exe")
+  } else {
+    venv_dir.join("bin").join("python")
+  }
+}
+
+fn run_command(mut command: Command) -> Result<std::process::Output, std::io::Error> {
+  command.output()
+}
+
+fn format_argv<I, S>(command: &str, args: &[String], extra: I) -> String
+where
+  I: IntoIterator<Item = S>,
+  S: AsRef<str>,
+{
+  let mut parts = vec![command.to_string()];
+  parts.extend(args.iter().cloned());
+  parts.extend(extra.into_iter().map(|arg| arg.as_ref().to_string()));
+  parts.join(" ")
 }

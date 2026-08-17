@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 
 const form = document.getElementById('analysis-form');
+const prepareButton = document.getElementById('prepare-button');
 const runButton = document.getElementById('run-button');
 const exportTxtButton = document.getElementById('export-txt-button');
 const exportDocxButton = document.getElementById('export-docx-button');
@@ -60,6 +61,51 @@ resetButton.addEventListener('click', () => {
   output.textContent = 'Noch keine Analyse gestartet.';
   setStatus('Bereit');
   setProgress('Bereit zum Starten', 0, false);
+});
+
+prepareButton.addEventListener('click', async () => {
+  const payload = getCurrentPayload();
+  prepareButton.disabled = true;
+  runButton.disabled = true;
+  setStatus('Vorbereitung', 'running');
+  setProgress('Python-Umgebung wird vorbereitet', 10, true);
+  output.textContent = 'Python-Umgebung wird vorbereitet...';
+
+  let progressTimer = null;
+  try {
+    persistFormState();
+    progressTimer = startProgressCycle([
+      { label: 'Virtuelle Umgebung wird erstellt', percent: 25 },
+      { label: 'pip wird aktualisiert', percent: 50 },
+      { label: 'Tier AI wird installiert', percent: 78 },
+    ]);
+    const result = await invoke('prepare_environment', payload);
+    stopProgressCycle(progressTimer);
+    setProgress('Python-Umgebung vorbereitet', 100, false);
+    output.textContent = [
+      `Exit-Code: ${result.exit_code}`,
+      '',
+      'Kommando:',
+      result.command,
+      '',
+      'stdout:',
+      result.stdout || '(leer)',
+      '',
+      'stderr:',
+      result.stderr || '(leer)',
+    ].join('\n');
+    setStatus(result.exit_code === 0 ? 'Bereit' : 'Fehler', result.exit_code === 0 ? 'ready' : 'error');
+  } catch (error) {
+    if (progressTimer !== null) {
+      stopProgressCycle(progressTimer);
+    }
+    setProgress('Vorbereitung fehlgeschlagen', 0, false);
+    output.textContent = `Fehler bei der Vorbereitung der Python-Umgebung:\n${error}`;
+    setStatus('Fehler', 'error');
+  } finally {
+    prepareButton.disabled = false;
+    runButton.disabled = false;
+  }
 });
 
 exportTxtButton.addEventListener('click', () => runDirectExport('txt', 'Text'));
@@ -179,7 +225,16 @@ form.addEventListener('submit', async (event) => {
       stopProgressCycle(progressTimer);
     }
     setProgress('Analyse fehlgeschlagen', 0, false);
-    output.textContent = `Fehler beim Starten der Analyse:\n${error}`;
+    if (String(error).includes("No module named 'pandas'")) {
+      output.textContent = [
+        'Die Python-Umgebung hat noch nicht alle Analyse-Abhängigkeiten.',
+        'Nutze bitte zuerst „Python vorbereiten“ und starte die Analyse danach erneut.',
+        '',
+        `Fehler:\n${error}`,
+      ].join('\n');
+    } else {
+      output.textContent = `Fehler beim Starten der Analyse:\n${error}`;
+    }
     setStatus('Fehler', 'error');
   } finally {
     runButton.disabled = false;
@@ -203,17 +258,23 @@ function setProgress(label, percent, active) {
   progressBar.style.transform = active ? 'translateX(-100%)' : 'translateX(0)';
 }
 
-function startProgressCycle() {
-  const stages = [
-    { label: 'Projekt wird vorbereitet', percent: 20 },
-    { label: 'Analyse läuft', percent: 45 },
-    { label: 'Bericht wird aufgebaut', percent: 70 },
-    { label: 'Export wird abgeschlossen', percent: 88 },
-  ];
+function getCurrentPayload() {
+  return Object.fromEntries(
+    fieldNames.map((name) => [name, document.getElementById(name).value.trim()]),
+  );
+}
+
+function startProgressCycle(stages = [
+  { label: 'Projekt wird vorbereitet', percent: 20 },
+  { label: 'Analyse läuft', percent: 45 },
+  { label: 'Bericht wird aufgebaut', percent: 70 },
+  { label: 'Export wird abgeschlossen', percent: 88 },
+]) {
+  const cycle = stages;
 
   let index = 0;
   const timer = window.setInterval(() => {
-    const stage = stages[index % stages.length];
+    const stage = cycle[index % cycle.length];
     setProgress(stage.label, stage.percent, true);
     index += 1;
   }, 1400);

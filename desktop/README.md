@@ -64,3 +64,4 @@ Im aktuellen Prototyp wird dafür der Projekt-Root per Formularfeld übergeben.
 - Ein animierter Fortschrittsbalken zeigt den aktuellen Analysezustand
 - Die letzten Läufe werden lokal als Verlauf gespeichert
 - Die App kann direkt TXT, DOCX und PDF exportieren, ohne Terminal
+- Über „Python vorbereiten“ wird automatisch eine lokale `.venv` eingerichtet und das Projekt installiert
