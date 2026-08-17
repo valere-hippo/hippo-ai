@@ -17,6 +17,20 @@ Prototype Windows-App auf Basis von Tauri.
 - Microsoft C++ Build Tools
 - Microsoft Edge WebView2
 
+Wenn `cargo` nicht gefunden wird, ist Rust nicht installiert oder nicht im PATH.
+Installiere Rust unter Windows am einfachsten mit:
+
+```powershell
+winget install --id Rustlang.Rustup
+```
+
+Danach das Terminal neu öffnen und prüfen:
+
+```powershell
+cargo --version
+rustc --version
+```
+
 ## Lokale Entwicklung
 
 Im Root des Repos:
