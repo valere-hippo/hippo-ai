@@ -14,6 +14,7 @@ def render_report(result: AnalysisResult) -> str:
         lines.append(f"Nachweise: {species_result.total_observations}")
         lines.append(f"Konzentration: {species_result.concentration_assessment}")
         lines.append(f"Habitat: {species_result.habitat_assessment}")
+        lines.append(f"Transit: {species_result.transit_assessment}")
         lines.append(f"Brutbewertung: {species_result.reproduction_assessment}")
         if species_result.clusters:
             for cluster in species_result.clusters:

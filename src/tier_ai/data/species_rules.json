@@ -1,6 +1,7 @@
 {
   "amsel": {
     "species": "Amsel",
+    "taxon_group": "bird",
     "breeding_months": [3, 4, 5, 6, 7],
     "habitat_keywords": ["gehölz", "gebüsch", "baum", "hecke"],
     "min_contacts_for_reproduction": 2,
@@ -8,6 +9,7 @@
   },
   "blaumeise": {
     "species": "Blaumeise",
+    "taxon_group": "bird",
     "breeding_months": [3, 4, 5, 6, 7],
     "habitat_keywords": ["gehölz", "baum", "park", "hecke"],
     "min_contacts_for_reproduction": 2,
@@ -15,6 +17,7 @@
   },
   "buntspecht": {
     "species": "Buntspecht",
+    "taxon_group": "bird",
     "breeding_months": [3, 4, 5, 6, 7],
     "habitat_keywords": ["wald", "baum", "gehölz", "park"],
     "min_contacts_for_reproduction": 2,
@@ -22,6 +25,7 @@
   },
   "dorngrasmücke": {
     "species": "Dorngrasmücke",
+    "taxon_group": "bird",
     "breeding_months": [4, 5, 6, 7],
     "habitat_keywords": ["gebüsch", "hecke", "saum", "brach"],
     "min_contacts_for_reproduction": 2,
@@ -29,6 +33,7 @@
   },
   "kohlmeise": {
     "species": "Kohlmeise",
+    "taxon_group": "bird",
     "breeding_months": [3, 4, 5, 6, 7],
     "habitat_keywords": ["gehölz", "baum", "park", "garten", "hecke"],
     "min_contacts_for_reproduction": 2,
@@ -36,6 +41,7 @@
   },
   "zwergfledermaus": {
     "species": "Zwergfledermaus",
+    "taxon_group": "bat",
     "breeding_months": [5, 6, 7, 8],
     "habitat_keywords": ["gebäude", "siedlung", "linie", "hecke", "allee", "gewässer"],
     "min_contacts_for_reproduction": 3,
@@ -43,6 +49,7 @@
   },
   "großer abendsegler": {
     "species": "Großer Abendsegler",
+    "taxon_group": "bat",
     "breeding_months": [5, 6, 7, 8],
     "habitat_keywords": ["wald", "allee", "gewässer", "offen", "struktur"],
     "min_contacts_for_reproduction": 3,
@@ -50,6 +57,7 @@
   },
   "rauhautfledermaus": {
     "species": "Rauhautfledermaus",
+    "taxon_group": "bat",
     "breeding_months": [5, 6, 7, 8],
     "habitat_keywords": ["gewässer", "wald", "rand", "hecke", "struktur"],
     "min_contacts_for_reproduction": 3,

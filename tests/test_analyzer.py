@@ -74,7 +74,38 @@ class AnalyzerTests(unittest.TestCase):
         self.assertIn("kein belastbarer Brutverdacht", species.reproduction_assessment)
         self.assertIn("eher unplausibel", species.habitat_assessment)
 
+    def test_assesses_bat_transit(self) -> None:
+        observations = [
+            Observation(
+                species="Zwergfledermaus",
+                observed_at=date(2026, 6, 5),
+                geometry=_Geometry(_Point(0.0, 0.0)),
+                attrs={"habitat": "Hecke entlang Weg", "corridor": "Leitlinie"},
+            ),
+            Observation(
+                species="Zwergfledermaus",
+                observed_at=date(2026, 6, 6),
+                geometry=_Geometry(_Point(5.0, 5.0)),
+                attrs={"habitat": "Gewässerrand", "corridor": "Straße"},
+            ),
+            Observation(
+                species="Zwergfledermaus",
+                observed_at=date(2026, 6, 7),
+                geometry=_Geometry(_Point(8.0, 6.0)),
+                attrs={"habitat": "Hecke", "corridor": "Brücke"},
+            ),
+        ]
+
+        result = analyze_observations(
+            observations,
+            source_path="demo.gpkg",
+            config=AnalyzerConfig(distance_threshold_m=10.0, min_cluster_size=2),
+        )
+        species = result.species_results[0]
+
+        self.assertIn("Transit", species.transit_assessment)
+        self.assertIn("Zwergfledermaus", species.transit_assessment)
+
 
 if __name__ == "__main__":
     unittest.main()
-

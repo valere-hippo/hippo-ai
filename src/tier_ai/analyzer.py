@@ -6,7 +6,7 @@ from statistics import mean
 
 from .config import AnalyzerConfig
 from .models import AnalysisResult, ClusterSummary, Observation, SpeciesAnalysis
-from .rules import SpeciesRule, detect_habitat_compatibility, get_rule
+from .rules import SpeciesRule, detect_habitat_compatibility, get_rule, is_bat_rule
 from .validation import validate_frame
 
 
@@ -23,12 +23,23 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
         habitat_assessment = _assess_habitat(species, items, rule)
         concentration = _assess_concentration(items, clusters, rule)
         reproduction = _assess_reproduction(items, clusters, rule, habitat_assessment)
-        summary = _render_species_summary(species, items, clusters, concentration, habitat_assessment, reproduction, rule)
+        transit_assessment = _assess_transit(species, items, clusters, rule, habitat_assessment)
+        summary = _render_species_summary(
+            species,
+            items,
+            clusters,
+            concentration,
+            habitat_assessment,
+            transit_assessment,
+            reproduction,
+            rule,
+        )
         species_results.append(
             SpeciesAnalysis(
                 species=species,
                 total_observations=len(items),
                 clusters=clusters,
+                transit_assessment=transit_assessment,
                 habitat_assessment=habitat_assessment,
                 reproduction_assessment=reproduction,
                 concentration_assessment=concentration,
@@ -111,6 +122,7 @@ def _render_species_summary(
     clusters: list[ClusterSummary],
     concentration: str,
     habitat: str,
+    transit: str,
     reproduction: str,
     rule: SpeciesRule | None,
 ) -> str:
@@ -118,6 +130,7 @@ def _render_species_summary(
         f"Art {species}: {len(items)} Nachweise im Untersuchungsgebiet.",
         f"Bewertung der Verteilung: {concentration}.",
         f"Habitatbewertung: {habitat}.",
+        f"Transitbewertung: {transit}.",
         f"Brut-/Reproduktionsbewertung: {reproduction}.",
     ]
     if rule and rule.notes:
@@ -169,3 +182,26 @@ def _assess_reproduction(items: list[Observation], clusters: list[ClusterSummary
         return f"Brutverdacht möglich für {rule.species}, aber noch nicht belastbar"
 
     return "vorläufig zu prüfen"
+
+
+def _assess_transit(species: str, items: list[Observation], clusters: list[ClusterSummary], rule: SpeciesRule | None, habitat_assessment: str) -> str:
+    if not is_bat_rule(species):
+        return "für Vogelarten nicht relevant"
+
+    if rule is None:
+        return "für Fledermäuse nicht bewertbar"
+
+    attrs_text = " ".join(str(value).casefold() for observation in items for value in observation.attrs.values() if value is not None)
+    line_keywords = ("linie", "leit", "hecke", "allee", "weg", "brücke", "straße", "strasse", "gewässer", "ufer")
+    has_leitstruktur = any(keyword in attrs_text for keyword in line_keywords)
+
+    if clusters and has_leitstruktur:
+        return f"Transit entlang von Leitstrukturen für {rule.species} plausibel"
+
+    if clusters and "plausibel" in habitat_assessment:
+        return f"Transit für {rule.species} möglich"
+
+    if len(items) >= rule.min_contacts_for_reproduction:
+        return f"Transitdaten für {rule.species} vorhanden, aber noch nicht eindeutig"
+
+    return f"kein belastbarer Transitnachweis für {rule.species}"

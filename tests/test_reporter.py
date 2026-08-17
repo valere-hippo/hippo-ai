@@ -17,6 +17,7 @@ def test_render_report_contains_species():
                         centroid_y=2.0,
                     )
                 ],
+                transit_assessment="Transit entlang von Leitstrukturen für Zwergfledermaus plausibel",
                 habitat_assessment="habitatlich plausibel für Amsel",
                 reproduction_assessment="vorläufig zu prüfen",
                 concentration_assessment="Verdacht auf Konzentrationszone",
@@ -32,4 +33,5 @@ def test_render_report_contains_species():
     assert "input.gpkg" in report
     assert "Verdacht auf Konzentrationszone" in report
     assert "Habitat" in report
+    assert "Transit" in report
     assert "Validierung" in report

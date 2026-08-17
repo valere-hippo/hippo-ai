@@ -13,6 +13,7 @@ class SpeciesRule:
     """Règle métier minimale pour une espèce."""
 
     species: str
+    taxon_group: str = "bird"
     breeding_months: set[int] = field(default_factory=set)
     habitat_keywords: set[str] = field(default_factory=set)
     min_contacts_for_reproduction: int = 2
@@ -65,11 +66,17 @@ def _load_rule_payload(rule_source: str | Path | None) -> dict[str, Any]:
 def _parse_species_rule(payload: dict[str, Any]) -> SpeciesRule:
     return SpeciesRule(
         species=str(payload.get("species", "")).strip(),
+        taxon_group=str(payload.get("taxon_group", "bird")).strip().casefold() or "bird",
         breeding_months={int(month) for month in payload.get("breeding_months", [])},
         habitat_keywords={str(keyword).casefold() for keyword in payload.get("habitat_keywords", [])},
         min_contacts_for_reproduction=int(payload.get("min_contacts_for_reproduction", 2)),
         notes=str(payload.get("notes", "")).strip(),
     )
+
+
+def is_bat_rule(species: str) -> bool:
+    rule = get_rule(species)
+    return bool(rule and rule.taxon_group == "bat")
 
 
 def detect_habitat_compatibility(species: str, attrs: dict[str, object]) -> str:
