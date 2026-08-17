@@ -5,7 +5,7 @@ import argparse
 from .config import AnalyzerConfig, FieldMapping
 from .analyzer import analyze_observations
 from .exporter import export_report
-from .importer import load_observations
+from .importer import load_observations_with_issues
 from .reporter import render_report
 from .rules import set_rule_source
 
@@ -30,8 +30,9 @@ def main() -> None:
     config = AnalyzerConfig(distance_threshold_m=args.distance_threshold_m, min_cluster_size=args.min_cluster_size, field_mapping=mapping)
     if args.rules_file:
         set_rule_source(args.rules_file)
-    observations = load_observations(args.input, mapping=mapping)
+    observations, validation_issues = load_observations_with_issues(args.input, mapping=mapping)
     result = analyze_observations(observations, source_path=args.input, config=config)
+    result.validation_issues = validation_issues
 
     if args.output:
         export_report(result, args.output)

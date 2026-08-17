@@ -7,6 +7,7 @@ from statistics import mean
 from .config import AnalyzerConfig
 from .models import AnalysisResult, ClusterSummary, Observation, SpeciesAnalysis
 from .rules import SpeciesRule, detect_habitat_compatibility, get_rule
+from .validation import validate_frame
 
 
 def analyze_observations(observations: list[Observation], source_path: str, config: AnalyzerConfig | None = None) -> AnalysisResult:

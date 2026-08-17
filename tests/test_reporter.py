@@ -23,6 +23,7 @@ def test_render_report_contains_species():
                 text_summary="Art Amsel: 3 Nachweise im Untersuchungsgebiet.",
             )
         ],
+        validation_issues=["Keine Datums-Spalte gefunden."],
     )
 
     report = render_report(result)
@@ -31,4 +32,4 @@ def test_render_report_contains_species():
     assert "input.gpkg" in report
     assert "Verdacht auf Konzentrationszone" in report
     assert "Habitat" in report
-
+    assert "Validierung" in report

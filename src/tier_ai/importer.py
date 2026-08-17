@@ -9,6 +9,7 @@ import pandas as pd
 
 from .config import FieldMapping
 from .models import Observation
+from .validation import validate_frame
 
 
 class ImportErrorWithContext(RuntimeError):
@@ -54,6 +55,12 @@ def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> 
     if frame.empty:
         return []
 
+    issues = validate_frame(frame, mapping=mapping)
+    fatal_issues = [issue for issue in issues if issue.level == "error"]
+    if fatal_issues:
+        joined = "; ".join(issue.message for issue in fatal_issues)
+        raise ImportErrorWithContext(joined)
+
     species_column = _find_column(frame.columns, [mapping.species, "species", "art", "artname", "taxon"])
     date_column = _find_column(frame.columns, [mapping.observed_at, "date", "datum", "observed_at", "beobachtet_am"])
 
@@ -76,6 +83,58 @@ def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> 
         )
 
     return observations
+
+
+def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None = None) -> tuple[list[Observation], list[str]]:
+    source = Path(path)
+    if not source.exists():
+        raise ImportErrorWithContext(f"Datei nicht gefunden: {source}")
+    mapping = mapping or FieldMapping()
+
+    try:
+        import geopandas as gpd
+    except Exception as exc:  # pragma: no cover - import dependency
+        raise ImportErrorWithContext(
+            "geopandas ist nicht installiert. Für den Import geospatialer Daten "
+            "wird diese Abhängigkeit benötigt."
+        ) from exc
+
+    try:
+        frame = gpd.read_file(source)
+    except Exception as exc:
+        raise ImportErrorWithContext(f"Datei konnte nicht gelesen werden: {source}") from exc
+
+    if frame.empty:
+        return [], []
+
+    issues = validate_frame(frame, mapping=mapping)
+    fatal_issues = [issue for issue in issues if issue.level == "error"]
+    if fatal_issues:
+        joined = "; ".join(issue.message for issue in fatal_issues)
+        raise ImportErrorWithContext(joined)
+
+    species_column = _find_column(frame.columns, [mapping.species, "species", "art", "artname", "taxon"])
+    date_column = _find_column(frame.columns, [mapping.observed_at, "date", "datum", "observed_at", "beobachtet_am"])
+
+    observations: list[Observation] = []
+    for _, row in frame.iterrows():
+        geometry = row.geometry
+        if geometry is None or geometry.is_empty:
+            continue
+
+        species = str(row[species_column]).strip() if species_column else "unbekannt"
+        observed_at = _parse_date(row[date_column]) if date_column else None
+        attrs = row.drop(labels=["geometry"], errors="ignore").to_dict()
+        observations.append(
+            Observation(
+                species=species or "unbekannt",
+                observed_at=observed_at,
+                geometry=geometry,
+                attrs=attrs,
+            )
+        )
+
+    return observations, [issue.message for issue in issues]
 
 
 def _find_column(columns: pd.Index, candidates: list[str]) -> str | None:

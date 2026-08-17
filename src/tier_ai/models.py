@@ -57,3 +57,4 @@ class AnalysisResult:
     source_path: str
     species_results: list[SpeciesAnalysis] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    validation_issues: list[str] = field(default_factory=list)

@@ -28,4 +28,8 @@ def render_report(result: AnalysisResult) -> str:
         lines.append("## Warnungen")
         lines.extend(f"- {warning}" for warning in result.warnings)
 
+    if result.validation_issues:
+        lines.append("## Validierung")
+        lines.extend(f"- {issue}" for issue in result.validation_issues)
+
     return "\n".join(lines).strip() + "\n"
