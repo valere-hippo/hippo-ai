@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import tempfile
 import unittest
-from dataclasses import dataclass
-from datetime import date
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -105,6 +103,97 @@ class ExporterTests(unittest.TestCase):
                 self.assertIn("<w:numbering", numbering_xml)
                 self.assertIn("Geospatiale Fachauswertung", header_xml)
                 self.assertIn("PAGE", footer_xml)
+
+    def test_exports_docx_with_template_overrides(self) -> None:
+        result = AnalysisResult(
+            source_path="input.gpkg",
+            species_results=[
+                SpeciesAnalysis(
+                    species="Amsel",
+                    total_observations=1,
+                    text_summary="Art Amsel: 1 Nachweis im Untersuchungsgebiet.",
+                )
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            template_dir = Path(tmpdir) / "template"
+            (template_dir / "word" / "_rels").mkdir(parents=True)
+            (template_dir / "docProps").mkdir(parents=True)
+            (template_dir / "_rels").mkdir(parents=True)
+            (template_dir / "word").mkdir(parents=True, exist_ok=True)
+            (template_dir / "[Content_Types].xml").write_text(
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>
+""",
+                encoding="utf-8",
+            )
+            (template_dir / "_rels" / ".rels").write_text(
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+""",
+                encoding="utf-8",
+            )
+            (template_dir / "docProps" / "core.xml").write_text(
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
+""",
+                encoding="utf-8",
+            )
+            (template_dir / "docProps" / "app.xml").write_text(
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"/>
+""",
+                encoding="utf-8",
+            )
+            (template_dir / "word" / "styles.xml").write_text(
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/></w:style>
+</w:styles>
+""",
+                encoding="utf-8",
+            )
+            (template_dir / "word" / "numbering.xml").write_text(
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>
+""",
+                encoding="utf-8",
+            )
+            (template_dir / "word" / "header1.xml").write_text(
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:r><w:t xml:space="preserve">Vorlagenkopf</w:t></w:r></w:p>
+</w:hdr>
+""",
+                encoding="utf-8",
+            )
+            (template_dir / "word" / "footer1.xml").write_text(
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:r><w:t xml:space="preserve">Vorlagenfuß</w:t></w:r></w:p>
+</w:ftr>
+""",
+                encoding="utf-8",
+            )
+            (template_dir / "word" / "_rels" / "document.xml.rels").write_text(
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>
+</Relationships>
+""",
+                encoding="utf-8",
+            )
+
+            output = export_report(result, Path(tmpdir) / "bericht.docx", docx_template_dir=template_dir)
+
+            self.assertTrue(output.exists())
+            with ZipFile(output) as archive:
+                header_xml = archive.read("word/header1.xml").decode("utf-8")
+                footer_xml = archive.read("word/footer1.xml").decode("utf-8")
+                self.assertIn("Vorlagenkopf", header_xml)
+                self.assertIn("Vorlagenfuß", footer_xml)
 
 
 if __name__ == "__main__":

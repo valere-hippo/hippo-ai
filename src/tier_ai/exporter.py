@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import textwrap
 from pathlib import Path
 from typing import Iterable
@@ -10,14 +11,19 @@ from .models import AnalysisResult, SpeciesAnalysis
 from .reporter import render_report
 
 
-def export_report(result: AnalysisResult, output_path: str | Path) -> Path:
+def export_report(
+    result: AnalysisResult,
+    output_path: str | Path,
+    *,
+    docx_template_dir: str | Path | None = None,
+) -> Path:
     """Exportiert den Bericht als TXT, DOCX oder PDF."""
 
     path = Path(output_path)
     suffix = path.suffix.lower()
 
     if suffix == ".docx":
-        _write_docx(path, result, render_report(result))
+        _write_docx(path, result, render_report(result), template_dir=docx_template_dir)
     elif suffix == ".pdf":
         _write_pdf(path, render_report(result))
     else:
@@ -26,26 +32,64 @@ def export_report(result: AnalysisResult, output_path: str | Path) -> Path:
     return path
 
 
-def _write_docx(path: Path, result: AnalysisResult, report_text: str) -> None:
+def _write_docx(
+    path: Path,
+    result: AnalysisResult,
+    report_text: str,
+    *,
+    template_dir: str | Path | None = None,
+) -> None:
     paragraphs = report_text.rstrip("\n").split("\n")
+    template_parts = _load_docx_template_parts(Path(template_dir)) if template_dir else {}
+    header_rel_id, footer_rel_id = _docx_relationship_ids(template_parts.get("document_rels_xml"))
 
     with ZipFile(path, "w", compression=ZIP_DEFLATED) as archive:
-        archive.writestr("[Content_Types].xml", _content_types_xml())
-        archive.writestr("_rels/.rels", _root_rels_xml())
-        archive.writestr("docProps/core.xml", _core_props_xml())
-        archive.writestr("docProps/app.xml", _app_props_xml())
-        archive.writestr("word/styles.xml", _styles_xml())
-        archive.writestr("word/numbering.xml", _numbering_xml())
-        archive.writestr("word/header1.xml", _header_xml())
-        archive.writestr("word/footer1.xml", _footer_xml())
-        archive.writestr("word/_rels/document.xml.rels", _document_rels_xml())
-        archive.writestr("word/document.xml", _document_xml(result, paragraphs))
+        archive.writestr("[Content_Types].xml", template_parts.get("content_types_xml", _content_types_xml()))
+        archive.writestr("_rels/.rels", template_parts.get("root_rels_xml", _root_rels_xml()))
+        archive.writestr("docProps/core.xml", template_parts.get("core_props_xml", _core_props_xml()))
+        archive.writestr("docProps/app.xml", template_parts.get("app_props_xml", _app_props_xml()))
+        archive.writestr("word/styles.xml", template_parts.get("styles_xml", _styles_xml()))
+        archive.writestr("word/numbering.xml", template_parts.get("numbering_xml", _numbering_xml()))
+        archive.writestr("word/header1.xml", template_parts.get("header_xml", _header_xml()))
+        archive.writestr("word/footer1.xml", template_parts.get("footer_xml", _footer_xml()))
+        archive.writestr("word/_rels/document.xml.rels", template_parts.get("document_rels_xml", _document_rels_xml()))
+        archive.writestr("word/document.xml", _document_xml(result, paragraphs, header_rel_id, footer_rel_id))
 
 
 def _write_pdf(path: Path, report_text: str) -> None:
     pages = _build_pdf_pages(report_text)
     pdf_bytes = _build_pdf_document(pages)
     path.write_bytes(pdf_bytes)
+
+
+def _load_docx_template_parts(template_dir: Path) -> dict[str, str]:
+    parts: dict[str, str] = {}
+    mapping = {
+        "content_types_xml": "[Content_Types].xml",
+        "root_rels_xml": "_rels/.rels",
+        "core_props_xml": "docProps/core.xml",
+        "app_props_xml": "docProps/app.xml",
+        "styles_xml": "word/styles.xml",
+        "numbering_xml": "word/numbering.xml",
+        "header_xml": "word/header1.xml",
+        "footer_xml": "word/footer1.xml",
+        "document_rels_xml": "word/_rels/document.xml.rels",
+    }
+    for key, relative_path in mapping.items():
+        candidate = template_dir / relative_path
+        if candidate.exists():
+            parts[key] = candidate.read_text(encoding="utf-8")
+    return parts
+
+
+def _docx_relationship_ids(document_rels_xml: str | None) -> tuple[str, str]:
+    if not document_rels_xml:
+        return "rId1", "rId2"
+    header_match = re.search(r'Type="[^"]*/header"[^>]*Id="([^"]+)"', document_rels_xml)
+    footer_match = re.search(r'Type="[^"]*/footer"[^>]*Id="([^"]+)"', document_rels_xml)
+    header_rel_id = header_match.group(1) if header_match else "rId1"
+    footer_rel_id = footer_match.group(1) if footer_match else "rId2"
+    return header_rel_id, footer_rel_id
 
 
 def _content_types_xml() -> str:
@@ -204,7 +248,12 @@ def _styles_xml() -> str:
 """
 
 
-def _document_xml(result: AnalysisResult, paragraphs: Iterable[str]) -> str:
+def _document_xml(
+    result: AnalysisResult,
+    paragraphs: Iterable[str],
+    header_rel_id: str = "rId1",
+    footer_rel_id: str = "rId2",
+) -> str:
     body_parts: list[str] = []
     skip_overview_bullets = False
     toc_inserted = False
@@ -240,8 +289,8 @@ def _document_xml(result: AnalysisResult, paragraphs: Iterable[str]) -> str:
 
     body_parts.append(
         "<w:sectPr>"
-        "<w:headerReference w:type=\"default\" r:id=\"rId1\"/>"
-        "<w:footerReference w:type=\"default\" r:id=\"rId2\"/>"
+        f"<w:headerReference w:type=\"default\" r:id=\"{header_rel_id}\"/>"
+        f"<w:footerReference w:type=\"default\" r:id=\"{footer_rel_id}\"/>"
         "<w:pgSz w:w=\"11906\" w:h=\"16838\"/>"
         "<w:pgMar w:top=\"1440\" w:right=\"1440\" w:bottom=\"1440\" w:left=\"1440\"/>"
         "</w:sectPr>"

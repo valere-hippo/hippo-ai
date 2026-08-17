@@ -24,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bird-min-cluster-size", type=int, default=None, help="Minimale Clustergröße für Vögel")
     parser.add_argument("--analysis-config-file", default=None, help="Pfad zu einer JSON-Datei mit Analyseparametern")
     parser.add_argument("--rules-file", default=None, help="Pfad zu einer JSON-Datei mit Artenregeln")
+    parser.add_argument("--docx-template-dir", default=None, help="Verzeichnis mit DOCX-Vorlagen-XML-Dateien")
     return parser
 
 
@@ -54,6 +55,6 @@ def main() -> None:
     result.metadata = metadata
 
     if args.output:
-        export_report(result, args.output)
+        export_report(result, args.output, docx_template_dir=args.docx_template_dir)
     else:
         print(render_report(result))

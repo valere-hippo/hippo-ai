@@ -20,6 +20,12 @@ Ou en `DOCX`:
 PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg -o bericht.docx
 ```
 
+Ein eigenes DOCX-Template-Verzeichnis kann zusätzlich übergeben werden:
+
+```bash
+PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg -o bericht.docx --docx-template-dir /pfad/zu/template
+```
+
 Ou en `PDF`:
 
 ```bash
