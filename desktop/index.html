@@ -83,7 +83,24 @@
           <h2>Ergebnis</h2>
           <span id="status-pill" class="pill">Bereit</span>
         </div>
+        <div class="progress-wrap">
+          <div class="progress-meta">
+            <span id="progress-label">Bereit zum Starten</span>
+            <span id="progress-percent">0%</span>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <div id="progress-bar" class="progress-bar"></div>
+          </div>
+        </div>
         <pre id="result-output" class="output">Noch keine Analyse gestartet.</pre>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Verlauf</h2>
+          <button type="button" id="clear-history-button" class="secondary compact">Löschen</button>
+        </div>
+        <div id="history-list" class="history-list"></div>
       </section>
     </main>
   </body>

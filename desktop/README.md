@@ -37,3 +37,5 @@ Im aktuellen Prototyp wird dafür der Projekt-Root per Formularfeld übergeben.
 - Windows-only als erster Zielpfad
 - Bundling ist noch deaktiviert
 - Die letzte Formularbelegung wird lokal im Webview gespeichert und beim nächsten Start wiederhergestellt
+- Ein animierter Fortschrittsbalken zeigt den aktuellen Analysezustand
+- Die letzten Läufe werden lokal als Verlauf gespeichert
