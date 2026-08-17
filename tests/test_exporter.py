@@ -50,6 +50,7 @@ class ExporterTests(unittest.TestCase):
                     reproduction_assessment="vorläufig zu prüfen",
                     concentration_assessment="Verdacht auf Konzentrationszone",
                     recommendation="räumliche Konzentration kartografisch nachprüfen",
+                    priority="mittel",
                     text_summary="Art Amsel: 3 Nachweise im Untersuchungsgebiet.",
                 )
             ],
@@ -70,6 +71,7 @@ class ExporterTests(unittest.TestCase):
                 self.assertIn("<w:tbl>", document_xml)
                 self.assertIn("Brut", document_xml)
                 self.assertIn("Empfehlung", document_xml)
+                self.assertIn("Priorität", document_xml)
                 self.assertIn("Gruppe", document_xml)
                 self.assertIn("headerReference", document_xml)
                 self.assertIn("footerReference", document_xml)

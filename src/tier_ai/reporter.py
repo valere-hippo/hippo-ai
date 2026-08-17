@@ -52,6 +52,7 @@ def render_report(result: AnalysisResult) -> str:
         lines.append(f"Transit: {species_result.transit_assessment}")
         lines.append(f"Brutbewertung: {species_result.reproduction_assessment}")
         lines.append(f"Empfehlung: {species_result.recommendation}")
+        lines.append(f"Priorität: {species_result.priority}")
         if species_result.clusters:
             for cluster in species_result.clusters:
                 lines.append(
@@ -96,6 +97,6 @@ def _render_species_overview(species_results) -> list[str]:
         lines.append(
             f"- {species_result.species} ({species_result.taxon_group}): {species_result.total_observations} Nachweise, "
             f"{cluster_count} Konzentrationsbereich(e), Brut={species_result.reproduction_assessment}, "
-            f"Empfehlung={species_result.recommendation}"
+            f"Empfehlung={species_result.recommendation}, Priorität={species_result.priority}"
         )
     return lines

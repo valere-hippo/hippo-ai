@@ -32,6 +32,7 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
             transit_assessment,
             reproduction,
         )
+        priority = _build_priority(taxon_group, concentration, transit_assessment, reproduction)
         summary = _render_species_summary(
             species,
             items,
@@ -41,6 +42,7 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
             transit_assessment,
             reproduction,
             recommendation,
+            priority,
             rule,
         )
         species_results.append(
@@ -54,6 +56,7 @@ def analyze_observations(observations: list[Observation], source_path: str, conf
                 reproduction_assessment=reproduction,
                 concentration_assessment=concentration,
                 recommendation=recommendation,
+                priority=priority,
                 text_summary=summary,
             )
         )
@@ -143,6 +146,7 @@ def _render_species_summary(
     transit: str,
     reproduction: str,
     recommendation: str,
+    priority: str,
     rule: SpeciesRule | None,
 ) -> str:
     parts = [
@@ -152,6 +156,7 @@ def _render_species_summary(
         f"Transitbewertung: {transit}.",
         f"Brut-/Reproduktionsbewertung: {reproduction}.",
         f"Empfehlung: {recommendation}.",
+        f"Priorität: {priority}.",
     ]
     if rule and rule.notes:
         parts.append(rule.notes)
@@ -293,3 +298,17 @@ def _build_recommendation(
     if "eher unplausibel" in habitat_assessment:
         return "Habitat fachlich plausibilisieren"
     return "derzeit keine vertiefte Maßnahme erforderlich"
+
+
+def _build_priority(taxon_group: str, concentration: str, transit_assessment: str, reproduction: str) -> str:
+    if "Brutverdacht plausibel" in reproduction:
+        return "hoch"
+    if taxon_group == "bat" and transit_assessment.startswith("Transit entlang von Leitstrukturen"):
+        return "hoch"
+    if "Brutverdacht möglich" in reproduction:
+        return "mittel"
+    if taxon_group == "bat" and transit_assessment.startswith("Transit"):
+        return "mittel"
+    if "Konzentrationszone" in concentration or "Konzentrationsbereich" in concentration:
+        return "mittel"
+    return "niedrig"

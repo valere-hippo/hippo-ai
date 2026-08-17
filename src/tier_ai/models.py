@@ -50,6 +50,7 @@ class SpeciesAnalysis:
     reproduction_assessment: str = "unbewertet"
     concentration_assessment: str = "unbewertet"
     recommendation: str = "nicht bewertet"
+    priority: str = "niedrig"
     text_summary: str = ""
 
 
