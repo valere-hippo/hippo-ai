@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tier-ai"
+version = "0.1.0"
+description = "Geospatial analysis and report generation for wildlife observation data"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pandas>=2.2",
+  "geopandas>=1.0",
+  "shapely>=2.0",
+]
+
+[project.scripts]
+tier-ai = "tier_ai.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
