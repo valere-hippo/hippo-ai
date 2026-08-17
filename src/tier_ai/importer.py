@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,10 @@ from .validation import validate_frame
 
 class ImportErrorWithContext(RuntimeError):
     pass
+
+
+def _configure_shapefile_support() -> None:
+    os.environ.setdefault("SHAPE_RESTORE_SHX", "YES")
 
 
 def _parse_date(value: Any) -> date | None:
@@ -37,6 +42,7 @@ def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> 
     if not source.exists():
         raise ImportErrorWithContext(f"Datei nicht gefunden: {source}")
     mapping = mapping or FieldMapping()
+    _configure_shapefile_support()
 
     try:
         import geopandas as gpd
@@ -49,6 +55,12 @@ def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> 
     try:
         frame = gpd.read_file(source)
     except Exception as exc:
+        message = str(exc)
+        if source.suffix.lower() == ".shp" and ("shx" in message.lower() or "data sourceerror" in message.lower()):
+            raise ImportErrorWithContext(
+                f"Die Shape-Datei {source.name} scheint unvollständig zu sein. "
+                f"Es fehlt vermutlich die zugehörige .shx-Datei im gleichen Ordner."
+            ) from exc
         raise ImportErrorWithContext(f"Datei konnte nicht gelesen werden: {source}") from exc
 
     if frame.empty:
@@ -89,6 +101,7 @@ def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None
     if not source.exists():
         raise ImportErrorWithContext(f"Datei nicht gefunden: {source}")
     mapping = mapping or FieldMapping()
+    _configure_shapefile_support()
 
     try:
         import geopandas as gpd
@@ -101,6 +114,12 @@ def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None
     try:
         frame = gpd.read_file(source)
     except Exception as exc:
+        message = str(exc)
+        if source.suffix.lower() == ".shp" and ("shx" in message.lower() or "data sourceerror" in message.lower()):
+            raise ImportErrorWithContext(
+                f"Die Shape-Datei {source.name} scheint unvollständig zu sein. "
+                f"Es fehlt vermutlich die zugehörige .shx-Datei im gleichen Ordner."
+            ) from exc
         raise ImportErrorWithContext(f"Datei konnte nicht gelesen werden: {source}") from exc
 
     if frame.empty:

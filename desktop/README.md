@@ -66,3 +66,4 @@ Im aktuellen Prototyp wird dafür der Projekt-Root per Formularfeld übergeben.
 - Die App kann direkt TXT, DOCX und PDF exportieren, ohne Terminal
 - Über „Python vorbereiten“ wird automatisch eine lokale `.venv` eingerichtet und das Projekt installiert
 - Als Eingabe bitte `.gpkg` oder `.shp` wählen; `.cpg` ist nur eine Begleitdatei und keine Analyse-Eingabe
+- Bei Shapefiles müssen `.shp`, `.dbf` und `.shx` im selben Ordner liegen; fehlt `.shx`, versucht die App die Datei zu restaurieren
