@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tier AI</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <p class="eyebrow">Windows Desktop Prototype</p>
+        <h1>Tier AI</h1>
+        <p class="lede">
+          GeoPackage-Analyse und Berichtsexport ohne Terminal. Die App startet das lokale Python-Backend
+          und zeigt dir das Ergebnis direkt im Fenster.
+        </p>
+      </section>
+
+      <section class="panel">
+        <form id="analysis-form" class="grid">
+          <label>
+            <span>Python-Executable</span>
+            <input id="python_executable" name="python_executable" value="py" />
+          </label>
+
+          <label>
+            <span>Projektwurzel</span>
+            <input id="project_root" name="project_root" value=".." />
+          </label>
+
+          <label class="full">
+            <span>Eingabedatei</span>
+            <input id="input" name="input" placeholder="C:\\Pfad\\zur\\datei.gpkg" required />
+          </label>
+
+          <label>
+            <span>Ausgabe</span>
+            <input id="output" name="output" placeholder="C:\\Pfad\\bericht.docx" />
+          </label>
+
+          <label>
+            <span>Art-Spalte</span>
+            <input id="species_column" name="species_column" value="species" />
+          </label>
+
+          <label>
+            <span>Datum-Spalte</span>
+            <input id="date_column" name="date_column" value="observed_at" />
+          </label>
+
+          <label>
+            <span>Analyse-Config</span>
+            <input id="analysis_config_file" name="analysis_config_file" placeholder="C:\\Pfad\\analyse.json" />
+          </label>
+
+          <label>
+            <span>Rollen-Datei</span>
+            <input id="rules_file" name="rules_file" placeholder="C:\\Pfad\\species_rules.json" />
+          </label>
+
+          <label class="full">
+            <span>DOCX-Template-Verzeichnis</span>
+            <input id="docx_template_dir" name="docx_template_dir" placeholder="C:\\Pfad\\zu\\template" />
+          </label>
+
+          <div class="actions full">
+            <button type="submit" id="run-button">Analyse starten</button>
+            <button type="button" id="reset-button" class="secondary">Zurücksetzen</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Ergebnis</h2>
+          <span id="status-pill" class="pill">Bereit</span>
+        </div>
+        <pre id="result-output" class="output">Noch keine Analyse gestartet.</pre>
+      </section>
+    </main>
+  </body>
+</html>

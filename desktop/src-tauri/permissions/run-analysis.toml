@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-run-analysis"
+description = "Allows the frontend to start the local Python analysis pipeline."
+commands.allow = ["run_analysis"]

@@ -86,6 +86,13 @@ PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg --rules-file /pfad/zu/eige
 In den Regeln können auch Prioritäten je Art definiert werden, z. B. für Brutverdacht,
 Transit oder Konzentrationsbereiche.
 
+## Windows-App
+
+Für eine Windows-Oberfläche ohne Terminal gibt es jetzt einen Tauri-Prototyp unter
+[desktop/](desktop/README.md).
+
+Der Prototyp startet die bestehende Python-Analyse lokal und zeigt das Ergebnis im Fenster an.
+
 ### Lokal testen
 
 Die Tests laufen mit `unittest`:
