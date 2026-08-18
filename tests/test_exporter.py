@@ -49,6 +49,7 @@ class ExporterTests(unittest.TestCase):
             self.assertIn(b"Tier-KI Auswertung", content)
             self.assertIn(b"Zusammenfassung", content)
             self.assertIn(b"Schlussbewertung", content)
+            self.assertIn(b"hipposideros", content)
 
     def test_exports_docx(self) -> None:
         result = AnalysisResult(
@@ -81,13 +82,19 @@ class ExporterTests(unittest.TestCase):
 
             self.assertTrue(output.exists())
             with ZipFile(output) as archive:
+                content_types_xml = archive.read("[Content_Types].xml").decode("utf-8")
                 styles_xml = archive.read("word/styles.xml").decode("utf-8")
                 numbering_xml = archive.read("word/numbering.xml").decode("utf-8")
                 header_xml = archive.read("word/header1.xml").decode("utf-8")
                 footer_xml = archive.read("word/footer1.xml").decode("utf-8")
+                document_rels_xml = archive.read("word/_rels/document.xml.rels").decode("utf-8")
+                logo_svg = archive.read("word/media/logo.svg").decode("utf-8")
                 document_xml = archive.read("word/document.xml").decode("utf-8")
+                self.assertIn("image/svg+xml", content_types_xml)
+                self.assertIn("rIdLogo", document_rels_xml)
                 self.assertIn("Tier-KI Auswertung", document_xml)
                 self.assertIn("Amsel", document_xml)
+                self.assertIn("wp:inline", document_xml)
                 self.assertIn("<w:tbl>", document_xml)
                 self.assertIn("Brut", document_xml)
                 self.assertIn("Empfehlung", document_xml)
@@ -97,6 +104,8 @@ class ExporterTests(unittest.TestCase):
                 self.assertIn("footerReference", document_xml)
                 self.assertNotIn("Inhaltsverzeichnis", document_xml)
                 self.assertNotIn("TOC \\o \"1-1\" \\h \\z \\u", document_xml)
+                self.assertIn("Tier-KI Logo", document_xml)
+                self.assertIn("<svg", logo_svg)
                 self.assertIn("Title", styles_xml)
                 self.assertIn("Heading1", styles_xml)
                 self.assertIn("ListBullet", styles_xml)

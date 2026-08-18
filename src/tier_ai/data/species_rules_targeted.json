@@ -466,5 +466,53 @@
     "priority_if_concentration": "mittel",
     "priority_default": "niedrig",
     "notes": ""
+  },
+  "mönchsgrasmücke": {
+    "species": "Mönchsgrasmücke",
+    "taxon_group": "bird",
+    "breeding_months": [4, 5, 6, 7, 8],
+    "habitat_keywords": ["gehölz", "hecke", "garten", "park", "rand"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "niedrig",
+    "priority_default": "niedrig",
+    "notes": ""
+  },
+  "waldkauz": {
+    "species": "Waldkauz",
+    "taxon_group": "bird",
+    "breeding_months": [2, 3, 4, 5],
+    "habitat_keywords": ["wald", "altbaum", "gehölz", "park", "höhle"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": ""
+  },
+  "kleiber": {
+    "species": "Kleiber",
+    "taxon_group": "bird",
+    "breeding_months": [4, 5, 6, 7],
+    "habitat_keywords": ["wald", "gehölz", "park", "baum", "altbaum"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "niedrig",
+    "priority_default": "niedrig",
+    "notes": ""
+  },
+  "braunes langohr": {
+    "species": "Braunes Langohr",
+    "taxon_group": "bat",
+    "breeding_months": [5, 6, 7, 8],
+    "habitat_keywords": ["wald", "gehölz", "park", "gebäude", "dachstuhl"],
+    "min_contacts_for_reproduction": 3,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": ""
   }
 }
