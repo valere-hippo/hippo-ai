@@ -19,17 +19,17 @@ def render_report(result: AnalysisResult) -> str:
         lines.append(result.final_conclusion)
         lines.append("")
 
+    lines.append("## Methodik")
+    lines.extend(_render_methodology(result))
+    lines.append("")
+
+    lines.append("## Ergebnisprofil")
+    lines.extend(_render_result_profile(result))
+    lines.append("")
+
     if result.metadata is not None:
         lines.append("## Metadaten")
-        lines.append(f"Datei: {result.metadata.source_name}")
-        if result.metadata.file_size_bytes is not None:
-            lines.append(f"Dateigröße: {result.metadata.file_size_bytes} Bytes")
-        if result.metadata.record_count is not None:
-            lines.append(f"Datensätze: {result.metadata.record_count}")
-        if result.metadata.crs:
-            lines.append(f"CRS: {result.metadata.crs}")
-        if result.metadata.geometry_types:
-            lines.append(f"Geometrietypen: {', '.join(result.metadata.geometry_types)}")
+        lines.extend(_render_metadata(result))
         lines.append("")
 
     if result.species_results:
@@ -63,8 +63,79 @@ def render_report(result: AnalysisResult) -> str:
     if result.validation_issues:
         lines.append("## Validierung")
         lines.extend(f"- {issue}" for issue in result.validation_issues)
+        lines.append("")
+
+    lines.append("## Datenqualität")
+    lines.extend(_render_data_quality(result))
 
     return "\n".join(lines).strip() + "\n"
+
+
+def _render_methodology(result: AnalysisResult) -> list[str]:
+    lines = [
+        "• Die Auswertung basiert auf den verfügbaren Geodaten und wird ohne starre Art-Zwangszuordnung durchgeführt.",
+        "• Arten werden zuerst über explizite Art-Spalten, dann über Aliaslisten, wissenschaftliche Namen und Dateinamen erkannt.",
+        "• Wenn keine eindeutige Artzuordnung möglich ist, werden die Nachweise als nicht zuordenbar dokumentiert, jedoch weiterhin fachlich ausgewertet.",
+        "• Räumliche Häufungen werden über Abstands-Schwellen und zusammenhängende Komponenten gebildet.",
+        "• Brut-, Habitat- und Transitbewertung beruhen auf den im Projekt hinterlegten Artenregeln und dienen als fachliche Erstbewertung.",
+    ]
+    if result.validation_issues:
+        lines.append("• Validierungshinweise wurden separat ausgewiesen und sollten bei der fachlichen Prüfung berücksichtigt werden.")
+    return lines
+
+
+def _render_result_profile(result: AnalysisResult) -> list[str]:
+    total_observations = sum(species.total_observations for species in result.species_results)
+    species_count = len(result.species_results)
+    clustered_species = sum(1 for species in result.species_results if species.clusters)
+    bat_species = sum(1 for species in result.species_results if species.taxon_group == "bat")
+    breeding_species = sum(1 for species in result.species_results if "Brutverdacht" in species.reproduction_assessment)
+    unclassified_species = [species for species in result.species_results if _is_unclassified_species(species.species)]
+    lines = [
+        f"• Gesamtzahl der Nachweise: {total_observations}.",
+        f"• Anzahl ausgewerteter Arten: {species_count}.",
+        f"• Arten mit räumlichen Konzentrationen: {clustered_species}.",
+        f"• Fachlich relevante Brutindikationen: {breeding_species}.",
+        f"• Fledermaus-Taxa mit Transitbewertung: {bat_species}.",
+    ]
+    if unclassified_species:
+        lines.append(f"• Nicht zuordenbare Nachweise: {sum(species.total_observations for species in unclassified_species)}.")
+    return lines
+
+
+def _render_metadata(result: AnalysisResult) -> list[str]:
+    if result.metadata is None:
+        return ["• Keine Metadaten verfügbar."]
+
+    lines = [f"Datei: {result.metadata.source_name}"]
+    if result.metadata.file_size_bytes is not None:
+        lines.append(f"Dateigröße: {result.metadata.file_size_bytes} Bytes")
+    if result.metadata.record_count is not None:
+        lines.append(f"Datensätze: {result.metadata.record_count}")
+    if result.metadata.crs:
+        lines.append(f"CRS: {result.metadata.crs}")
+    if result.metadata.geometry_types:
+        lines.append(f"Geometrietypen: {', '.join(result.metadata.geometry_types)}")
+    return [f"• {line}" for line in lines]
+
+
+def _render_data_quality(result: AnalysisResult) -> list[str]:
+    lines: list[str] = []
+    if result.validation_issues:
+        lines.extend(f"• {issue}" for issue in result.validation_issues)
+    else:
+        lines.append("• Keine validierungsrelevanten Auffälligkeiten festgestellt.")
+
+    unclassified_count = sum(species.total_observations for species in result.species_results if _is_unclassified_species(species.species))
+    if unclassified_count:
+        lines.append(
+            "• Ein Teil der Nachweise war nicht eindeutig zuordenbar. "
+            "Für diese Fälle empfiehlt sich ein Abgleich mit den Originalattributen oder dem Dateinamen."
+        )
+    else:
+        lines.append("• Die Artzuordnung konnte für alle Nachweise auf ein regelbasiertes Ziel abgebildet werden.")
+    lines.append("• Die Ergebnisse sollten fachlich gegengeprüft und bei Bedarf kartografisch ergänzt werden.")
+    return lines
 
 
 def _render_species_overview(species_results) -> list[str]:
@@ -88,3 +159,8 @@ def _display_group_name(group: str) -> str:
     if normalized == "bird":
         return "Vögel"
     return group
+
+
+def _is_unclassified_species(species: str) -> bool:
+    normalized = species.strip().casefold()
+    return normalized in {"", "unbekannt", "unknown", "unclassified", "nicht zuordenbar", "nicht zuordenbare nachweise"}

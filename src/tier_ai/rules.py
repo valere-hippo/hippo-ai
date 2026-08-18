@@ -159,6 +159,33 @@ def _variant_keys(value: str) -> set[str]:
     return {variant for variant in {normalized, compact} if variant}
 
 
+def _species_tokens(value: str) -> set[str]:
+    tokens = {
+        token
+        for token in value.replace("-", " ").replace("_", " ").split()
+        if len(token) >= 3
+    }
+    stopwords = {
+        "range",
+        "breeding",
+        "breedingrange",
+        "range12232025",
+        "breedingrange12232025",
+        "bird",
+        "birds",
+        "species",
+        "sp",
+        "spp",
+        "map",
+        "record",
+        "records",
+        "data",
+        "gebiet",
+        "gebiete",
+    }
+    return {token for token in tokens if token not in stopwords}
+
+
 def resolve_species_label(value: str) -> str | None:
     if not value:
         return None
@@ -175,6 +202,26 @@ def resolve_species_label(value: str) -> str | None:
         for alias, canonical in ordered_aliases:
             if len(alias) >= 4 and alias in candidate:
                 return canonical
+
+    candidate_tokens = _species_tokens(text)
+    compact_tokens = _species_tokens(compact_text)
+    for candidate in [candidate_tokens, compact_tokens]:
+        if not candidate:
+            continue
+        best_match: tuple[int, str] | None = None
+        for alias, canonical in ordered_aliases:
+            alias_tokens = _species_tokens(alias)
+            if not alias_tokens:
+                continue
+            overlap = len(candidate & alias_tokens)
+            if overlap == 0:
+                continue
+            if overlap >= min(2, len(alias_tokens)):
+                score = overlap * 10 + len(alias_tokens)
+                if best_match is None or score > best_match[0]:
+                    best_match = (score, canonical)
+        if best_match is not None:
+            return best_match[1]
     return None
 
 

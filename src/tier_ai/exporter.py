@@ -389,6 +389,8 @@ def _paragraph_xml(line: str, index: int) -> str:
         return _styled_paragraph("Heading1", line[3:])
     if line.startswith("- "):
         return _styled_paragraph("ListBullet", f"• {line[2:]}")
+    if line.startswith("• "):
+        return _styled_paragraph("ListBullet", line)
     return _styled_paragraph("Normal", line)
 
 
@@ -404,10 +406,18 @@ def _build_pdf_pages(report_text: str) -> list[dict[str, object]]:
     sections = _parse_report_sections(report_text)
     pages: list[dict[str, object]] = []
     pages.append(_pdf_cover_page(sections))
+    if sections["methodology"]:
+        pages.append(_pdf_list_page("Methodik", sections["methodology"]))
+    if sections["result_profile"]:
+        pages.append(_pdf_list_page("Ergebnisprofil", sections["result_profile"]))
+    if sections["metadata"]:
+        pages.append(_pdf_list_page("Metadaten", sections["metadata"]))
     if sections["overview_table"]:
         pages.append(_pdf_overview_page(sections))
     for block in sections["species_blocks"]:
         pages.append(_pdf_species_page(block))
+    if sections["data_quality"]:
+        pages.append(_pdf_list_page("Datenqualität", sections["data_quality"]))
     if sections["warnings"]:
         pages.append(_pdf_list_page("Warnungen", sections["warnings"]))
     if sections["validation"]:
@@ -422,8 +432,12 @@ def _parse_report_sections(report_text: str) -> dict[str, object]:
         "source": lines[1] if len(lines) > 1 else "",
         "summary": "",
         "conclusion": "",
+        "methodology": [],
+        "result_profile": [],
+        "metadata": [],
         "overview_table": [],
         "species_blocks": [],
+        "data_quality": [],
         "warnings": [],
         "validation": [],
     }
@@ -460,10 +474,18 @@ def _parse_report_sections(report_text: str) -> dict[str, object]:
 
             if heading == "Zusammenfassung":
                 current_section = "summary"
+            elif heading == "Methodik":
+                current_section = "methodology"
+            elif heading == "Ergebnisprofil":
+                current_section = "result_profile"
             elif heading == "Schlussbewertung":
                 current_section = "conclusion"
+            elif heading == "Metadaten":
+                current_section = "metadata"
             elif heading == "Übersicht":
                 current_section = "overview"
+            elif heading == "Datenqualität":
+                current_section = "data_quality"
             elif heading == "Warnungen":
                 current_section = "warnings"
             elif heading == "Validierung":
@@ -475,6 +497,8 @@ def _parse_report_sections(report_text: str) -> dict[str, object]:
 
         if current_section == "overview":
             sections["overview_table"].append(line)  # type: ignore[union-attr]
+        elif current_section in {"methodology", "result_profile", "metadata", "data_quality"}:
+            sections[current_section].append(line)  # type: ignore[union-attr]
         elif current_section == "species" and current_species is not None:
             current_species["lines"].append(line)
         else:
@@ -800,7 +824,12 @@ def _serialize_pdf(objects: list[bytes], catalog_obj_id: int, info_obj_id: int) 
 
 
 def _pdf_escape_text(text: str) -> str:
-    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    sanitized = (
+        text.replace("•", "-")
+        .replace("–", "-")
+        .replace("—", "-")
+    )
+    return sanitized.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
 def _species_overview_table_xml(species_results: list[SpeciesAnalysis]) -> str:

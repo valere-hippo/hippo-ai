@@ -48,6 +48,8 @@ class ExporterTests(unittest.TestCase):
             self.assertTrue(content.startswith(b"%PDF-1.4"))
             self.assertIn(b"Tier-KI Auswertung", content)
             self.assertIn(b"Zusammenfassung", content)
+            self.assertIn(b"Methodik", content)
+            self.assertIn(b"Ergebnisprofil", content)
             self.assertIn(b"Schlussbewertung", content)
             self.assertIn(b"hipposideros", content)
 
@@ -94,6 +96,8 @@ class ExporterTests(unittest.TestCase):
                 self.assertIn("rIdLogo", document_rels_xml)
                 self.assertIn("Tier-KI Auswertung", document_xml)
                 self.assertIn("Amsel", document_xml)
+                self.assertIn("Methodik", document_xml)
+                self.assertIn("Ergebnisprofil", document_xml)
                 self.assertIn("wp:inline", document_xml)
                 self.assertIn("<w:tbl>", document_xml)
                 self.assertIn("Brut", document_xml)

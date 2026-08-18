@@ -194,6 +194,8 @@ def _resolve_row_species(row: Any, species_column: str | None, fallback_species:
             resolved = resolve_species_label(str(raw_value))
             if resolved:
                 return resolved
+            if fallback_species:
+                return fallback_species
             text = str(raw_value).strip()
             if text:
                 return text

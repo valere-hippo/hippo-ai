@@ -45,6 +45,8 @@ def test_render_report_contains_species():
     assert "Amsel" in report
     assert "input.gpkg" in report
     assert "Zusammenfassung" in report
+    assert "Methodik" in report
+    assert "Ergebnisprofil" in report
     assert "Schlussbewertung" in report
     assert "Übersicht" in report
     assert "Verdacht auf Konzentrationszone" in report
@@ -54,6 +56,7 @@ def test_render_report_contains_species():
     assert "Priorität" in report
     assert "Vögel" in report
     assert "Metadaten" in report
+    assert "Datenqualität" in report
     assert "Validierung" in report
 
 
@@ -85,4 +88,6 @@ def test_render_report_formats_unclassified_species_cleanly():
     assert "Nicht zuordenbare Nachweise" in report
     assert "unbestimmt" in report
     assert "unbekannt" not in report
+    assert "Methodik" in report
+    assert "Ergebnisprofil" in report
     assert "Inhaltsverzeichnis" not in report
