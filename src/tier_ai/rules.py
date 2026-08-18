@@ -60,11 +60,13 @@ def _rules_for_source(rule_source: str | None) -> dict[str, SpeciesRule]:
 
 def _load_rule_payload(rule_source: str | Path | None) -> dict[str, Any]:
     if rule_source is None:
-        base_resource = resources.files("tier_ai.data").joinpath("species_rules.json")
-        payload = json.loads(base_resource.read_text(encoding="utf-8"))
-        extra_resource = resources.files("tier_ai.data").joinpath("species_rules_extra.json")
-        if extra_resource.is_file():
-            payload.update(json.loads(extra_resource.read_text(encoding="utf-8")))
+        payload: dict[str, Any] = {}
+        data_root = resources.files("tier_ai.data")
+        for resource in sorted(
+            (child for child in data_root.iterdir() if child.name.startswith("species_rules") and child.suffix == ".json"),
+            key=lambda item: item.name,
+        ):
+            payload.update(json.loads(resource.read_text(encoding="utf-8")))
         return payload
 
     path = Path(rule_source)
