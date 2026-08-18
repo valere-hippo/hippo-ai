@@ -2,7 +2,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 
 const form = document.getElementById('analysis-form');
-const prepareButton = document.getElementById('prepare-button');
 const runButton = document.getElementById('run-button');
 const exportTxtButton = document.getElementById('export-txt-button');
 const exportDocxButton = document.getElementById('export-docx-button');
@@ -29,83 +28,44 @@ const pickInputButton = document.querySelector('[data-action="pick-input"]');
 const pickOutputButton = document.querySelector('[data-action="pick-output"]');
 const storageKey = 'tier-ai.desktop.form';
 const historyKey = 'tier-ai.desktop.history';
-let selectedHistoryIndex = null;
-
-const fieldNames = [
+const envReadyKey = 'tier-ai.desktop.python-ready';
+const advancedFields = [
   'python_executable',
   'project_root',
-  'input',
-  'output',
   'species_column',
   'date_column',
   'analysis_config_file',
   'rules_file',
   'docx_template_dir',
 ];
+const visibleFields = ['input', 'output'];
+const allFields = [...visibleFields, ...advancedFields];
+let selectedHistoryIndex = null;
 
 restoreFormState();
 renderHistory();
 renderDetails(null);
 
-fieldNames.forEach((name) => {
-  document.getElementById(name).addEventListener('change', persistFormState);
+allFields.forEach((name) => {
+  const element = document.getElementById(name);
+  if (element) {
+    element.addEventListener('change', persistFormState);
+  }
 });
 
 resetButton.addEventListener('click', () => {
   form.reset();
-  document.getElementById('python_executable').value = 'py';
-  document.getElementById('project_root').value = '..';
-  document.getElementById('species_column').value = 'species';
-  document.getElementById('date_column').value = 'observed_at';
+  document.getElementById('python_executable').value = '';
+  document.getElementById('project_root').value = '';
+  document.getElementById('species_column').value = '';
+  document.getElementById('date_column').value = '';
+  document.getElementById('analysis_config_file').value = '';
+  document.getElementById('rules_file').value = '';
+  document.getElementById('docx_template_dir').value = '';
   localStorage.removeItem(storageKey);
   output.textContent = 'Noch keine Analyse gestartet.';
   setStatus('Bereit');
   setProgress('Bereit zum Starten', 0, false);
-});
-
-prepareButton.addEventListener('click', async () => {
-  const payload = getCurrentPayload();
-  prepareButton.disabled = true;
-  runButton.disabled = true;
-  setStatus('Vorbereitung', 'running');
-  setProgress('Python-Umgebung wird vorbereitet', 10, true);
-  output.textContent = 'Python-Umgebung wird vorbereitet...';
-
-  let progressTimer = null;
-  try {
-    persistFormState();
-    progressTimer = startProgressCycle([
-      { label: 'Virtuelle Umgebung wird erstellt', percent: 25 },
-      { label: 'pip wird aktualisiert', percent: 50 },
-      { label: 'Tier AI wird installiert', percent: 78 },
-    ]);
-    const result = await invoke('prepare_environment', payload);
-    stopProgressCycle(progressTimer);
-    setProgress('Python-Umgebung vorbereitet', 100, false);
-    output.textContent = [
-      `Exit-Code: ${result.exit_code}`,
-      '',
-      'Kommando:',
-      result.command,
-      '',
-      'stdout:',
-      result.stdout || '(leer)',
-      '',
-      'stderr:',
-      result.stderr || '(leer)',
-    ].join('\n');
-    setStatus(result.exit_code === 0 ? 'Bereit' : 'Fehler', result.exit_code === 0 ? 'ready' : 'error');
-  } catch (error) {
-    if (progressTimer !== null) {
-      stopProgressCycle(progressTimer);
-    }
-    setProgress('Vorbereitung fehlgeschlagen', 0, false);
-    output.textContent = `Fehler bei der Vorbereitung der Python-Umgebung:\n${error}`;
-    setStatus('Fehler', 'error');
-  } finally {
-    prepareButton.disabled = false;
-    runButton.disabled = false;
-  }
 });
 
 exportTxtButton.addEventListener('click', () => runDirectExport('txt', 'Text'));
@@ -166,9 +126,7 @@ pickOutputButton.addEventListener('click', async () => {
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
 
-  const payload = Object.fromEntries(
-    fieldNames.map((name) => [name, document.getElementById(name).value.trim()]),
-  );
+  const payload = getCurrentPayload();
 
   if (!payload.input) {
     setStatus('Fehler', 'error');
@@ -186,30 +144,21 @@ form.addEventListener('submit', async (event) => {
   }
 
   runButton.disabled = true;
-  setStatus('Läuft', 'running');
-  setProgress('Vorbereitung', 15, true);
-  output.textContent = 'Analyse wird gestartet...';
+  setStatus('Vorbereitung', 'running');
+  setProgress('Python-Umgebung wird geprüft', 10, true);
+  output.textContent = 'Python-Umgebung wird vorbereitet...';
 
   let progressTimer = null;
   try {
     persistFormState();
+    await ensurePythonEnvironment(payload);
+    setStatus('Läuft', 'running');
+    setProgress('Analyse wird gestartet', 18, true);
     progressTimer = startProgressCycle();
     const result = await invoke('run_analysis', payload);
     stopProgressCycle(progressTimer);
     setProgress('Analyse abgeschlossen', 100, false);
-    const lines = [
-      `Exit-Code: ${result.exit_code}`,
-      '',
-      'Kommando:',
-      result.command,
-      '',
-      'stdout:',
-      result.stdout || '(leer)',
-      '',
-      'stderr:',
-      result.stderr || '(leer)',
-    ];
-    output.textContent = lines.join('\n');
+    output.textContent = formatRunResult(result);
     setStatus(result.exit_code === 0 ? 'Fertig' : 'Fehler', result.exit_code === 0 ? 'ready' : 'error');
     addHistoryEntry({
       timestamp: new Date().toISOString(),
@@ -231,24 +180,68 @@ form.addEventListener('submit', async (event) => {
     if (progressTimer !== null) {
       stopProgressCycle(progressTimer);
     }
-    setProgress('Analyse fehlgeschlagen', 0, false);
-    if (String(error).includes("No module named 'pandas'")) {
-      output.textContent = [
-        'Die Python-Umgebung hat noch nicht alle Analyse-Abhängigkeiten.',
-        'Nutze bitte zuerst „Python vorbereiten“ und starte die Analyse danach erneut.',
-        '',
-        `Fehler:\n${error}`,
-      ].join('\n');
-    } else if (String(error).includes('Keine GeoPackage- oder Shape-Datei')) {
+
+    const errorText = String(error);
+    if (errorText.includes("No module named 'pandas'")) {
+      localStorage.removeItem(envReadyKey);
+      try {
+        output.textContent = 'Python-Umgebung wird nachinstalliert...';
+        setStatus('Vorbereitung', 'running');
+        setProgress('Python-Abhängigkeiten werden repariert', 35, true);
+        await forcePreparePythonEnvironment(payload);
+        const rerun = await invoke('run_analysis', payload);
+        setProgress('Analyse abgeschlossen', 100, false);
+        output.textContent = formatRunResult(rerun);
+        setStatus(rerun.exit_code === 0 ? 'Fertig' : 'Fehler', rerun.exit_code === 0 ? 'ready' : 'error');
+        addHistoryEntry({
+          timestamp: new Date().toISOString(),
+          input: payload.input,
+          output: payload.output || '',
+          exitCode: rerun.exit_code,
+          command: rerun.command,
+          python_executable: payload.python_executable,
+          project_root: payload.project_root,
+          species_column: payload.species_column,
+          date_column: payload.date_column,
+          analysis_config_file: payload.analysis_config_file,
+          rules_file: payload.rules_file,
+          docx_template_dir: payload.docx_template_dir,
+          stdout: rerun.stdout || '',
+          stderr: rerun.stderr || '',
+        });
+        return;
+      } catch (retryError) {
+        setProgress('Analyse fehlgeschlagen', 0, false);
+        output.textContent = `Fehler beim Starten der Analyse:\n${retryError}`;
+        setStatus('Fehler', 'error');
+      }
+    } else if (errorText.includes('Keine GeoPackage- oder Shape-Datei')) {
       output.textContent = 'Bitte eine .gpkg- oder .shp-Datei auswählen. .cpg ist keine Analyse-Eingabe.';
+      setStatus('Fehler', 'error');
     } else {
+      setProgress('Analyse fehlgeschlagen', 0, false);
       output.textContent = `Fehler beim Starten der Analyse:\n${error}`;
+      setStatus('Fehler', 'error');
     }
-    setStatus('Fehler', 'error');
   } finally {
     runButton.disabled = false;
   }
 });
+
+function formatRunResult(result) {
+  return [
+    `Exit-Code: ${result.exit_code}`,
+    '',
+    'Kommando:',
+    result.command,
+    '',
+    'stdout:',
+    result.stdout || '(leer)',
+    '',
+    'stderr:',
+    result.stderr || '(leer)',
+  ].join('\n');
+}
 
 function setStatus(label, state = 'ready') {
   statusPill.textContent = label;
@@ -269,7 +262,7 @@ function setProgress(label, percent, active) {
 
 function getCurrentPayload() {
   return Object.fromEntries(
-    fieldNames.map((name) => [name, document.getElementById(name).value.trim()]),
+    allFields.map((name) => [name, document.getElementById(name).value.trim()]),
   );
 }
 
@@ -297,7 +290,7 @@ function stopProgressCycle(timer) {
 
 function persistFormState() {
   const state = Object.fromEntries(
-    fieldNames.map((name) => [name, document.getElementById(name).value]),
+    allFields.map((name) => [name, document.getElementById(name).value]),
   );
   localStorage.setItem(storageKey, JSON.stringify(state));
 }
@@ -310,7 +303,7 @@ function restoreFormState() {
 
   try {
     const state = JSON.parse(stored);
-    fieldNames.forEach((name) => {
+    allFields.forEach((name) => {
       if (typeof state[name] === 'string') {
         document.getElementById(name).value = state[name];
       }
@@ -415,7 +408,7 @@ function renderDetails(entry) {
 }
 
 function loadHistoryEntry(entry) {
-  fieldNames.forEach((name) => {
+  allFields.forEach((name) => {
     if (typeof entry[name] === 'string') {
       document.getElementById(name).value = entry[name];
     }
@@ -439,6 +432,24 @@ async function runDirectExport(extension, label) {
   document.getElementById('output').value = selected;
   persistFormState();
   await form.requestSubmit();
+}
+
+async function ensurePythonEnvironment(payload) {
+  if (localStorage.getItem(envReadyKey) === 'true') {
+    return;
+  }
+
+  const result = await invoke('prepare_environment', payload);
+  if (result.exit_code !== 0) {
+    throw new Error(formatRunResult(result));
+  }
+
+  localStorage.setItem(envReadyKey, 'true');
+}
+
+async function forcePreparePythonEnvironment(payload) {
+  localStorage.removeItem(envReadyKey);
+  await ensurePythonEnvironment(payload);
 }
 
 function setInputPath(value) {

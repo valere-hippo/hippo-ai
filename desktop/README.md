@@ -1,6 +1,6 @@
 # Tier AI Desktop
 
-Prototype Windows-App auf Basis von Tauri.
+Windows-App auf Basis von Tauri.
 
 ## Zweck
 
@@ -64,6 +64,6 @@ Im aktuellen Prototyp wird dafür der Projekt-Root per Formularfeld übergeben.
 - Ein animierter Fortschrittsbalken zeigt den aktuellen Analysezustand
 - Die letzten Läufe werden lokal als Verlauf gespeichert
 - Die App kann direkt TXT, DOCX und PDF exportieren, ohne Terminal
-- Über „Python vorbereiten“ wird automatisch eine lokale `.venv` eingerichtet und das Projekt installiert
+- Beim ersten Analyse-Start richtet die App automatisch eine lokale `.venv` ein und installiert das Projekt
 - Als Eingabe bitte `.gpkg` oder `.shp` wählen; `.cpg` ist nur eine Begleitdatei und keine Analyse-Eingabe
 - Bei Shapefiles müssen `.shp`, `.dbf` und `.shx` im selben Ordner liegen; fehlt `.shx`, versucht die App die Datei zu restaurieren

@@ -3,33 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tier AI</title>
+    <title>Tier-KI</title>
     <link rel="stylesheet" href="/src/style.css" />
     <script type="module" src="/src/main.js"></script>
   </head>
   <body>
     <main class="app-shell">
       <section class="hero">
-        <p class="eyebrow">Windows Desktop Prototype</p>
-        <h1>Tier AI</h1>
+        <div class="hero-brand">
+          <img class="app-logo" src="/src/assets/logo.svg" alt="Tier-KI Logo" />
+          <div>
+            <p class="eyebrow">Geospatiale Auswertung</p>
+            <h1>Tier-KI</h1>
+          </div>
+        </div>
         <p class="lede">
-          GeoPackage-Analyse und Berichtsexport ohne Terminal. Die App startet das lokale Python-Backend
-          und zeigt dir das Ergebnis direkt im Fenster.
+          GeoPackage-Analyse und Berichtsexport direkt in einer Windows-App. Einfach Eingabedatei und
+          Ausgabe wählen, der Rest wird automatisch erkannt.
         </p>
       </section>
 
       <section class="panel">
         <form id="analysis-form" class="grid">
-          <label>
-            <span>Python-Executable</span>
-            <input id="python_executable" name="python_executable" value="py" />
-          </label>
-
-          <label>
-            <span>Projektwurzel</span>
-            <input id="project_root" name="project_root" value=".." />
-          </label>
-
           <label class="full">
             <span>Eingabedatei</span>
             <div class="input-row">
@@ -38,7 +33,7 @@
             </div>
           </label>
 
-          <label>
+          <label class="full">
             <span>Ausgabe</span>
             <div class="input-row">
               <input id="output" name="output" placeholder="C:\\Pfad\\bericht.docx" />
@@ -46,33 +41,51 @@
             </div>
           </label>
 
-          <label>
-            <span>Art-Spalte</span>
-            <input id="species_column" name="species_column" value="species" />
-          </label>
+          <details class="advanced-panel full">
+            <summary>Erweiterte Optionen</summary>
+            <p class="advanced-note">
+              Die App erkennt Projektwurzel, Art- und Datumsspalte automatisch. Diese Felder nur ausfüllen,
+              wenn du bewusst etwas überschreiben willst.
+            </p>
+            <div class="advanced-grid">
+              <label>
+                <span>Python-Executable</span>
+                <input id="python_executable" name="python_executable" placeholder="Automatisch" />
+              </label>
 
-          <label>
-            <span>Datum-Spalte</span>
-            <input id="date_column" name="date_column" value="observed_at" />
-          </label>
+              <label>
+                <span>Projektwurzel</span>
+                <input id="project_root" name="project_root" placeholder="Automatisch" />
+              </label>
 
-          <label>
-            <span>Analyse-Config</span>
-            <input id="analysis_config_file" name="analysis_config_file" placeholder="C:\\Pfad\\analyse.json" />
-          </label>
+              <label>
+                <span>Art-Spalte</span>
+                <input id="species_column" name="species_column" placeholder="Automatisch erkennen" />
+              </label>
 
-          <label>
-            <span>Rollen-Datei</span>
-            <input id="rules_file" name="rules_file" placeholder="C:\\Pfad\\species_rules.json" />
-          </label>
+              <label>
+                <span>Datum-Spalte</span>
+                <input id="date_column" name="date_column" placeholder="Automatisch erkennen" />
+              </label>
 
-          <label class="full">
-            <span>DOCX-Template-Verzeichnis</span>
-            <input id="docx_template_dir" name="docx_template_dir" placeholder="C:\\Pfad\\zu\\template" />
-          </label>
+              <label>
+                <span>Analyse-Config</span>
+                <input id="analysis_config_file" name="analysis_config_file" placeholder="Optional" />
+              </label>
+
+              <label>
+                <span>Rollen-Datei</span>
+                <input id="rules_file" name="rules_file" placeholder="Optional" />
+              </label>
+
+              <label class="full">
+                <span>DOCX-Template-Verzeichnis</span>
+                <input id="docx_template_dir" name="docx_template_dir" placeholder="Optional" />
+              </label>
+            </div>
+          </details>
 
           <div class="actions full">
-            <button type="button" id="prepare-button" class="secondary">Python vorbereiten</button>
             <button type="submit" id="run-button">Analyse starten</button>
             <button type="button" id="export-txt-button" class="secondary">TXT exportieren</button>
             <button type="button" id="export-docx-button" class="secondary">DOCX exportieren</button>

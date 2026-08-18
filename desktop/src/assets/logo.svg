@@ -1,0 +1,18 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tier-KI Logo">
+  <defs>
+    <linearGradient id="g1" x1="16" y1="12" x2="84" y2="84" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7BD389"/>
+      <stop offset="1" stop-color="#87AEF4"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="22" y1="18" x2="74" y2="76" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#11161D"/>
+      <stop offset="1" stop-color="#0B0F15"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="88" height="88" rx="24" fill="url(#g2)" stroke="url(#g1)" stroke-width="3"/>
+  <path d="M26 58C29.8 43.7 40.6 34 53.8 30.8C63.7 28.5 72 30.6 76 35.8C67.2 37.3 59.9 41 54.5 47.1C49.1 53.2 43.5 61.7 40.8 70.2C34.3 68.8 29.1 64.9 26 58Z" fill="url(#g1)" opacity="0.95"/>
+  <path d="M34 60C43.8 51.2 53.2 45.9 65.1 41.5" stroke="#EAF5EE" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M32 35.5C34.8 31.7 39.4 28.8 44.9 28" stroke="#EAF5EE" stroke-width="3.2" stroke-linecap="round"/>
+  <circle cx="61.5" cy="57.5" r="6.5" fill="#EAF5EE"/>
+  <circle cx="61.5" cy="57.5" r="2.2" fill="#0B0F15"/>
+</svg>
