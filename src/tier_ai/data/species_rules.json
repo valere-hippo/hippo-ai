@@ -23,6 +23,30 @@
     "priority_default": "niedrig",
     "notes": ""
   },
+  "bergfink": {
+    "species": "Bergfink",
+    "taxon_group": "bird",
+    "breeding_months": [4, 5, 6, 7],
+    "habitat_keywords": ["wald", "fichte", "nadelwald", "berg", "forst"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Typische Nadelwaldart; in offenen Agrarräumen eher unplausibel."
+  },
+  "fichtenkreuzschnabel": {
+    "species": "Fichtenkreuzschnabel",
+    "taxon_group": "bird",
+    "breeding_months": [1, 2, 3, 4, 5, 6, 7, 8],
+    "habitat_keywords": ["fichte", "nadelwald", "wald", "forst", "berg"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Saisonale Brut kann stark von Samenangebot und Höhenlage abhängen."
+  },
   "buntspecht": {
     "species": "Buntspecht",
     "taxon_group": "bird",
@@ -34,6 +58,18 @@
     "priority_if_concentration": "mittel",
     "priority_default": "niedrig",
     "notes": ""
+  },
+  "singschwirl": {
+    "species": "Singschwirl",
+    "taxon_group": "bird",
+    "breeding_months": [5, 6, 7, 8],
+    "habitat_keywords": ["schilf", "röhre", "sumpf", "ufer", "feucht"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Feuchtgebietsart mit starker Bindung an Schilf und nasse Standorte."
   },
   "dorngrasmücke": {
     "species": "Dorngrasmücke",
