@@ -256,26 +256,12 @@ def _document_xml(
 ) -> str:
     body_parts: list[str] = []
     skip_overview_bullets = False
-    toc_inserted = False
-    skip_toc_bullets = False
     for index, line in enumerate(paragraphs):
         if not line.strip():
             if skip_overview_bullets:
                 skip_overview_bullets = False
-            if skip_toc_bullets:
-                skip_toc_bullets = False
             body_parts.append("<w:p><w:pPr><w:spacing w:after=\"120\"/></w:pPr></w:p>")
             continue
-        if line == "## Inhaltsverzeichnis":
-            body_parts.append(_styled_paragraph("Heading1", "Inhaltsverzeichnis"))
-            body_parts.append(_toc_field_paragraph())
-            toc_inserted = True
-            skip_toc_bullets = True
-            continue
-        if skip_toc_bullets and line.startswith("- "):
-            continue
-        if skip_toc_bullets:
-            skip_toc_bullets = False
         if line == "## Übersicht":
             body_parts.append(_styled_paragraph("Heading1", "Übersicht"))
             body_parts.append(_species_overview_table_xml(result.species_results))
@@ -335,18 +321,6 @@ def _styled_paragraph(style_id: str, text: str) -> str:
         "<w:p><w:pPr><w:pStyle w:val=\"%s\"/></w:pPr>"
         "<w:r><w:t xml:space=\"preserve\">%s</w:t></w:r></w:p>"
         % (style_id, escape(text))
-    )
-
-
-def _toc_field_paragraph() -> str:
-    return (
-        "<w:p>"
-        "<w:r><w:fldChar w:fldCharType=\"begin\"/></w:r>"
-        "<w:r><w:instrText xml:space=\"preserve\"> TOC \\o \"1-1\" \\h \\z \\u </w:instrText></w:r>"
-        "<w:r><w:fldChar w:fldCharType=\"separate\"/></w:r>"
-        "<w:r><w:t xml:space=\"preserve\">In Word aktualisieren, um das Inhaltsverzeichnis zu erzeugen.</w:t></w:r>"
-        "<w:r><w:fldChar w:fldCharType=\"end\"/></w:r>"
-        "</w:p>"
     )
 
 

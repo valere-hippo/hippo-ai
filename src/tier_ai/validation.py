@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 
 from datetime import datetime
 
 from .config import FieldMapping
+from .rules import load_species_rules, normalize_species_name
 
 
 @dataclass(slots=True)
@@ -18,23 +20,7 @@ def validate_frame(frame: Any, mapping: FieldMapping | None = None) -> list[Vali
     mapping = mapping or FieldMapping()
     issues: list[ValidationIssue] = []
 
-    species_column = _find_column(
-        frame.columns,
-        [
-            mapping.species,
-            "species",
-            "species_name",
-            "art",
-            "artname",
-            "taxon",
-            "taxon_name",
-            "wissenschaftlicher_name",
-            "deutscher_name",
-            "objektart",
-            "bezeichnung",
-            "name",
-        ],
-    )
+    species_column = detect_species_column(frame, mapping)
     date_column = _find_column(frame.columns, [mapping.observed_at, "date", "datum", "observed_at", "beobachtet_am"])
 
     if species_column is None:
@@ -64,6 +50,73 @@ def _find_column(columns: Any, candidates: list[str]) -> str | None:
         if candidate in lowered:
             return lowered[candidate]
     return None
+
+
+@lru_cache(maxsize=1)
+def _known_species_normalized() -> set[str]:
+    rules = load_species_rules()
+    normalized = {normalize_species_name(rule.species or key) for key, rule in rules.items()}
+    normalized.update(normalize_species_name(key) for key in rules)
+    return normalized
+
+
+def detect_species_column(frame: Any, mapping: FieldMapping | None = None) -> str | None:
+    mapping = mapping or FieldMapping()
+    direct = _find_column(
+        frame.columns,
+        [
+            mapping.species,
+            "species",
+            "species_name",
+            "art",
+            "artname",
+            "taxon",
+            "taxon_name",
+            "wissenschaftlicher_name",
+            "deutscher_name",
+            "objektart",
+            "bezeichnung",
+            "name",
+        ],
+    )
+    if direct is not None:
+        return direct
+
+    known_species = _known_species_normalized()
+    best_column: str | None = None
+    best_score = 0
+    for column in frame.columns:
+        if str(column).lower() == "geometry":
+            continue
+        try:
+            values = [value for value in list(frame[column]) if value not in (None, "")]
+        except Exception:
+            continue
+        if not values:
+            continue
+        score = 0
+        for value in values[:200]:
+            text = normalize_species_name(str(value))
+            if not text:
+                continue
+            if text in known_species:
+                score += 3
+                continue
+            tokens = [token for token in _tokenize_species_candidate(text) if token]
+            if any(token in known_species for token in tokens):
+                score += 2
+                continue
+        if score > best_score:
+            best_score = score
+            best_column = str(column)
+
+    return best_column if best_score > 0 else None
+
+
+def _tokenize_species_candidate(value: str) -> list[str]:
+    cleaned = value.replace("(", " ").replace(")", " ").replace(",", " ").replace(";", " ").replace("/", " ")
+    cleaned = cleaned.replace("|", " ").replace("-", " ").replace("_", " ")
+    return [token for token in cleaned.split() if token]
 
 
 def _looks_like_invalid_date(value: Any) -> bool:

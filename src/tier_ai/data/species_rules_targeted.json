@@ -430,5 +430,41 @@
     "priority_if_concentration": "mittel",
     "priority_default": "niedrig",
     "notes": ""
+  },
+  "weidenlaubsänger": {
+    "species": "Weidenlaubsänger",
+    "taxon_group": "bird",
+    "breeding_months": [4, 5, 6, 7],
+    "habitat_keywords": ["wald", "ufer", "feucht", "gehölz", "moor"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": ""
+  },
+  "weissbartseeschwalbe": {
+    "species": "Weißbartseeschwalbe",
+    "taxon_group": "bird",
+    "breeding_months": [5, 6, 7, 8],
+    "habitat_keywords": ["wasser", "ufer", "schilf", "sand", "kies"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": ""
+  },
+  "kiebitzregenpfeifer": {
+    "species": "Kiebitzregenpfeifer",
+    "taxon_group": "bird",
+    "breeding_months": [4, 5, 6, 7],
+    "habitat_keywords": ["ufer", "sand", "offen", "feucht", "brache"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": ""
   }
 }

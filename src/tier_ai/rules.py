@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from dataclasses import dataclass, field
 from functools import lru_cache
 from importlib import resources
@@ -28,7 +29,12 @@ _RULE_SOURCE: str | None = None
 
 
 def normalize_species_name(value: str) -> str:
-    return value.strip().casefold()
+    text = value.strip().casefold()
+    text = text.replace("ß", "ss")
+    text = text.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue")
+    text = text.replace("Ä", "ae").replace("Ö", "oe").replace("Ü", "ue")
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(char for char in normalized if not unicodedata.combining(char))
 
 
 def get_rule(species: str) -> SpeciesRule | None:

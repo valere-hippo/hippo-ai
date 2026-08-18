@@ -44,7 +44,6 @@ def test_render_report_contains_species():
 
     assert "Amsel" in report
     assert "input.gpkg" in report
-    assert "Inhaltsverzeichnis" in report
     assert "Zusammenfassung" in report
     assert "Schlussbewertung" in report
     assert "Übersicht" in report
@@ -86,3 +85,4 @@ def test_render_report_formats_unclassified_species_cleanly():
     assert "Nicht zuordenbare Nachweise" in report
     assert "unbestimmt" in report
     assert "unbekannt" not in report
+    assert "Inhaltsverzeichnis" not in report

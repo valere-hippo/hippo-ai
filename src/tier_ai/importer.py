@@ -9,7 +9,7 @@ import pandas as pd
 
 from .config import FieldMapping
 from .models import InputMetadata, Observation
-from .validation import validate_frame
+from .validation import detect_species_column, validate_frame
 
 
 class ImportErrorWithContext(RuntimeError):
@@ -72,23 +72,7 @@ def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> 
         joined = "; ".join(issue.message for issue in fatal_issues)
         raise ImportErrorWithContext(joined)
 
-    species_column = _find_column(
-        frame.columns,
-        [
-            mapping.species,
-            "species",
-            "species_name",
-            "art",
-            "artname",
-            "taxon",
-            "taxon_name",
-            "wissenschaftlicher_name",
-            "deutscher_name",
-            "objektart",
-            "bezeichnung",
-            "name",
-        ],
-    )
+    species_column = detect_species_column(frame, mapping)
     date_column = _find_column(frame.columns, [mapping.observed_at, "date", "datum", "observed_at", "beobachtet_am"])
 
     observations: list[Observation] = []
@@ -97,12 +81,12 @@ def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> 
         if geometry is None or geometry.is_empty:
             continue
 
-        species = str(row[species_column]).strip() if species_column else "unbekannt"
+        species = str(row[species_column]).strip() if species_column else "Nicht zuordenbare Nachweise"
         observed_at = _parse_date(row[date_column]) if date_column else None
         attrs = row.drop(labels=["geometry"], errors="ignore").to_dict()
         observations.append(
             Observation(
-                species=species or "unbekannt",
+                species=species or "Nicht zuordenbare Nachweise",
                 observed_at=observed_at,
                 geometry=geometry,
                 attrs=attrs,
@@ -148,23 +132,7 @@ def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None
         joined = "; ".join(issue.message for issue in fatal_issues)
         raise ImportErrorWithContext(joined)
 
-    species_column = _find_column(
-        frame.columns,
-        [
-            mapping.species,
-            "species",
-            "species_name",
-            "art",
-            "artname",
-            "taxon",
-            "taxon_name",
-            "wissenschaftlicher_name",
-            "deutscher_name",
-            "objektart",
-            "bezeichnung",
-            "name",
-        ],
-    )
+    species_column = detect_species_column(frame, mapping)
     date_column = _find_column(frame.columns, [mapping.observed_at, "date", "datum", "observed_at", "beobachtet_am"])
 
     observations: list[Observation] = []
@@ -173,12 +141,12 @@ def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None
         if geometry is None or geometry.is_empty:
             continue
 
-        species = str(row[species_column]).strip() if species_column else "unbekannt"
+        species = str(row[species_column]).strip() if species_column else "Nicht zuordenbare Nachweise"
         observed_at = _parse_date(row[date_column]) if date_column else None
         attrs = row.drop(labels=["geometry"], errors="ignore").to_dict()
         observations.append(
             Observation(
-                species=species or "unbekannt",
+                species=species or "Nicht zuordenbare Nachweise",
                 observed_at=observed_at,
                 geometry=geometry,
                 attrs=attrs,

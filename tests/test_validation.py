@@ -37,6 +37,19 @@ class _Frame:
 
 
 class ValidationTests(unittest.TestCase):
+    def test_detects_species_column_by_values(self) -> None:
+        frame = _Frame(
+            columns=["nachweis", "geometry"],
+            data=[
+                {"nachweis": "Amsel", "geometry": None},
+                {"nachweis": "Waldohreule", "geometry": None},
+            ],
+        )
+
+        issues = validate_frame(frame, mapping=FieldMapping(species="art", observed_at="datum"))
+
+        self.assertFalse(any("Art-Spalte" in issue.message for issue in issues))
+
     def test_reports_missing_species_column(self) -> None:
         frame = _Frame(columns=["datum", "geometry"], data=[{"datum": "2026-04-01T00:00:00", "geometry": None}])
 
