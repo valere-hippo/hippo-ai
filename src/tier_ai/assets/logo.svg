@@ -1,18 +1,26 @@
-<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tier-KI Logo">
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="hipposideros landschaftsökologie Ökosystemmanagement">
   <defs>
-    <linearGradient id="g1" x1="16" y1="12" x2="84" y2="84" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7BD389"/>
-      <stop offset="1" stop-color="#87AEF4"/>
+    <linearGradient id="frame" x1="100" y1="84" x2="410" y2="392" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3F0817"/>
+      <stop offset="1" stop-color="#8B1734"/>
     </linearGradient>
-    <linearGradient id="g2" x1="22" y1="18" x2="74" y2="76" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#11161D"/>
-      <stop offset="1" stop-color="#0B0F15"/>
+    <linearGradient id="wing" x1="112" y1="120" x2="402" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#681127"/>
+      <stop offset="1" stop-color="#A91E41"/>
     </linearGradient>
   </defs>
-  <rect x="4" y="4" width="88" height="88" rx="24" fill="url(#g2)" stroke="url(#g1)" stroke-width="3"/>
-  <path d="M26 58C29.8 43.7 40.6 34 53.8 30.8C63.7 28.5 72 30.6 76 35.8C67.2 37.3 59.9 41 54.5 47.1C49.1 53.2 43.5 61.7 40.8 70.2C34.3 68.8 29.1 64.9 26 58Z" fill="url(#g1)" opacity="0.95"/>
-  <path d="M34 60C43.8 51.2 53.2 45.9 65.1 41.5" stroke="#EAF5EE" stroke-width="4.5" stroke-linecap="round"/>
-  <path d="M32 35.5C34.8 31.7 39.4 28.8 44.9 28" stroke="#EAF5EE" stroke-width="3.2" stroke-linecap="round"/>
-  <circle cx="61.5" cy="57.5" r="6.5" fill="#EAF5EE"/>
-  <circle cx="61.5" cy="57.5" r="2.2" fill="#0B0F15"/>
+  <rect x="40" y="32" width="432" height="272" rx="72" fill="#10070B" stroke="url(#frame)" stroke-width="10"/>
+  <circle cx="256" cy="186" r="116" fill="none" stroke="url(#frame)" stroke-width="10"/>
+  <path d="M126 180C156 132 202 102 256 102C310 102 356 132 386 180C350 182 314 196 286 222C270 237 262 251 256 266C250 251 242 237 226 222C198 196 162 182 126 180Z" fill="url(#wing)" opacity="0.92"/>
+  <path d="M152 214C176 188 210 170 256 170C302 170 336 188 360 214" stroke="#E8D9DB" stroke-width="9" stroke-linecap="round"/>
+  <path d="M164 146C174 132 190 120 208 114" stroke="#E8D9DB" stroke-width="7" stroke-linecap="round"/>
+  <path d="M348 146C338 132 322 120 304 114" stroke="#E8D9DB" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="256" cy="186" r="18" fill="#E8D9DB"/>
+  <circle cx="256" cy="186" r="6.5" fill="#10070B"/>
+
+  <g fill="#7A1230" font-family="Teko, Arial, sans-serif" font-weight="600" text-anchor="middle">
+    <text x="256" y="374" font-size="64" letter-spacing="0.02em">hipposideros</text>
+    <text x="256" y="420" font-size="31" letter-spacing="0.01em">landschaftsökologie</text>
+    <text x="256" y="462" font-size="26" letter-spacing="0.01em">Ökosystemmanagement</text>
+  </g>
 </svg>

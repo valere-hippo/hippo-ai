@@ -514,5 +514,77 @@
     "priority_if_concentration": "mittel",
     "priority_default": "niedrig",
     "notes": ""
+  },
+  "erlenzeisig": {
+    "species": "Erlenzeisig",
+    "taxon_group": "bird",
+    "breeding_months": [4, 5, 6, 7],
+    "habitat_keywords": ["wald", "gehölz", "erlen", "park", "ufer"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "niedrig",
+    "priority_default": "niedrig",
+    "notes": ""
+  },
+  "kernbeißer": {
+    "species": "Kernbeißer",
+    "taxon_group": "bird",
+    "breeding_months": [4, 5, 6, 7],
+    "habitat_keywords": ["wald", "gehölz", "park", "obst", "hecken"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "niedrig",
+    "priority_default": "niedrig",
+    "notes": ""
+  },
+  "tannenhäher": {
+    "species": "Tannenhäher",
+    "taxon_group": "bird",
+    "breeding_months": [3, 4, 5, 6],
+    "habitat_keywords": ["nadelwald", "wald", "berg", "gebirge", "gehölz"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "niedrig",
+    "priority_default": "niedrig",
+    "notes": ""
+  },
+  "bluthänfling": {
+    "species": "Bluthänfling",
+    "taxon_group": "bird",
+    "breeding_months": [4, 5, 6, 7, 8],
+    "habitat_keywords": ["heide", "brache", "gehölz", "hecke", "offen"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "niedrig",
+    "priority_default": "niedrig",
+    "notes": ""
+  },
+  "gebirgsstelze": {
+    "species": "Gebirgsstelze",
+    "taxon_group": "bird",
+    "breeding_months": [4, 5, 6, 7],
+    "habitat_keywords": ["wasser", "ufer", "bach", "fluss", "stein"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "niedrig",
+    "priority_default": "niedrig",
+    "notes": ""
+  },
+  "wasseramsel": {
+    "species": "Wasseramsel",
+    "taxon_group": "bird",
+    "breeding_months": [2, 3, 4, 5, 6],
+    "habitat_keywords": ["wasser", "bach", "fluss", "ufer", "stein"],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "hoch",
+    "priority_if_transit": "niedrig",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": ""
   }
 }

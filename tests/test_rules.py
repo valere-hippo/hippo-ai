@@ -39,6 +39,12 @@ class RuleLoaderTests(unittest.TestCase):
         self.assertIn("weissbartseeschwalbe", rules)
         self.assertIn("kiebitzregenpfeifer", rules)
         self.assertIn("schwanzmeise", rules)
+        self.assertIn("erlenzeisig", rules)
+        self.assertIn("kernbeisser", rules)
+        self.assertIn("tannenhaeher", rules)
+        self.assertIn("bluthaenfling", rules)
+        self.assertIn("gebirgsstelze", rules)
+        self.assertIn("wasseramsel", rules)
 
     def test_loads_custom_rule_file(self) -> None:
         payload = {

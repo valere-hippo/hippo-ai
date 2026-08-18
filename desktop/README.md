@@ -8,6 +8,8 @@ Windows-App auf Basis von Tauri.
 - lokale Python-Analyse starten
 - Ergebnis direkt im Fenster anzeigen
 - optional als TXT, DOCX oder PDF exportieren
+- GeoJSON-Dateien werden ebenfalls akzeptiert
+- zwei Testdateien liegen unter `tests/fixtures/`
 
 ## Voraussetzungen auf Windows
 
@@ -64,7 +66,8 @@ Im aktuellen Prototyp wird dafür der Projekt-Root per Formularfeld übergeben.
 - Ein animierter Fortschrittsbalken zeigt den aktuellen Analysezustand
 - Die letzten Läufe werden lokal als Verlauf gespeichert
 - Die App kann direkt TXT, DOCX und PDF exportieren, ohne Terminal
+- GeoJSON kann direkt mit importiert werden
 - Beim ersten Analyse-Start richtet die App automatisch eine lokale `.venv` ein und installiert das Projekt
 - Alle `species_rules*.json` im Projekt werden beim Start automatisch zusammengeführt; ein `Analyse-Config`-Feld ist daher meist nicht nötig
-- Als Eingabe bitte `.gpkg` oder `.shp` wählen; `.cpg` ist nur eine Begleitdatei und keine Analyse-Eingabe
+- Als Eingabe bitte `.gpkg`, `.shp` oder `.geojson` wählen; `.cpg` ist nur eine Begleitdatei und keine Analyse-Eingabe
 - Bei Shapefiles müssen `.shp`, `.dbf` und `.shx` im selben Ordner liegen; fehlt `.shx`, versucht die App die Datei zu restaurieren

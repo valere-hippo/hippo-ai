@@ -30,7 +30,7 @@ def _parse_date(value: Any) -> date | None:
 
 
 def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> list[Observation]:
-    """Liest GeoPackage- oder Shape-Daten in ein internes Beobachtungsmodell.
+    """Liest GeoPackage-, Shape- oder GeoJSON-Daten in ein internes Beobachtungsmodell.
 
     Erwartet mindestens:
     - eine Spalte für die Art

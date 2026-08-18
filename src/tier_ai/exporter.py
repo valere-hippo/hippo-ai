@@ -632,8 +632,8 @@ def _pdf_logo_commands() -> list[str]:
             commands.extend(_pdf_circle_commands(element.attrib))
     commands.extend(
         [
-            "0.71 0.09 0.16 rg",
-            "0.71 0.09 0.16 RG",
+            "0.48 0.07 0.19 rg",
+            "0.48 0.07 0.19 RG",
             "BT",
             "/F2 18 Tf",
             "0 -26 Td",
@@ -655,8 +655,8 @@ def _pdf_rect_commands(attributes: dict[str, str]) -> list[str]:
     height = float(attributes.get("height", "0"))
     rx = float(attributes.get("rx", "0"))
     commands = [
-        "0.07 0.09 0.12 rg",
-        "0.42 0.02 0.06 RG",
+        "0.06 0.03 0.04 rg",
+        "0.25 0.03 0.09 RG",
         "2 w",
     ]
     if rx > 0:
@@ -672,10 +672,10 @@ def _pdf_circle_commands(attributes: dict[str, str]) -> list[str]:
     cy = float(attributes.get("cy", "0"))
     radius = float(attributes.get("r", "0"))
     fill = attributes.get("fill", "#EAF5EE")
-    if fill == "#0B0F15":
-        commands = ["0.04 0.06 0.08 rg"]
+    if fill == "#10070B":
+        commands = ["0.06 0.03 0.04 rg"]
     else:
-        commands = ["0.92 0.96 0.93 rg"]
+        commands = ["0.91 0.85 0.86 rg"]
     commands.extend(_pdf_ellipse_path(cx - radius, cy - radius, radius * 2, radius * 2))
     commands.append("f")
     return commands
@@ -688,15 +688,15 @@ def _pdf_path_commands(attributes: dict[str, str]) -> list[str]:
     stroke_width = float(attributes.get("stroke-width", "1"))
     commands: list[str] = []
     if fill and fill != "none":
-        if "#EAF5EE" in fill:
-            commands.append("0.92 0.96 0.93 rg")
+        if "#E8D9DB" in fill:
+            commands.append("0.91 0.85 0.86 rg")
         else:
-            commands.append("0.48 0.84 0.55 rg")
+            commands.append("0.66 0.12 0.25 rg")
     if stroke and stroke != "none":
-        if "#EAF5EE" in stroke:
-            commands.append("0.92 0.96 0.93 RG")
+        if "#E8D9DB" in stroke:
+            commands.append("0.91 0.85 0.86 RG")
         else:
-            commands.append("0.48 0.84 0.55 RG")
+            commands.append("0.48 0.07 0.19 RG")
         commands.append(f"{stroke_width} w")
     commands.extend(_pdf_svg_path_to_ops(d))
     if fill and fill != "none" and stroke and stroke != "none":

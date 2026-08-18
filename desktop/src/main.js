@@ -95,10 +95,11 @@ pickInputButton.addEventListener('click', async () => {
   const selected = await open({
     multiple: false,
     directory: false,
-    title: 'GeoPackage oder Shape auswählen',
+    title: 'GeoPackage, Shape oder GeoJSON auswählen',
     filters: [
       { name: 'GeoPackage', extensions: ['gpkg'] },
       { name: 'Shape', extensions: ['shp'] },
+      { name: 'GeoJSON', extensions: ['geojson', 'json'] },
     ],
   });
 
@@ -137,7 +138,7 @@ form.addEventListener('submit', async (event) => {
   if (!isSupportedInputFile(payload.input)) {
     setStatus('Fehler', 'error');
     output.textContent = [
-      'Bitte eine GeoPackage- oder Shape-Datei auswählen.',
+      'Bitte eine GeoPackage-, Shape- oder GeoJSON-Datei auswählen.',
       'Dateien mit der Endung .cpg sind nur Begleitdateien und keine Analyse-Eingabe.',
     ].join('\n');
     return;
@@ -215,8 +216,8 @@ form.addEventListener('submit', async (event) => {
         output.textContent = `Fehler beim Starten der Analyse:\n${retryError}`;
         setStatus('Fehler', 'error');
       }
-    } else if (errorText.includes('Keine GeoPackage- oder Shape-Datei')) {
-      output.textContent = 'Bitte eine .gpkg- oder .shp-Datei auswählen. .cpg ist keine Analyse-Eingabe.';
+    } else if (errorText.includes('Keine GeoPackage- oder Shape-Datei') || errorText.includes('GeoJSON')) {
+      output.textContent = 'Bitte eine .gpkg-, .shp- oder .geojson-Datei auswählen. .cpg ist keine Analyse-Eingabe.';
       setStatus('Fehler', 'error');
     } else {
       setProgress('Analyse fehlgeschlagen', 0, false);
@@ -458,5 +459,5 @@ function setInputPath(value) {
 }
 
 function isSupportedInputFile(path) {
-  return /\.(gpkg|shp)$/i.test(path);
+  return /\.(gpkg|shp|geojson|json)$/i.test(path);
 }

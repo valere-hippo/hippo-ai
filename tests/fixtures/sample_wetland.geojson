@@ -1,0 +1,39 @@
+{
+  "type": "FeatureCollection",
+  "name": "sample_wetland",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "species": "Rohrdommel",
+        "observed_at": "2026-06-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [8.2512, 51.0124]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "species": "Teichhuhn",
+        "observed_at": "2026-06-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [8.2520, 51.0128]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "species": "Weißbartseeschwalbe",
+        "observed_at": "2026-07-05"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [8.2530, 51.0131]
+      }
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "type": "FeatureCollection",
+  "name": "sample_forest",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "species": "Amsel",
+        "observed_at": "2026-05-14"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [7.4501, 50.9201]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "species": "Kleiber",
+        "observed_at": "2026-05-14"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [7.4509, 50.9208]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "species": "Waldkauz",
+        "observed_at": "2026-02-03"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [7.4492, 50.9194]
+      }
+    }
+  ]
+}

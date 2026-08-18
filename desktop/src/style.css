@@ -2,14 +2,14 @@
 
 :root {
   color-scheme: dark;
-  --bg: #0e1116;
-  --panel: #151a22;
-  --panel-2: #10151d;
-  --border: #283244;
-  --text: #ecf1f7;
-  --muted: #8e9aab;
-  --accent: #7bd389;
-  --accent-2: #87aef4;
+  --bg: #12070b;
+  --panel: #1b1014;
+  --panel-2: #150b0f;
+  --border: #5b1630;
+  --text: #f5e9ec;
+  --muted: #d6b4bf;
+  --accent: #8c1230;
+  --accent-2: #b73b58;
   --danger: #ef6f6c;
   --shadow: rgba(0, 0, 0, 0.28);
 }
@@ -23,9 +23,9 @@ body {
   margin: 0;
   min-height: 100%;
   background:
-    radial-gradient(circle at top left, rgba(123, 211, 137, 0.12), transparent 30%),
-    radial-gradient(circle at top right, rgba(135, 174, 244, 0.12), transparent 26%),
-    linear-gradient(180deg, #0b0f15 0%, #11161d 100%);
+    radial-gradient(circle at top left, rgba(140, 18, 48, 0.18), transparent 32%),
+    radial-gradient(circle at top right, rgba(183, 59, 88, 0.12), transparent 24%),
+    linear-gradient(180deg, #10070b 0%, #1b1014 100%);
   color: var(--text);
   font-family: Teko, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -49,14 +49,15 @@ body {
 
 .hero-brand {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 10px;
 }
 
 .app-logo {
-  width: 72px;
-  height: 72px;
+  width: min(290px, 100%);
+  height: auto;
   flex: none;
   filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.35));
 }
@@ -148,8 +149,8 @@ button {
   border: 0;
   border-radius: 999px;
   padding: 13px 18px;
-  background: linear-gradient(135deg, var(--accent), #62c3b6);
-  color: #07110a;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff6f8;
   font: inherit;
   font-weight: 600;
   font-size: 1.1rem;
