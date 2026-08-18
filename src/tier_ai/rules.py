@@ -15,6 +15,7 @@ class SpeciesRule:
 
     species: str
     taxon_group: str = "bird"
+    aliases: set[str] = field(default_factory=set)
     breeding_months: set[int] = field(default_factory=set)
     habitat_keywords: set[str] = field(default_factory=set)
     min_contacts_for_reproduction: int = 2
@@ -45,6 +46,7 @@ def set_rule_source(rule_source: str | Path | None) -> None:
     global _RULE_SOURCE
     _RULE_SOURCE = str(rule_source) if rule_source is not None else None
     _rules_for_source.cache_clear()
+    _species_alias_map.cache_clear()
 
 
 def load_species_rules(rule_source: str | Path | None = None) -> dict[str, SpeciesRule]:
@@ -53,6 +55,20 @@ def load_species_rules(rule_source: str | Path | None = None) -> dict[str, Speci
     for key, value in raw.items():
         rules[normalize_species_name(key)] = _parse_species_rule(value)
     return rules
+
+
+@lru_cache(maxsize=1)
+def _species_alias_map(rule_source: str | None) -> dict[str, str]:
+    raw = _load_rule_payload(rule_source)
+    alias_map: dict[str, str] = {}
+    for _, value in raw.items():
+        rule = _parse_species_rule(value)
+        canonical = rule.species or ""
+        if not canonical:
+            continue
+        for alias in _rule_aliases(rule):
+            alias_map[alias] = canonical
+    return alias_map
 
 
 @lru_cache(maxsize=1)
@@ -83,9 +99,15 @@ def _parse_species_rule(payload: dict[str, Any]) -> SpeciesRule:
     min_contacts = payload.get("min_contacts_for_reproduction")
     if min_contacts is None:
         min_contacts = payload.get("min_contacts_for_reproduktion", 2)
+    aliases = {
+        normalize_species_name(str(alias))
+        for alias in payload.get("aliases", [])
+        if str(alias).strip()
+    }
     return SpeciesRule(
         species=str(payload.get("species", "")).strip(),
         taxon_group=str(payload.get("taxon_group", "bird")).strip().casefold() or "bird",
+        aliases=aliases,
         breeding_months={int(month) for month in payload.get("breeding_months", [])},
         habitat_keywords={str(keyword).casefold() for keyword in payload.get("habitat_keywords", [])},
         min_contacts_for_reproduction=int(min_contacts),
@@ -100,6 +122,52 @@ def _parse_species_rule(payload: dict[str, Any]) -> SpeciesRule:
 def is_bat_rule(species: str) -> bool:
     rule = get_rule(species)
     return bool(rule and rule.taxon_group == "bat")
+
+
+def _rule_aliases(rule: SpeciesRule) -> set[str]:
+    aliases = set(_variant_keys(rule.species))
+    for alias in rule.aliases:
+        aliases.update(_variant_keys(alias))
+    return {alias for alias in aliases if alias}
+
+
+def _variant_keys(value: str) -> set[str]:
+    normalized = normalize_species_name(value)
+    compact = "".join(char for char in normalized if char.isalnum())
+    return {variant for variant in {normalized, compact} if variant}
+
+
+def resolve_species_label(value: str) -> str | None:
+    if not value:
+        return None
+    alias_map = _species_alias_map(_RULE_SOURCE)
+    text = normalize_species_name(value)
+    compact_text = "".join(char for char in text if char.isalnum())
+    candidates = [text, compact_text]
+    for candidate in candidates:
+        if candidate in alias_map:
+            return alias_map[candidate]
+
+    ordered_aliases = sorted(alias_map.items(), key=lambda item: len(item[0]), reverse=True)
+    for candidate in candidates:
+        for alias, canonical in ordered_aliases:
+            if len(alias) >= 4 and alias in candidate:
+                return canonical
+    return None
+
+
+def infer_species_from_text(value: str) -> str | None:
+    return resolve_species_label(value)
+
+
+def infer_species_from_filename(source_name: str | None) -> str | None:
+    if not source_name:
+        return None
+    stem = Path(source_name).stem
+    resolved = resolve_species_label(stem)
+    if resolved:
+        return resolved
+    return resolve_species_label(Path(stem).name)
 
 
 def detect_habitat_compatibility(species: str, attrs: dict[str, object]) -> str:

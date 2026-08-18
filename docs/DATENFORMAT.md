@@ -31,6 +31,17 @@ Für den Import akzeptiert das System zunächst folgende Alternativen:
 - Art: `species`, `art`, `artname`, `taxon`
 - Datum: `date`, `datum`, `observed_at`, `beobachtet_am`
 
+Wenn keine explizite Art-Spalte vorhanden ist, versucht das System zusätzlich:
+
+1. den Dateinamen zu interpretieren,
+2. Textspalten auf bekannte Arten oder Aliasnamen zu prüfen,
+3. englische, deutsche oder wissenschaftliche Bezeichnungen zuzuordnen,
+4. zusammengesetzte Namen wie `LazuliBunting` oder `Lazuli Bunting` zu erkennen.
+
+Das ist absichtlich tolerant, damit auch Shape- oder GeoPackage-Dateien aus Fremdquellen
+sauber ausgewertet werden können. Wenn mehrere Arten ohne klare Artspalte vorkommen,
+wird im Bericht eine fachliche Nachprüfung empfohlen.
+
 ## Geometrietypen
 
 Für Version 1 werden diese Geometrietypen akzeptiert:
@@ -56,4 +67,3 @@ Die Analyse erzeugt pro Art:
 - erkannte Konzentrationsbereiche
 - vorläufige fachliche Bewertung
 - Textzusammenfassung
-

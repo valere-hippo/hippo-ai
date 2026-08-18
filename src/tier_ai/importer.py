@@ -9,6 +9,7 @@ import pandas as pd
 
 from .config import FieldMapping
 from .models import InputMetadata, Observation
+from .rules import infer_species_from_filename, resolve_species_label
 from .validation import detect_species_column, validate_frame
 
 
@@ -66,7 +67,7 @@ def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> 
     if frame.empty:
         return []
 
-    issues = validate_frame(frame, mapping=mapping)
+    issues = validate_frame(frame, mapping=mapping, source_name=source.name)
     fatal_issues = [issue for issue in issues if issue.level == "error"]
     if fatal_issues:
         joined = "; ".join(issue.message for issue in fatal_issues)
@@ -74,6 +75,7 @@ def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> 
 
     species_column = detect_species_column(frame, mapping)
     date_column = _find_column(frame.columns, [mapping.observed_at, "date", "datum", "observed_at", "beobachtet_am"])
+    fallback_species = infer_species_from_filename(source.name)
 
     observations: list[Observation] = []
     for _, row in frame.iterrows():
@@ -81,7 +83,7 @@ def load_observations(path: str | Path, mapping: FieldMapping | None = None) -> 
         if geometry is None or geometry.is_empty:
             continue
 
-        species = str(row[species_column]).strip() if species_column else "Nicht zuordenbare Nachweise"
+        species = _resolve_row_species(row, species_column, fallback_species)
         observed_at = _parse_date(row[date_column]) if date_column else None
         attrs = row.drop(labels=["geometry"], errors="ignore").to_dict()
         observations.append(
@@ -126,7 +128,7 @@ def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None
         metadata = _build_metadata(source, frame)
         return [], [], metadata
 
-    issues = validate_frame(frame, mapping=mapping)
+    issues = validate_frame(frame, mapping=mapping, source_name=source.name)
     fatal_issues = [issue for issue in issues if issue.level == "error"]
     if fatal_issues:
         joined = "; ".join(issue.message for issue in fatal_issues)
@@ -134,6 +136,7 @@ def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None
 
     species_column = detect_species_column(frame, mapping)
     date_column = _find_column(frame.columns, [mapping.observed_at, "date", "datum", "observed_at", "beobachtet_am"])
+    fallback_species = infer_species_from_filename(source.name)
 
     observations: list[Observation] = []
     for _, row in frame.iterrows():
@@ -141,7 +144,7 @@ def load_observations_with_issues(path: str | Path, mapping: FieldMapping | None
         if geometry is None or geometry.is_empty:
             continue
 
-        species = str(row[species_column]).strip() if species_column else "Nicht zuordenbare Nachweise"
+        species = _resolve_row_species(row, species_column, fallback_species)
         observed_at = _parse_date(row[date_column]) if date_column else None
         attrs = row.drop(labels=["geometry"], errors="ignore").to_dict()
         observations.append(
@@ -181,4 +184,29 @@ def _find_column(columns: pd.Index, candidates: list[str]) -> str | None:
     for candidate in candidates:
         if candidate in lowered:
             return lowered[candidate]
+    return None
+
+
+def _resolve_row_species(row: Any, species_column: str | None, fallback_species: str | None) -> str | None:
+    if species_column is not None:
+        raw_value = row.get(species_column)
+        if raw_value not in (None, ""):
+            resolved = resolve_species_label(str(raw_value))
+            if resolved:
+                return resolved
+            text = str(raw_value).strip()
+            if text:
+                return text
+
+    if fallback_species:
+        return fallback_species
+
+    # Final fallback: inspect other textual columns for a match.
+    for key, value in row.items():
+        if key == "geometry" or value in (None, ""):
+            continue
+        resolved = resolve_species_label(str(value))
+        if resolved:
+            return resolved
+
     return None

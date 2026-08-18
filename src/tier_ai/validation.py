@@ -7,7 +7,7 @@ from typing import Any
 from datetime import datetime
 
 from .config import FieldMapping
-from .rules import load_species_rules, normalize_species_name
+from .rules import infer_species_from_filename, infer_species_from_text, load_species_rules, normalize_species_name
 
 
 @dataclass(slots=True)
@@ -16,7 +16,7 @@ class ValidationIssue:
     message: str
 
 
-def validate_frame(frame: Any, mapping: FieldMapping | None = None) -> list[ValidationIssue]:
+def validate_frame(frame: Any, mapping: FieldMapping | None = None, source_name: str | None = None) -> list[ValidationIssue]:
     mapping = mapping or FieldMapping()
     issues: list[ValidationIssue] = []
 
@@ -24,7 +24,21 @@ def validate_frame(frame: Any, mapping: FieldMapping | None = None) -> list[Vali
     date_column = _find_column(frame.columns, [mapping.observed_at, "date", "datum", "observed_at", "beobachtet_am"])
 
     if species_column is None:
-        issues.append(ValidationIssue(level="warning", message="Keine Art-Spalte gefunden. Es wird eine unbestimmte Kategorie verwendet."))
+        inferred = infer_species_from_filename(source_name) if source_name else None
+        if inferred is None:
+            issues.append(
+                ValidationIssue(
+                    level="warning",
+                    message="Keine Art-Spalte gefunden und keine Art aus dem Dateinamen ableitbar.",
+                )
+            )
+        else:
+            issues.append(
+                ValidationIssue(
+                    level="info",
+                    message=f"Keine Art-Spalte gefunden. Die Art wird aus dem Dateinamen als '{inferred}' abgeleitet.",
+                )
+            )
     if date_column is None:
         issues.append(ValidationIssue(level="warning", message="Keine Datums-Spalte gefunden."))
     if "geometry" not in {str(column).lower() for column in frame.columns} and getattr(frame, "geometry", None) is None:
@@ -96,11 +110,12 @@ def detect_species_column(frame: Any, mapping: FieldMapping | None = None) -> st
             continue
         score = 0
         for value in values[:200]:
+            resolved = infer_species_from_text(str(value))
+            if resolved is not None:
+                score += 3
+                continue
             text = normalize_species_name(str(value))
             if not text:
-                continue
-            if text in known_species:
-                score += 3
                 continue
             tokens = [token for token in _tokenize_species_candidate(text) if token]
             if any(token in known_species for token in tokens):
