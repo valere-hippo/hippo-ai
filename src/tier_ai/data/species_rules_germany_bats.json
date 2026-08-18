@@ -1,0 +1,446 @@
+[
+  {
+    "species": "Bechsteinfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Bechstein's bat",
+      "Bechsteinfledermaus",
+      "M. bechsteini",
+      "Bechsteins bat",
+      "Bechstein'sbat",
+      "M.bechsteini"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Kleine Hufeisennase",
+    "taxon_group": "bat",
+    "aliases": [
+      "Lesser mouse-eared bat",
+      "Kleine Hufeisennase",
+      "M. blythii",
+      "Lessermouse-earedbat",
+      "M.blythii"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Brandtfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Brandt's bat",
+      "Brandtfledermaus",
+      "M. brandti",
+      "Brandts bat",
+      "Brandt'sbat",
+      "M.brandti"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Teichfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Pond bat",
+      "Teichfledermaus",
+      "M. dasycneme",
+      "Pondbat",
+      "M.dasycneme"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Wasserfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Daubenton's bat",
+      "Wasserfledermaus",
+      "M. daubentonii",
+      "Daubentons bat",
+      "Daubenton'sbat",
+      "M.daubentonii"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Fransenfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Geoffroy's bat",
+      "Fransenfledermaus",
+      "M. emarginatus",
+      "Geoffroys bat",
+      "Geoffroy'sbat",
+      "M.emarginatus"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Großes Mausohr",
+    "taxon_group": "bat",
+    "aliases": [
+      "Greater mouse-eared bat",
+      "Großes Mausohr",
+      "M. myotis",
+      "Greatermouse-earedbat",
+      "M.myotis"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Wimperfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Whiskered bat",
+      "Wimperfledermaus",
+      "M. mystacinus",
+      "Whiskeredbat",
+      "M.mystacinus"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Fransenfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Natterer's bat",
+      "Fransenfledermaus",
+      "M. nattereri",
+      "Natterers bat",
+      "Natterer'sbat",
+      "M.nattereri"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Mopsfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Western barbastelle",
+      "Mopsfledermaus",
+      "B. barbastellus",
+      "Westernbarbastelle",
+      "B.barbastellus"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Nordfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Northern bat",
+      "Nordfledermaus",
+      "E. nilssoni",
+      "Northernbat",
+      "E.nilssoni"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Breitflügelfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Serotine bat",
+      "Breitflügelfledermaus",
+      "E. serotinus",
+      "Serotinebat",
+      "E.serotinus"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Alpenfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Savi's pipistrelle",
+      "Alpenfledermaus",
+      "H. savii",
+      "Savis pipistrelle",
+      "Savi'spipistrelle",
+      "H.savii"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Riesenabendsegler",
+    "taxon_group": "bat",
+    "aliases": [
+      "Greater noctule bat",
+      "Riesenabendsegler",
+      "N. lasiopterus",
+      "Greaternoctulebat",
+      "N.lasiopterus"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Kleiner Abendsegler",
+    "taxon_group": "bat",
+    "aliases": [
+      "Lesser noctule",
+      "Kleiner Abendsegler",
+      "N. leisleri",
+      "Lessernoctule",
+      "N.leisleri"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Großer Abendsegler",
+    "taxon_group": "bat",
+    "aliases": [
+      "Common noctule",
+      "Großer Abendsegler",
+      "N. noctula",
+      "Commonnoctule",
+      "N.noctula"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Rauhautfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Nathusius' pipistrelle",
+      "Rauhautfledermaus",
+      "P. nathusii",
+      "Nathusius pipistrelle",
+      "Nathusius'pipistrelle",
+      "P.nathusii"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Zwergfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Common pipistrelle",
+      "Zwergfledermaus",
+      "P. pipistrellus",
+      "Commonpipistrelle",
+      "P.pipistrellus"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Braunes Langohr",
+    "taxon_group": "bat",
+    "aliases": [
+      "Brown long-eared bat",
+      "Braunes Langohr",
+      "P. auritus",
+      "Brownlong-earedbat",
+      "P.auritus"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Graues Langohr",
+    "taxon_group": "bat",
+    "aliases": [
+      "Grey long-eared bat",
+      "Graues Langohr",
+      "P. austriacus",
+      "Greylong-earedbat",
+      "P.austriacus"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Zweifarbfledermaus",
+    "taxon_group": "bat",
+    "aliases": [
+      "Parti-coloured bat",
+      "Zweifarbfledermaus",
+      "V. murinus",
+      "Parti-colouredbat",
+      "V.murinus"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Große Hufeisennase",
+    "taxon_group": "bat",
+    "aliases": [
+      "Greater horseshoe bat",
+      "Große Hufeisennase",
+      "R. ferrumequinum",
+      "Greaterhorseshoebat",
+      "R.ferrumequinum"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  },
+  {
+    "species": "Kleine Hufeisennase",
+    "taxon_group": "bat",
+    "aliases": [
+      "Lesser horseshoe bat",
+      "Kleine Hufeisennase",
+      "R. hipposideros",
+      "Lesserhorseshoebat",
+      "R.hipposideros"
+    ],
+    "breeding_months": [],
+    "habitat_keywords": [],
+    "min_contacts_for_reproduction": 2,
+    "priority_if_breeding": "mittel",
+    "priority_if_transit": "mittel",
+    "priority_if_concentration": "mittel",
+    "priority_default": "niedrig",
+    "notes": "Germany bat checklist entry from Wikipedia raw list."
+  }
+]

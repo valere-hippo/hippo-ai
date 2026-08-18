@@ -15,11 +15,14 @@ class RuleLoaderTests(unittest.TestCase):
     def test_loads_default_rules(self) -> None:
         rules = load_species_rules()
 
-        self.assertGreaterEqual(len(rules), 197)
+        self.assertGreaterEqual(len(rules), 560)
         self.assertIn("amsel", rules)
         self.assertEqual(rules["amsel"].species, "Amsel")
         self.assertIn("lazulifink", rules)
         self.assertEqual(rules["lazulifink"].species, "Lazulifink")
+        self.assertIn("haselhuhn", rules)
+        self.assertIn("bechsteinfledermaus", rules)
+        self.assertIn("brandtfledermaus", rules)
         self.assertIn("zwergfledermaus", rules)
         self.assertEqual(rules["zwergfledermaus"].min_contacts_for_reproduction, 3)
         self.assertEqual(rules["zwergfledermaus"].priority_if_breeding, "hoch")

@@ -52,7 +52,7 @@ def set_rule_source(rule_source: str | Path | None) -> None:
 def load_species_rules(rule_source: str | Path | None = None) -> dict[str, SpeciesRule]:
     raw = _load_rule_payload(rule_source)
     rules: dict[str, SpeciesRule] = {}
-    for key, value in raw.items():
+    for key, value in _iter_rule_items(raw):
         rules[normalize_species_name(key)] = _parse_species_rule(value)
     return rules
 
@@ -75,7 +75,7 @@ def _species_alias_map(rule_source: str | None) -> dict[str, str]:
 def _rules_for_source(rule_source: str | None) -> dict[str, SpeciesRule]:
     raw = _load_rule_payload(rule_source)
     rules: dict[str, SpeciesRule] = {}
-    for key, value in raw.items():
+    for key, value in _iter_rule_items(raw):
         rules[normalize_species_name(key)] = _parse_species_rule(value)
     return rules
 
@@ -86,13 +86,35 @@ def _load_rule_payload(rule_source: str | Path | None) -> dict[str, Any]:
         data_root = resources.files("tier_ai.data")
         for resource in sorted(
             (child for child in data_root.iterdir() if child.name.startswith("species_rules") and child.suffix == ".json"),
-            key=lambda item: item.name,
+            key=lambda item: (0 if item.name.startswith("species_rules_germany_") else 1, item.name),
         ):
-            payload.update(json.loads(resource.read_text(encoding="utf-8")))
+            data = json.loads(resource.read_text(encoding="utf-8"))
+            if resource.name.startswith("species_rules_germany_"):
+                for key, value in _iter_rule_items(data):
+                    payload.setdefault(key, value)
+            else:
+                for key, value in _iter_rule_items(data):
+                    payload[key] = value
         return payload
 
     path = Path(rule_source)
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _iter_rule_items(payload: Any) -> list[tuple[str, dict[str, Any]]]:
+    if isinstance(payload, dict):
+        return [(str(key), value) for key, value in payload.items()]
+    if isinstance(payload, list):
+        items: list[tuple[str, dict[str, Any]]] = []
+        for entry in payload:
+            if not isinstance(entry, dict):
+                continue
+            key = str(entry.get("species", "")).strip()
+            if not key:
+                continue
+            items.append((key, entry))
+        return items
+    return []
 
 
 def _parse_species_rule(payload: dict[str, Any]) -> SpeciesRule:
