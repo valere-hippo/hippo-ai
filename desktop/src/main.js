@@ -41,6 +41,13 @@ const retrievalDateFrom = document.getElementById('retrieval-date-from');
 const retrievalDateTo = document.getElementById('retrieval-date-to');
 const retrievalSummary = document.getElementById('retrieval-summary');
 const retrievalResults = document.getElementById('retrieval-results');
+const chatForm = document.getElementById('chat-form');
+const chatQuestion = document.getElementById('chat-question');
+const chatButton = document.getElementById('chat-button');
+const clearChatButton = document.getElementById('clear-chat-button');
+const chatSummary = document.getElementById('chat-summary');
+const chatAnswer = document.getElementById('chat-answer');
+const chatSources = document.getElementById('chat-sources');
 const indexProjectButton = document.getElementById('index-project-button');
 const clearRetrievalButton = document.getElementById('clear-retrieval-button');
 const pickInputButton = document.querySelector('[data-action="pick-input"]');
@@ -97,6 +104,10 @@ resetButton.addEventListener('click', () => {
   document.getElementById('analysis_config_file').value = '';
   document.getElementById('rules_file').value = '';
   document.getElementById('docx_template_dir').value = '';
+  chatQuestion.value = '';
+  chatSummary.textContent = 'Noch keine Frage gestellt.';
+  chatAnswer.textContent = '';
+  chatSources.innerHTML = '';
   localStorage.removeItem(storageKey);
   output.textContent = 'Noch keine Analyse gestartet.';
   setStatus('Bereit');
@@ -200,6 +211,18 @@ clearRetrievalButton.addEventListener('click', () => {
 exportTxtButton.addEventListener('click', () => runDirectExport('txt', 'Text'));
 exportDocxButton.addEventListener('click', () => runDirectExport('docx', 'Word'));
 exportPdfButton.addEventListener('click', () => runDirectExport('pdf', 'PDF'));
+
+chatForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  await runProjectChat();
+});
+
+clearChatButton.addEventListener('click', () => {
+  chatQuestion.value = '';
+  chatSummary.textContent = 'Noch keine Frage gestellt.';
+  chatAnswer.textContent = '';
+  chatSources.innerHTML = '';
+});
 
 clearHistoryButton.addEventListener('click', () => {
   localStorage.removeItem(historyKey);
@@ -763,6 +786,111 @@ function renderRetrievalHits(hits) {
           </div>
           <div class="retrieval-hit-path">${escapeHtml(hit.relative_path || hit.source_path || '')}</div>
           <div class="retrieval-hit-snippet">${escapeHtml(hit.snippet || '')}</div>
+        </article>
+      `;
+    })
+    .join('');
+}
+
+async function runProjectChat() {
+  if (!selectedProjectId || !selectedProjectRecord) {
+    chatSummary.textContent = 'Bitte zuerst ein Projekt auswählen.';
+    return;
+  }
+
+  const question = chatQuestion.value.trim();
+  if (!question) {
+    chatSummary.textContent = 'Bitte eine Frage eingeben.';
+    return;
+  }
+
+  chatButton.disabled = true;
+  chatSummary.textContent = 'Antwort wird erzeugt...';
+  chatAnswer.textContent = '';
+  chatSources.innerHTML = '';
+
+  const payload = {
+    project_id: selectedProjectId,
+    question,
+    species: retrievalSpecies.value.trim() || null,
+    file_type: retrievalFileType.value.trim() || null,
+    category: null,
+    zone: retrievalZone.value.trim() || null,
+    date_from: retrievalDateFrom.value || null,
+    date_to: retrievalDateTo.value || null,
+    limit: 6,
+    python_executable: document.getElementById('python_executable').value.trim() || null,
+    project_root: document.getElementById('project_root').value.trim() || null,
+  };
+
+  try {
+    const result = await invoke('chat_project', payload);
+    const parsed = parseChatResult(result.stdout || '');
+    if (result.exit_code !== 0) {
+      chatSummary.textContent = `Chat fehlgeschlagen (Exit-Code ${result.exit_code})`;
+      chatAnswer.textContent = result.stderr || result.stdout || 'Keine Ausgabe';
+    } else {
+      chatSummary.textContent = formatChatResult(parsed);
+      renderChatResponse(parsed);
+    }
+  } catch (error) {
+    chatSummary.textContent = `Chat fehlgeschlagen: ${error}`;
+  } finally {
+    chatButton.disabled = false;
+  }
+}
+
+function parseChatResult(stdout) {
+  if (!stdout || typeof stdout !== 'string') {
+    return { sources: [] };
+  }
+
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    return { sources: [], raw: stdout };
+  }
+}
+
+function formatChatResult(parsed) {
+  return [
+    `Index: ${parsed.backend || 'local'}`,
+    `Treffer: ${parsed.returned_hits ?? 0}`,
+    `Quellen: ${Array.isArray(parsed.sources) ? parsed.sources.length : 0}`,
+    `Modell: ${parsed.model_name || 'n/a'}`,
+  ].join(' · ');
+}
+
+function renderChatResponse(parsed) {
+  const answer = typeof parsed.answer === 'string' && parsed.answer.trim()
+    ? parsed.answer.trim()
+    : 'Keine Antwort erhalten.';
+  chatAnswer.innerHTML = escapeHtml(answer).replaceAll('\n', '<br />');
+
+  const sources = Array.isArray(parsed.sources) ? parsed.sources : [];
+  if (!sources.length) {
+    chatSources.innerHTML = '<div class="history-empty">Keine Quellen gefunden.</div>';
+    return;
+  }
+
+  chatSources.innerHTML = sources
+    .map((source) => {
+      const meta = [
+        source.species ? `Art: ${escapeHtml(source.species)}` : null,
+        source.zone ? `Zone: ${escapeHtml(source.zone)}` : null,
+        source.observed_at ? `Datum: ${escapeHtml(source.observed_at)}` : null,
+      ].filter(Boolean).join(' · ');
+      return `
+        <article class="chat-source">
+          <div class="chat-source-top">
+            <div>
+              <div class="chat-source-title">[${escapeHtml(source.id || 'S?')}] ${escapeHtml(source.title || source.file_name || 'Quelle')}</div>
+              <div class="chat-source-meta">${escapeHtml(meta || 'Ohne Metadaten')}</div>
+            </div>
+            <div class="chat-source-score">${escapeHtml((Number(source.score) || 0).toFixed(3))}</div>
+          </div>
+          <div class="chat-source-path">${escapeHtml(source.relative_path || source.source_path || '')}</div>
+          <div class="chat-source-snippet">${escapeHtml(source.snippet || '')}</div>
         </article>
       `;
     })

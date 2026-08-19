@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -10,11 +11,14 @@ from .backups import create_project_backup
 from .logging_config import configure_logging
 from .models import (
     BackupResult,
+    ChatSource,
     HealthResponse,
     LoginRequest,
     ProjectCreate,
     ProjectInventory,
     ProjectRecord,
+    ProjectChatRequest,
+    ProjectChatResponse,
     RetrievalIndexRequest,
     RetrievalSearchRequest,
     TokenResponse,
@@ -22,6 +26,7 @@ from .models import (
 )
 from .project_store import ProjectStore
 from .settings import get_settings
+from tier_ai.chat import answer_project_question
 from tier_ai.retrieval import RetrievalFilter, index_project, search_project, to_dict
 
 configure_logging()
@@ -180,3 +185,69 @@ def search_project_retrieval(
         {"query": payload.query, "hits": result.returned_hits, "backend": result.backend},
     )
     return to_dict(result)
+
+
+@app.post("/projects/{project_id}/chat", response_model=ProjectChatResponse)
+def chat_project(
+    project_id: str,
+    payload: ProjectChatRequest,
+    user: UserContext = Depends(get_current_user),
+) -> ProjectChatResponse:
+    project = store.get_project(project_id)
+    index_root = Path(payload.index_root or settings.state_dir / "retrieval")
+    filters = RetrievalFilter(
+        species=payload.species,
+        file_type=payload.file_type,
+        category=payload.category,
+        zone=payload.zone,
+        date_from=payload.date_from,
+        date_to=payload.date_to,
+        limit=payload.limit,
+    )
+    response = answer_project_question(
+        project_id=project.id,
+        project_slug=project.slug,
+        question=payload.question,
+        index_root=index_root,
+        filters=filters,
+        prefer_real_models=payload.prefer_real_models,
+        max_sources=payload.limit,
+    )
+    write_audit(
+        "project.chat",
+        "project",
+        project.id,
+        user.username,
+        {"question": payload.question, "hits": response.returned_hits, "backend": response.backend},
+    )
+    return ProjectChatResponse(
+        project_id=response.project_id,
+        project_slug=response.project_slug,
+        question=response.question,
+        answer=response.answer,
+        backend=response.backend,
+        index_path=response.index_path,
+        model_name=response.model_name,
+        total_candidates=response.total_candidates,
+        returned_hits=response.returned_hits,
+        citations=response.citations,
+        sources=[
+            ChatSource(
+                id=source.id,
+                title=source.title,
+                relative_path=source.relative_path,
+                source_path=source.source_path,
+                file_name=source.file_name,
+                extension=source.extension,
+                category=source.category,
+                species=source.species,
+                observed_at=source.observed_at,
+                zone=source.zone,
+                geometry_type=source.geometry_type,
+                score=source.score,
+                snippet=source.snippet,
+            )
+            for source in response.sources
+        ],
+        created_at=datetime.fromisoformat(response.created_at),
+    )

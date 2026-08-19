@@ -35,6 +35,7 @@ Der Backend-Service stellt zusätzlich Projekt-Retrieval-Endpunkte bereit:
 
 - `POST /projects/{project_id}/retrieval/index`
 - `POST /projects/{project_id}/retrieval/search`
+- `POST /projects/{project_id}/chat`
 
 Diese Endpunkte nutzen `BGE-M3` für Embeddings, `bge-reranker-v2-m3` für das
 Re-Ranking und speichern optional in Qdrant. Wenn die GPU-Hub-Variablen gesetzt
@@ -47,3 +48,9 @@ ab:
 
 Damit kann `hippo-ai` die Modelle extern beziehen, während Qdrant und die
 Projektlogik lokal oder auf dem Backend-Server laufen.
+
+## Projekt-Chat
+
+Der Chat-Endpunkt beantwortet Fragen auf Basis des aktiven Projektindex und
+liefert die zugehörigen Quellen mit. Die Antwort wird bewusst auf Deutsch
+erzeugt und soll inhaltlich nur die geladenen Projektquellen verwenden.

@@ -217,6 +217,33 @@
         <pre id="result-output" class="output">Noch keine Analyse gestartet.</pre>
       </section>
 
+      <section class="panel panel-chat">
+        <div class="section-head">
+          <h2>Projekt-Chat</h2>
+          <span class="pill">RAG mit Quellen</span>
+        </div>
+        <form id="chat-form" class="grid chat-grid">
+          <label class="full">
+            <span>Frage</span>
+            <textarea
+              id="chat-question"
+              name="chat_question"
+              rows="4"
+              placeholder="z. B. Welche Arten sind im Projekt am relevantesten und welche Quellen belegen das?"
+              required
+            ></textarea>
+          </label>
+
+          <div class="actions full">
+            <button type="submit" id="chat-button">Antworten</button>
+            <button type="button" id="clear-chat-button" class="secondary">Leeren</button>
+          </div>
+        </form>
+        <div id="chat-summary" class="project-summary">Noch keine Frage gestellt.</div>
+        <div id="chat-answer" class="chat-answer"></div>
+        <div id="chat-sources" class="chat-sources"></div>
+      </section>
+
       <section class="panel panel-history">
         <div class="section-head">
           <h2>Verlauf</h2>

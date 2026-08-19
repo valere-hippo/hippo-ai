@@ -93,6 +93,50 @@ class RetrievalSearchRequest(BaseModel):
     prefer_real_models: bool = True
 
 
+class ProjectChatRequest(BaseModel):
+    question: str
+    species: str | None = None
+    file_type: str | None = None
+    category: str | None = None
+    zone: str | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    limit: int = 6
+    index_root: str | None = None
+    prefer_real_models: bool = True
+
+
+class ChatSource(BaseModel):
+    id: str
+    title: str
+    relative_path: str
+    source_path: str
+    file_name: str
+    extension: str
+    category: str
+    species: str | None = None
+    observed_at: str | None = None
+    zone: str | None = None
+    geometry_type: str | None = None
+    score: float = 0.0
+    snippet: str = ""
+
+
+class ProjectChatResponse(BaseModel):
+    project_id: str
+    project_slug: str
+    question: str
+    answer: str
+    backend: str
+    index_path: str
+    model_name: str
+    total_candidates: int
+    returned_hits: int
+    citations: list[str] = Field(default_factory=list)
+    sources: list[ChatSource] = Field(default_factory=list)
+    created_at: datetime
+
+
 class BackupResult(BaseModel):
     project_id: str
     archive_path: str
