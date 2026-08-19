@@ -215,7 +215,7 @@ function renderChatThread() {
   const messages = chatThreads[key] || [];
   if (!messages.length) {
     chatThread.innerHTML = `
-      <div class="chat-empty">
+      <div class="chat-empty chat-empty-minimal">
         Noch keine Nachricht. Stelle eine Frage, um den Chat zu beginnen.
       </div>
     `;
