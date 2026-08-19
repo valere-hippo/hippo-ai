@@ -32,6 +32,17 @@ const detailStderr = document.getElementById('detail-stderr');
 const projectSelect = document.getElementById('project-select');
 const projectSummary = document.getElementById('project-summary');
 const projectFileList = document.getElementById('project-file-list');
+const retrievalForm = document.getElementById('retrieval-form');
+const retrievalQuery = document.getElementById('retrieval-query');
+const retrievalSpecies = document.getElementById('retrieval-species');
+const retrievalFileType = document.getElementById('retrieval-file-type');
+const retrievalZone = document.getElementById('retrieval-zone');
+const retrievalDateFrom = document.getElementById('retrieval-date-from');
+const retrievalDateTo = document.getElementById('retrieval-date-to');
+const retrievalSummary = document.getElementById('retrieval-summary');
+const retrievalResults = document.getElementById('retrieval-results');
+const indexProjectButton = document.getElementById('index-project-button');
+const clearRetrievalButton = document.getElementById('clear-retrieval-button');
 const pickInputButton = document.querySelector('[data-action="pick-input"]');
 const pickOutputButton = document.querySelector('[data-action="pick-output"]');
 const pickProjectFolderButton = document.querySelector('[data-action="pick-project-folder"]');
@@ -53,6 +64,8 @@ const visibleFields = ['input', 'output'];
 const allFields = [...visibleFields, ...advancedFields];
 let selectedHistoryIndex = null;
 let selectedProjectId = localStorage.getItem(projectSelectionKey) || '';
+let projectRecords = [];
+let selectedProjectRecord = null;
 
 restoreFormState();
 restoreProjectFormState();
@@ -167,6 +180,21 @@ refreshProjectInventoryButton.addEventListener('click', async () => {
   } finally {
     refreshProjectInventoryButton.disabled = false;
   }
+});
+
+indexProjectButton.addEventListener('click', async () => {
+  await runProjectIndex();
+});
+
+retrievalForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  await runProjectSearch();
+});
+
+clearRetrievalButton.addEventListener('click', () => {
+  retrievalForm.reset();
+  retrievalSummary.textContent = 'Kein Suchlauf gestartet.';
+  retrievalResults.innerHTML = '';
 });
 
 exportTxtButton.addEventListener('click', () => runDirectExport('txt', 'Text'));
@@ -500,6 +528,7 @@ function loadHistory() {
 async function loadProjects(preferredProjectId = null) {
   try {
     const projects = await invoke('list_projects');
+    projectRecords = Array.isArray(projects) ? projects : [];
     renderProjectSelect(projects, preferredProjectId);
     if (selectedProjectId) {
       await loadSelectedProject();
@@ -542,6 +571,7 @@ function renderProjectSelect(projects, preferredProjectId = null) {
     selectedProjectId = '';
     localStorage.removeItem(projectSelectionKey);
   }
+  selectedProjectRecord = projectRecords.find((project) => project.id === selectedProjectId) || null;
 }
 
 async function loadSelectedProject() {
@@ -552,6 +582,7 @@ async function loadSelectedProject() {
 
   try {
     const inventory = await invoke('get_project_inventory', { project_id: selectedProjectId });
+    selectedProjectRecord = projectRecords.find((project) => project.id === selectedProjectId) || null;
     renderProjectInventory(inventory);
   } catch (error) {
     projectSummary.textContent = `Projektinventar konnte nicht geladen werden: ${error}`;
@@ -601,6 +632,138 @@ function renderProjectInventory(inventory) {
             ${escapeHtml(file.extension || 'ohne Endung')} · ${escapeHtml(String(file.size_bytes || 0))} Bytes${modified}
           </div>
         </div>
+      `;
+    })
+    .join('');
+}
+
+async function runProjectIndex() {
+  if (!selectedProjectId || !selectedProjectRecord) {
+    retrievalSummary.textContent = 'Bitte zuerst ein Projekt auswählen.';
+    return;
+  }
+
+  indexProjectButton.disabled = true;
+  retrievalSummary.textContent = 'Index wird erstellt...';
+  try {
+    const result = await invoke('index_project', {
+      project_id: selectedProjectId,
+      python_executable: document.getElementById('python_executable').value.trim() || null,
+      project_root: document.getElementById('project_root').value.trim() || null,
+    });
+    setStatus(result.exit_code === 0 ? 'Index erstellt' : 'Indexfehler', result.exit_code === 0 ? 'ready' : 'error');
+    retrievalSummary.textContent = formatRetrievalIndexResult(result);
+  } catch (error) {
+    retrievalSummary.textContent = `Indexierung fehlgeschlagen: ${error}`;
+  } finally {
+    indexProjectButton.disabled = false;
+  }
+}
+
+async function runProjectSearch() {
+  if (!selectedProjectId || !selectedProjectRecord) {
+    retrievalSummary.textContent = 'Bitte zuerst ein Projekt auswählen.';
+    return;
+  }
+
+  const payload = {
+    project_id: selectedProjectId,
+    query: retrievalQuery.value.trim(),
+    species: retrievalSpecies.value.trim() || null,
+    file_type: retrievalFileType.value.trim() || null,
+    category: null,
+    zone: retrievalZone.value.trim() || null,
+    date_from: retrievalDateFrom.value || null,
+    date_to: retrievalDateTo.value || null,
+    limit: 10,
+    python_executable: document.getElementById('python_executable').value.trim() || null,
+    project_root: document.getElementById('project_root').value.trim() || null,
+  };
+
+  if (!payload.query && !payload.species && !payload.file_type && !payload.zone && !payload.date_from && !payload.date_to) {
+    retrievalSummary.textContent = 'Bitte mindestens eine Suchanfrage oder einen Filter angeben.';
+    retrievalResults.innerHTML = '';
+    return;
+  }
+
+  retrievalSummary.textContent = 'Suche läuft...';
+  retrievalResults.innerHTML = '';
+  try {
+    const result = await invoke('search_project', payload);
+    const parsed = parseRetrievalResult(result.stdout || '');
+    if (result.exit_code !== 0) {
+      retrievalSummary.textContent = `Suche fehlgeschlagen (Exit-Code ${result.exit_code})`;
+    } else {
+      retrievalSummary.textContent = formatRetrievalSearchResult(parsed);
+      renderRetrievalHits(parsed.hits || []);
+    }
+  } catch (error) {
+    retrievalSummary.textContent = `Suche fehlgeschlagen: ${error}`;
+  }
+}
+
+function parseRetrievalResult(stdout) {
+  if (!stdout || typeof stdout !== 'string') {
+    return { hits: [] };
+  }
+
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    return { hits: [], raw: stdout };
+  }
+}
+
+function formatRetrievalIndexResult(result) {
+  const parsed = parseRetrievalResult(result.stdout || '');
+  if (parsed.indexed_documents !== undefined) {
+    return [
+      `Index: ${parsed.backend || 'local'}`,
+      `Dokumente: ${parsed.indexed_documents}`,
+      `Pfad: ${parsed.index_path || 'unbekannt'}`,
+      `Modell: ${parsed.embedding_model || 'n/a'}`,
+      `Reranker: ${parsed.reranker_model || 'n/a'}`,
+    ].join(' · ');
+  }
+
+  return formatRunResult(result);
+}
+
+function formatRetrievalSearchResult(parsed) {
+  const hits = Array.isArray(parsed.hits) ? parsed.hits.length : 0;
+  return [
+    `Index: ${parsed.backend || 'local'}`,
+    `Treffer: ${hits}`,
+    `Dokumente geprüft: ${parsed.total_candidates ?? 0}`,
+  ].join(' · ');
+}
+
+function renderRetrievalHits(hits) {
+  if (!Array.isArray(hits) || !hits.length) {
+    retrievalResults.innerHTML = '<div class="history-empty">Keine Treffer gefunden.</div>';
+    return;
+  }
+
+  retrievalResults.innerHTML = hits
+    .map((hit) => {
+      const meta = [
+        hit.species ? `Art: ${escapeHtml(hit.species)}` : null,
+        hit.zone ? `Zone: ${escapeHtml(hit.zone)}` : null,
+        hit.observed_at ? `Datum: ${escapeHtml(hit.observed_at)}` : null,
+        hit.category ? `Kategorie: ${escapeHtml(hit.category)}` : null,
+      ].filter(Boolean).join(' · ');
+      return `
+        <article class="retrieval-hit">
+          <div class="retrieval-hit-top">
+            <div>
+              <div class="retrieval-hit-title">${escapeHtml(hit.title || hit.file_name || 'Treffer')}</div>
+              <div class="retrieval-hit-meta">${escapeHtml(meta || 'Ohne Metadaten')}</div>
+            </div>
+            <div class="retrieval-hit-score">${escapeHtml((Number(hit.score) || 0).toFixed(3))}</div>
+          </div>
+          <div class="retrieval-hit-path">${escapeHtml(hit.relative_path || hit.source_path || '')}</div>
+          <div class="retrieval-hit-snippet">${escapeHtml(hit.snippet || '')}</div>
+        </article>
       `;
     })
     .join('');

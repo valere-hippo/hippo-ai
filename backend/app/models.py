@@ -24,6 +24,7 @@ class ProjectCreate(BaseModel):
     description: str = ""
     client: str = ""
     tags: list[str] = Field(default_factory=list)
+    source_path: str | None = None
 
 
 class ProjectRecord(BaseModel):
@@ -39,6 +40,57 @@ class ProjectRecord(BaseModel):
     updated_at: datetime
     directories: dict[str, str] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProjectFileEntry(BaseModel):
+    relative_path: str
+    absolute_path: str
+    file_name: str
+    extension: str
+    category: str
+    size_bytes: int
+    modified_at: str | None = None
+
+
+class ProjectInventorySummary(BaseModel):
+    total_files: int = 0
+    geodata_files: int = 0
+    document_files: int = 0
+    image_files: int = 0
+    qgis_files: int = 0
+    other_files: int = 0
+    by_extension: dict[str, int] = Field(default_factory=dict)
+
+
+class ProjectInventory(BaseModel):
+    project_id: str
+    slug: str
+    name: str
+    root_path: str
+    source_path: str | None = None
+    scanned_at: str
+    summary: ProjectInventorySummary
+    files: list[ProjectFileEntry] = Field(default_factory=list)
+
+
+class RetrievalIndexRequest(BaseModel):
+    source_root: str | None = None
+    index_root: str | None = None
+    use_qdrant: bool = True
+    prefer_real_models: bool = True
+
+
+class RetrievalSearchRequest(BaseModel):
+    query: str = ""
+    species: str | None = None
+    file_type: str | None = None
+    category: str | None = None
+    zone: str | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    limit: int = 10
+    index_root: str | None = None
+    prefer_real_models: bool = True
 
 
 class BackupResult(BaseModel):
@@ -62,4 +114,3 @@ class AuditEvent(BaseModel):
     subject_id: str
     username: str
     details: dict[str, Any] = Field(default_factory=dict)
-

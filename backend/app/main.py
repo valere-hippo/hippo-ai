@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,9 +8,21 @@ from .auth import create_access_token, get_current_user, verify_credentials
 from .audit import write_audit
 from .backups import create_project_backup
 from .logging_config import configure_logging
-from .models import BackupResult, HealthResponse, LoginRequest, ProjectCreate, ProjectRecord, TokenResponse, UserContext
+from .models import (
+    BackupResult,
+    HealthResponse,
+    LoginRequest,
+    ProjectCreate,
+    ProjectInventory,
+    ProjectRecord,
+    RetrievalIndexRequest,
+    RetrievalSearchRequest,
+    TokenResponse,
+    UserContext,
+)
 from .project_store import ProjectStore
 from .settings import get_settings
+from tier_ai.retrieval import RetrievalFilter, index_project, search_project, to_dict
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -87,7 +100,83 @@ def backup_project(project_id: str, user: UserContext = Depends(get_current_user
 @app.get("/projects/{project_id}/files")
 def list_project_files(project_id: str, user: UserContext = Depends(get_current_user)) -> dict:
     project = store.get_project(project_id)
-    root = settings.projects_dir / project.slug
+    root = Path(project.metadata.get("source_path") or project.root_path)
     files = [str(path.relative_to(root)) for path in root.rglob("*") if path.is_file()]
     return {"project_id": project.id, "files": files}
 
+
+@app.get("/projects/{project_id}/inventory", response_model=ProjectInventory)
+def get_project_inventory(project_id: str, user: UserContext = Depends(get_current_user)) -> ProjectInventory:
+    project = store.get_project(project_id)
+    logger.info("Project inventory requested by %s for %s", user.username, project_id)
+    return store.get_project_inventory(project_id)
+
+
+@app.post("/projects/{project_id}/inventory/refresh", response_model=ProjectInventory)
+def refresh_project_inventory(project_id: str, user: UserContext = Depends(get_current_user)) -> ProjectInventory:
+    logger.info("Project inventory refresh requested by %s for %s", user.username, project_id)
+    inventory = store.refresh_project_inventory(project_id)
+    write_audit("project.inventory.refresh", "project", project_id, user.username, {"record_count": inventory.summary.total_files})
+    return inventory
+
+
+@app.post("/projects/{project_id}/retrieval/index")
+def index_project_retrieval(
+    project_id: str,
+    payload: RetrievalIndexRequest,
+    user: UserContext = Depends(get_current_user),
+) -> dict:
+    project = store.get_project(project_id)
+    source_root = Path(payload.source_root or project.metadata.get("source_path") or project.root_path)
+    index_root = Path(payload.index_root or settings.state_dir / "retrieval")
+    summary = index_project(
+        project_id=project.id,
+        project_slug=project.slug,
+        source_root=source_root,
+        index_root=index_root,
+        use_qdrant=payload.use_qdrant,
+        prefer_real_models=payload.prefer_real_models,
+    )
+    write_audit(
+        "project.retrieval.index",
+        "project",
+        project.id,
+        user.username,
+        {"backend": summary.backend, "documents": summary.indexed_documents, "index_path": summary.index_path},
+    )
+    return to_dict(summary)
+
+
+@app.post("/projects/{project_id}/retrieval/search")
+def search_project_retrieval(
+    project_id: str,
+    payload: RetrievalSearchRequest,
+    user: UserContext = Depends(get_current_user),
+) -> dict:
+    project = store.get_project(project_id)
+    index_root = Path(payload.index_root or settings.state_dir / "retrieval")
+    filters = RetrievalFilter(
+        species=payload.species,
+        file_type=payload.file_type,
+        category=payload.category,
+        zone=payload.zone,
+        date_from=payload.date_from,
+        date_to=payload.date_to,
+        limit=payload.limit,
+    )
+    result = search_project(
+        project_id=project.id,
+        project_slug=project.slug,
+        query=payload.query,
+        index_root=index_root,
+        filters=filters,
+        prefer_real_models=payload.prefer_real_models,
+    )
+    write_audit(
+        "project.retrieval.search",
+        "project",
+        project.id,
+        user.username,
+        {"query": payload.query, "hits": result.returned_hits, "backend": result.backend},
+    )
+    return to_dict(result)

@@ -82,6 +82,51 @@
         <div id="project-file-list" class="project-file-list"></div>
       </section>
 
+      <section class="panel panel-retrieval">
+        <div class="section-head">
+          <h2>Recherche</h2>
+          <button type="button" id="index-project-button" class="secondary compact">Indexieren</button>
+        </div>
+        <form id="retrieval-form" class="grid retrieval-grid">
+          <label class="full">
+            <span>Suchanfrage</span>
+            <input id="retrieval-query" name="retrieval_query" placeholder="z. B. Amsel Brutverdacht, Rohrdommel, Waldkante" />
+          </label>
+
+          <label>
+            <span>Art</span>
+            <input id="retrieval-species" name="retrieval_species" placeholder="Optional" />
+          </label>
+
+          <label>
+            <span>Dateityp</span>
+            <input id="retrieval-file-type" name="retrieval_file_type" placeholder="txt, pdf, gpkg, shp..." />
+          </label>
+
+          <label>
+            <span>Zone</span>
+            <input id="retrieval-zone" name="retrieval_zone" placeholder="Optional" />
+          </label>
+
+          <label>
+            <span>Datum von</span>
+            <input id="retrieval-date-from" name="retrieval_date_from" type="date" />
+          </label>
+
+          <label>
+            <span>Datum bis</span>
+            <input id="retrieval-date-to" name="retrieval_date_to" type="date" />
+          </label>
+
+          <div class="actions full">
+            <button type="submit" id="search-project-button">Suchen</button>
+            <button type="button" id="clear-retrieval-button" class="secondary">Leeren</button>
+          </div>
+        </form>
+        <div id="retrieval-summary" class="project-summary">Kein Suchlauf gestartet.</div>
+        <div id="retrieval-results" class="retrieval-results"></div>
+      </section>
+
       <section class="panel panel-form">
         <form id="analysis-form" class="grid">
           <label class="full">

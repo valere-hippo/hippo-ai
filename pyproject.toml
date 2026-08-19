@@ -12,6 +12,8 @@ dependencies = [
   "pandas>=2.2",
   "geopandas>=1.0",
   "shapely>=2.0",
+  "qdrant-client>=1.13",
+  "sentence-transformers>=3.4",
 ]
 
 [project.scripts]

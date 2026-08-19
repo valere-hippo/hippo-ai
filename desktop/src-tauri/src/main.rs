@@ -161,6 +161,68 @@ fn refresh_project_inventory(project_id: String) -> Result<ProjectInventory, Str
   project_store().refresh_project_inventory(&project_id)
 }
 
+#[tauri::command]
+fn index_project(
+  project_id: String,
+  python_executable: Option<String>,
+  project_root: Option<String>,
+) -> Result<AnalysisRunResult, String> {
+  let project = project_store().get_project(&project_id)?;
+  let source_path = project
+    .metadata
+    .source_path
+    .clone()
+    .unwrap_or_else(|| project.root_path.clone());
+  run_tier_ai_retrieval_command(
+    "index",
+    &project,
+    python_executable,
+    project_root,
+    &[
+      ("--source-root", Some(source_path)),
+      ("--index-root", None),
+      ("--no-qdrant", None),
+    ],
+  )
+}
+
+#[tauri::command]
+fn search_project(
+  project_id: String,
+  query: String,
+  species: Option<String>,
+  file_type: Option<String>,
+  category: Option<String>,
+  zone: Option<String>,
+  date_from: Option<String>,
+  date_to: Option<String>,
+  limit: Option<u32>,
+  python_executable: Option<String>,
+  project_root: Option<String>,
+) -> Result<AnalysisRunResult, String> {
+  let project = project_store().get_project(&project_id)?;
+  let source_path = project
+    .metadata
+    .source_path
+    .clone()
+    .unwrap_or_else(|| project.root_path.clone());
+  let mut extras: Vec<(&str, Option<String>)> = vec![
+    ("--source-root", Some(source_path)),
+    ("--query", Some(query)),
+    ("--species", species),
+    ("--file-type", file_type),
+    ("--category", category),
+    ("--zone", zone),
+    ("--date-from", date_from),
+    ("--date-to", date_to),
+  ];
+  if let Some(limit) = limit {
+    extras.push(("--limit", Some(limit.to_string())));
+  }
+
+  run_tier_ai_retrieval_command("search", &project, python_executable, project_root, &extras)
+}
+
 fn main() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
@@ -171,7 +233,9 @@ fn main() {
       create_project,
       attach_project_folder,
       get_project_inventory,
-      refresh_project_inventory
+      refresh_project_inventory,
+      index_project,
+      search_project
     ])
     .run(tauri::generate_context!())
     .expect("error while running hippo-ai desktop app");
@@ -264,4 +328,52 @@ where
 
 fn project_store() -> ProjectStore {
   ProjectStore::new()
+}
+
+fn run_tier_ai_retrieval_command(
+  subcommand: &str,
+  project: &ProjectRecord,
+  python_executable: Option<String>,
+  project_root: Option<String>,
+  extras: &[(&str, Option<String>)],
+) -> Result<AnalysisRunResult, String> {
+  let project_root = resolve_python_project_root(project_root.as_deref());
+  let python = resolve_python_executable(python_executable.as_deref(), &project_root);
+  let src_path = project_root.join("src");
+
+  let mut command = Command::new(&python.command);
+  command.current_dir(&project_root);
+  command.args(&python.args);
+  command.env("PYTHONPATH", &src_path);
+  command.arg("-m").arg("tier_ai.retrieval_cli").arg(subcommand);
+  command.arg("--project-id").arg(&project.id);
+  command.arg("--project-slug").arg(&project.slug);
+
+  for (flag, value) in extras {
+    if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
+      command.arg(flag).arg(value);
+    }
+  }
+
+  let display_command = format!(
+    "{} {}",
+    python.command,
+    command
+      .get_args()
+      .map(|arg| arg.to_string_lossy().into_owned())
+      .collect::<Vec<String>>()
+      .join(" ")
+  );
+
+  let output = command
+    .output()
+    .map_err(|error| format!("Retrieval konnte nicht gestartet werden: {error}"))?;
+
+  let exit_code = output.status.code().unwrap_or(-1);
+  Ok(AnalysisRunResult {
+    exit_code,
+    command: display_command,
+    stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+    stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+  })
 }
