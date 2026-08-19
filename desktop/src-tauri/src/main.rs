@@ -292,6 +292,37 @@ fn chat_project_stream(
   run_tier_ai_chat_command_stream(&app, &project, python_executable, project_root, request_id, &extras)
 }
 
+#[tauri::command]
+fn chat_general(
+  question: String,
+  python_executable: Option<String>,
+  project_root: Option<String>,
+) -> Result<AnalysisRunResult, String> {
+  let extras: Vec<(&str, Option<String>)> = vec![
+    ("--general", Some("true".to_string())),
+    ("--question", Some(question)),
+  ];
+
+  run_tier_ai_general_chat_command(python_executable, project_root, &extras)
+}
+
+#[tauri::command]
+fn chat_general_stream(
+  app: tauri::AppHandle,
+  question: String,
+  python_executable: Option<String>,
+  project_root: Option<String>,
+  request_id: Option<String>,
+) -> Result<AnalysisRunResult, String> {
+  let extras: Vec<(&str, Option<String>)> = vec![
+    ("--general", Some("true".to_string())),
+    ("--question", Some(question)),
+    ("--stream", Some("true".to_string())),
+  ];
+
+  run_tier_ai_general_chat_command_stream(&app, python_executable, project_root, request_id, &extras)
+}
+
 fn main() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
@@ -306,7 +337,9 @@ fn main() {
       index_project,
       search_project,
       chat_project,
-      chat_project_stream
+      chat_project_stream,
+      chat_general,
+      chat_general_stream
     ])
     .run(tauri::generate_context!())
     .expect("error while running hippo-ai desktop app");
@@ -516,6 +549,170 @@ fn run_tier_ai_chat_command_stream(
   command.arg("-m").arg("tier_ai.chat_cli");
   command.arg("--project-id").arg(&project.id);
   command.arg("--project-slug").arg(&project.slug);
+
+  for (flag, value) in extras {
+    if let Some(value) = value.as_ref().filter(|value| !value.trim().is_empty()) {
+      command.arg(flag).arg(value);
+    }
+  }
+
+  let display_command = format!(
+    "{} {}",
+    python.command,
+    command
+      .get_args()
+      .map(|arg| arg.to_string_lossy().into_owned())
+      .collect::<Vec<String>>()
+      .join(" ")
+  );
+
+  command.stdout(Stdio::piped());
+  command.stderr(Stdio::piped());
+
+  let mut child = command
+    .spawn()
+    .map_err(|error| format!("Chat konnte nicht gestartet werden: {error}"))?;
+  let stdout = child
+    .stdout
+    .take()
+    .ok_or_else(|| "Chat-stdout konnte nicht gelesen werden".to_string())?;
+  let stderr = child
+    .stderr
+    .take()
+    .ok_or_else(|| "Chat-stderr konnte nicht gelesen werden".to_string())?;
+
+  let app_for_stdout = app.clone();
+  let request_id_for_stdout = request_id.clone();
+  let stdout_handle = thread::spawn(move || {
+    let reader = BufReader::new(stdout);
+    let mut collected_stdout = String::new();
+    let mut final_json = String::new();
+    for line in reader.lines() {
+      match line {
+        Ok(raw_line) => {
+          if raw_line.trim().is_empty() {
+            continue;
+          }
+          collected_stdout.push_str(&raw_line);
+          collected_stdout.push('\n');
+          if let Ok(mut payload) = serde_json::from_str::<Value>(&raw_line) {
+            if let Some(object) = payload.as_object_mut() {
+              object.insert("request_id".to_string(), Value::String(request_id_for_stdout.clone()));
+            }
+            let event_type = payload
+              .get("type")
+              .and_then(|value| value.as_str())
+              .unwrap_or_default()
+              .to_string();
+            let _ = app_for_stdout.emit("hippo-ai-chat-stream", payload.clone());
+            if event_type == "final" {
+              if let Some(response) = payload.get("response") {
+                if let Ok(serialized) = serde_json::to_string_pretty(response) {
+                  final_json = serialized;
+                }
+              }
+            }
+          }
+        }
+        Err(_) => {}
+      }
+    }
+    (collected_stdout, final_json)
+  });
+
+  let stderr_handle = thread::spawn(move || {
+    let mut reader = BufReader::new(stderr);
+    let mut collected = String::new();
+    let _ = reader.read_to_string(&mut collected);
+    collected
+  });
+
+  let status = child
+    .wait()
+    .map_err(|error| format!("Chat-Prozess konnte nicht beendet werden: {error}"))?;
+
+  let (stdout_text, final_json) = stdout_handle
+    .join()
+    .map_err(|_| "Chat-stdout thread panicked".to_string())?;
+  let stderr_text = stderr_handle
+    .join()
+    .map_err(|_| "Chat-stderr thread panicked".to_string())?;
+
+  let final_stdout = if final_json.trim().is_empty() {
+    stdout_text
+  } else {
+    final_json
+  };
+
+  Ok(AnalysisRunResult {
+    exit_code: status.code().unwrap_or(-1),
+    command: display_command,
+    stdout: final_stdout,
+    stderr: stderr_text,
+  })
+}
+
+fn run_tier_ai_general_chat_command(
+  python_executable: Option<String>,
+  project_root: Option<String>,
+  extras: &[(&str, Option<String>)],
+) -> Result<AnalysisRunResult, String> {
+  let project_root = resolve_python_project_root(project_root.as_deref());
+  let python = resolve_python_executable(python_executable.as_deref(), &project_root);
+  let src_path = project_root.join("src");
+
+  let mut command = Command::new(&python.command);
+  command.current_dir(&project_root);
+  command.args(&python.args);
+  command.env("PYTHONPATH", &src_path);
+  command.arg("-m").arg("tier_ai.chat_cli");
+
+  for (flag, value) in extras {
+    if let Some(value) = value.as_ref().filter(|value| !value.trim().is_empty()) {
+      command.arg(flag).arg(value);
+    }
+  }
+
+  let display_command = format!(
+    "{} {}",
+    python.command,
+    command
+      .get_args()
+      .map(|arg| arg.to_string_lossy().into_owned())
+      .collect::<Vec<String>>()
+      .join(" ")
+  );
+
+  let output = command
+    .output()
+    .map_err(|error| format!("Chat konnte nicht gestartet werden: {error}"))?;
+
+  let exit_code = output.status.code().unwrap_or(-1);
+  Ok(AnalysisRunResult {
+    exit_code,
+    command: display_command,
+    stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+    stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+  })
+}
+
+fn run_tier_ai_general_chat_command_stream(
+  app: &tauri::AppHandle,
+  python_executable: Option<String>,
+  project_root: Option<String>,
+  request_id: Option<String>,
+  extras: &[(&str, Option<String>)],
+) -> Result<AnalysisRunResult, String> {
+  let project_root = resolve_python_project_root(project_root.as_deref());
+  let python = resolve_python_executable(python_executable.as_deref(), &project_root);
+  let src_path = project_root.join("src");
+  let request_id = request_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+  let mut command = Command::new(&python.command);
+  command.current_dir(&project_root);
+  command.args(&python.args);
+  command.env("PYTHONPATH", &src_path);
+  command.arg("-m").arg("tier_ai.chat_cli");
 
   for (flag, value) in extras {
     if let Some(value) = value.as_ref().filter(|value| !value.trim().is_empty()) {

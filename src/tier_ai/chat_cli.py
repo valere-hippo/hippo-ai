@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 from pathlib import Path
 
-from .chat import answer_project_question, stream_project_question, to_dict
+from .chat import answer_general_question, answer_project_question, stream_general_question, stream_project_question, to_dict
 from .retrieval import RetrievalFilter
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="hippo-ai-chat", description="Projektbezogene Chat-Antwort mit Quellen")
-    parser.add_argument("--project-id", required=True)
-    parser.add_argument("--project-slug", required=True)
+    parser.add_argument("--general", action="store_true")
+    parser.add_argument("--project-id", default="general")
+    parser.add_argument("--project-slug", default="general")
     parser.add_argument("--project-root", default=None)
     parser.add_argument("--index-root", default=None)
     parser.add_argument("--question", required=True)
@@ -30,6 +32,22 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+    if args.general:
+        if args.stream:
+            for event in stream_general_question(
+                question=args.question,
+                prefer_real_models=not args.no_real_models,
+            ):
+                print(json.dumps(event, ensure_ascii=False), flush=True)
+            return
+
+        response = answer_general_question(
+            question=args.question,
+            prefer_real_models=not args.no_real_models,
+        )
+        print(json.dumps(dataclasses.asdict(response), ensure_ascii=False, indent=2))
+        return
+
     project_root = resolve_project_root(args.project_root)
     index_root = Path(args.index_root) if args.index_root else project_root / "workspace" / "state" / "retrieval"
     filters = RetrievalFilter(

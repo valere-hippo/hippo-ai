@@ -49,6 +49,15 @@ class ChatResponse:
     created_at: str = ""
 
 
+@dataclass(slots=True)
+class GeneralChatResponse:
+    question: str
+    answer: str
+    backend: str
+    model_name: str
+    created_at: str
+
+
 def answer_project_question(
     *,
     project_id: str,
@@ -92,6 +101,21 @@ def answer_project_question(
     )
 
 
+def answer_general_question(
+    *,
+    question: str,
+    prefer_real_models: bool = True,
+) -> GeneralChatResponse:
+    answer = _generate_general_answer(question=question, prefer_real_models=prefer_real_models)
+    return GeneralChatResponse(
+        question=question,
+        answer=answer,
+        backend="remote" if _remote_chat_url() else "local",
+        model_name=_chat_model_name(),
+        created_at=_now_iso(),
+    )
+
+
 def prepare_project_question(
     *,
     project_id: str,
@@ -113,6 +137,36 @@ def prepare_project_question(
     )
     sources = _sources_from_hits(search.hits[:max_sources])
     return search, sources
+
+
+def stream_general_question(
+    *,
+    question: str,
+    prefer_real_models: bool = True,
+) -> Iterator[dict[str, Any]]:
+    yield {
+        "type": "meta",
+        "backend": "remote" if _remote_chat_url() else "local",
+        "model_name": _chat_model_name(),
+        "sources": [],
+    }
+
+    answer = _generate_general_answer(question=question, prefer_real_models=prefer_real_models)
+    emitted = False
+    for chunk in _chunk_text(answer):
+        emitted = True
+        yield {"type": "delta", "delta": chunk}
+    if not emitted:
+        yield {"type": "delta", "delta": answer}
+
+    response = GeneralChatResponse(
+        question=question,
+        answer=answer,
+        backend="remote" if _remote_chat_url() else "local",
+        model_name=_chat_model_name(),
+        created_at=_now_iso(),
+    )
+    yield {"type": "final", "response": dataclasses.asdict(response)}
 
 
 def stream_project_question(
@@ -174,6 +228,38 @@ def stream_project_question(
         created_at=_now_iso(),
     )
     yield {"type": "final", "response": to_dict(response)}
+
+
+def _generate_general_answer(*, question: str, prefer_real_models: bool) -> str:
+    client = _chat_client(prefer_real_models=prefer_real_models)
+    if client is None:
+        return _fallback_general_answer(question)
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Du bist hippo-ai, ein pragmatischer Assistent für Projektarbeit, Geo-Daten und Berichte. "
+                "Antworte auf Deutsch, klar und direkt. Wenn Kontext fehlt, frage nach statt etwas zu erfinden."
+            ),
+        },
+        {
+            "role": "user",
+            "content": question,
+        },
+    ]
+    try:
+        return client.chat(messages, temperature=0.2).strip() or _fallback_general_answer(question)
+    except Exception:
+        return _fallback_general_answer(question)
+
+
+def _fallback_general_answer(question: str) -> str:
+    return (
+        f"Frage: {question}\n\n"
+        "Ich bin im allgemeinen Modus. Für projektbezogene Auswertungen wähle links ein Projekt aus. "
+        "Für Dateianalysen, Berichte und Quellenbezug arbeite ich dann direkt mit dem Projektkontext."
+    )
 
 
 def to_dict(response: ChatResponse) -> dict[str, Any]:

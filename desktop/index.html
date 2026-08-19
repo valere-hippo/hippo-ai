@@ -10,201 +10,91 @@
   </head>
   <body>
     <main class="app-shell">
-      <section class="hero">
-        <div class="hero-brand">
-          <img class="app-logo" src="/src/assets/logo.svg" alt="hippo-ai Logo" />
+      <aside class="sidebar">
+        <div class="sidebar-head">
           <div>
-            <p class="eyebrow">Geospatiale Auswertung</p>
+            <p class="eyebrow">Projekt-KI</p>
             <h1>hippo-ai</h1>
           </div>
-        </div>
-        <p class="lede">
-          GeoPackage-Analyse und Berichtsexport direkt in einer Windows-App. Einfach Eingabedatei und
-          Ausgabe wählen, der Rest wird automatisch erkannt.
-        </p>
-      </section>
-
-      <section class="panel panel-projects">
-        <div class="section-head">
-          <h2>Projekt</h2>
-          <button type="button" id="refresh-projects-button" class="secondary compact">Neu laden</button>
+          <span class="pill" id="sidebar-mode-pill">Allgemeiner Chat</span>
         </div>
 
-        <div class="project-selector">
-          <label class="full">
-            <span>Aktives Projekt</span>
-            <select id="project-select" name="project_select"></select>
-          </label>
-        </div>
-
-        <form id="project-form" class="grid project-grid">
-          <label class="full">
-            <span>Projektname</span>
-            <input id="project-name" name="project_name" placeholder="z. B. Gebietsprüfung Boesner" />
-          </label>
-
-          <label class="full">
-            <span>Beschreibung</span>
-            <input id="project-description" name="project_description" placeholder="Optional" />
-          </label>
-
-          <label>
-            <span>Kunde</span>
-            <input id="project-client" name="project_client" placeholder="Optional" />
-          </label>
-
-          <label>
-            <span>Tags</span>
-            <input id="project-tags" name="project_tags" placeholder="z. B. avifauna, reptilien" />
-          </label>
-
-          <label class="full">
-            <span>Quellordner / Netzwerkpfad</span>
-            <div class="input-row">
-              <input id="project-source-path" name="project_source_path" placeholder="C:\\Daten\\Projekt oder \\server\\share\\projekt" />
-              <button type="button" class="secondary compact" data-action="pick-project-folder">Wählen</button>
-            </div>
-          </label>
-
-          <div class="actions full">
-            <button type="button" id="create-project-button">Projekt erstellen</button>
-            <button type="button" id="attach-project-button" class="secondary">Ordner anhängen</button>
+        <section class="sidebar-section">
+          <div class="section-head">
+            <h2>Projekte</h2>
+            <button type="button" id="refresh-projects-button" class="secondary compact">Neu laden</button>
           </div>
-        </form>
-      </section>
-
-      <section class="panel panel-project-files">
-        <div class="section-head">
-          <h2>Projektinhalt</h2>
-          <button type="button" id="refresh-project-inventory-button" class="secondary compact">Scannen</button>
-        </div>
-        <div id="project-summary" class="project-summary">Kein Projekt ausgewählt.</div>
-        <div id="project-file-list" class="project-file-list"></div>
-      </section>
-
-      <section class="panel panel-retrieval">
-        <div class="section-head">
-          <h2>Recherche</h2>
-          <button type="button" id="index-project-button" class="secondary compact">Indexieren</button>
-        </div>
-        <form id="retrieval-form" class="grid retrieval-grid">
-          <label class="full">
-            <span>Suchanfrage</span>
-            <input id="retrieval-query" name="retrieval_query" placeholder="z. B. Amsel Brutverdacht, Rohrdommel, Waldkante" />
-          </label>
-
-          <label>
-            <span>Art</span>
-            <input id="retrieval-species" name="retrieval_species" placeholder="Optional" />
-          </label>
-
-          <label>
-            <span>Dateityp</span>
-            <input id="retrieval-file-type" name="retrieval_file_type" placeholder="txt, pdf, gpkg, shp..." />
-          </label>
-
-          <label>
-            <span>Zone</span>
-            <input id="retrieval-zone" name="retrieval_zone" placeholder="Optional" />
-          </label>
-
-          <label>
-            <span>Datum von</span>
-            <input id="retrieval-date-from" name="retrieval_date_from" type="date" />
-          </label>
-
-          <label>
-            <span>Datum bis</span>
-            <input id="retrieval-date-to" name="retrieval_date_to" type="date" />
-          </label>
-
-          <div class="actions full">
-            <button type="submit" id="search-project-button">Suchen</button>
-            <button type="button" id="clear-retrieval-button" class="secondary">Leeren</button>
+          <div class="project-selector">
+            <label class="full">
+              <span>Aktives Projekt</span>
+              <select id="project-select" name="project_select"></select>
+            </label>
           </div>
-        </form>
-        <div id="retrieval-summary" class="project-summary">Kein Suchlauf gestartet.</div>
-        <div id="retrieval-results" class="retrieval-results"></div>
-      </section>
+          <div id="project-list" class="project-list"></div>
+        </section>
 
-      <section class="panel panel-form">
-        <form id="analysis-form" class="grid">
-          <label class="full">
-            <span>Eingabedatei</span>
-            <div class="input-row">
-              <input id="input" name="input" placeholder="C:\\Pfad\\zur\\datei.gpkg" required />
-              <button type="button" class="secondary compact" data-action="pick-input">Wählen</button>
-            </div>
-          </label>
-
-          <label class="full">
-            <span>Ausgabe</span>
-            <div class="input-row">
-              <input id="output" name="output" placeholder="C:\\Pfad\\bericht.docx" />
-              <button type="button" class="secondary compact" data-action="pick-output">Speichern</button>
-            </div>
-          </label>
-
-          <details class="advanced-panel full">
-            <summary>Erweiterte Optionen</summary>
-            <p class="advanced-note">
-              Die App erkennt Projektwurzel, Art- und Datumsspalte automatisch und lädt alle
-              `species_rules*.json` im Projekt. Diese Felder nur ausfüllen, wenn du bewusst etwas
-              überschreiben willst.
-            </p>
-            <div class="advanced-grid">
+        <section class="sidebar-section">
+          <details class="project-creator" open>
+            <summary>Projekt anlegen oder Ordner anhängen</summary>
+            <div id="project-form" class="sidebar-form">
               <label>
-                <span>Python-Executable</span>
-                <input id="python_executable" name="python_executable" placeholder="Automatisch" />
+                <span>Projektname</span>
+                <input id="project-name" name="project_name" placeholder="z. B. Gebietsprüfung Boesner" />
               </label>
 
               <label>
-                <span>Projektwurzel</span>
-                <input id="project_root" name="project_root" placeholder="Automatisch" />
+                <span>Beschreibung</span>
+                <input id="project-description" name="project_description" placeholder="Optional" />
               </label>
 
               <label>
-                <span>Art-Spalte</span>
-                <input id="species_column" name="species_column" placeholder="Automatisch erkennen" />
+                <span>Kunde</span>
+                <input id="project-client" name="project_client" placeholder="Optional" />
               </label>
 
               <label>
-                <span>Datum-Spalte</span>
-                <input id="date_column" name="date_column" placeholder="Automatisch erkennen" />
+                <span>Tags</span>
+                <input id="project-tags" name="project_tags" placeholder="z. B. avifauna, reptilien" />
               </label>
 
               <label>
-                <span>Analyse-Config</span>
-                <input id="analysis_config_file" name="analysis_config_file" placeholder="Optional" />
+                <span>Quellordner / Netzwerkpfad</span>
+                <div class="input-row">
+                  <input id="project-source-path" name="project_source_path" placeholder="C:\\Daten\\Projekt oder \\server\\share\\projekt" />
+                  <button type="button" class="secondary compact" data-action="pick-project-folder">Wählen</button>
+                </div>
               </label>
 
-              <label>
-                <span>Rollen-Datei</span>
-                <input id="rules_file" name="rules_file" placeholder="Optional" />
-              </label>
-
-              <label class="full">
-                <span>DOCX-Template-Verzeichnis</span>
-                <input id="docx_template_dir" name="docx_template_dir" placeholder="Optional" />
-              </label>
+              <div class="actions">
+                <button type="button" id="create-project-button">Projekt anlegen</button>
+                <button type="button" id="attach-project-button" class="secondary">Ordner anhängen</button>
+              </div>
             </div>
           </details>
+        </section>
 
-          <div class="actions full">
-            <button type="submit" id="run-button">Analyse starten</button>
-            <button type="button" id="export-txt-button" class="secondary">TXT exportieren</button>
-            <button type="button" id="export-docx-button" class="secondary">DOCX exportieren</button>
-            <button type="button" id="export-pdf-button" class="secondary">PDF exportieren</button>
-            <button type="button" id="reset-button" class="secondary">Zurücksetzen</button>
+        <section class="sidebar-section">
+          <div class="section-head">
+            <h2>Projektinfo</h2>
+            <button type="button" id="refresh-project-inventory-button" class="secondary compact">Scannen</button>
           </div>
-        </form>
-      </section>
+          <div id="project-summary" class="project-summary">Noch kein Projekt ausgewählt.</div>
+        </section>
+      </aside>
 
-      <section class="panel panel-result">
-        <div class="section-head">
-          <h2>Ergebnis</h2>
-          <span id="status-pill" class="pill">Bereit</span>
-        </div>
+      <section class="chat-panel">
+        <header class="chat-header">
+          <div>
+            <p class="eyebrow">Chat</p>
+            <div class="chat-title-row">
+              <h2 id="chat-title">Allgemeiner Chat</h2>
+              <span id="status-pill" class="pill">Bereit</span>
+            </div>
+            <p id="chat-context" class="chat-context">Fragen ohne Projekt laufen im allgemeinen Modus.</p>
+          </div>
+          <button type="button" id="clear-chat-button" class="secondary">Chat leeren</button>
+        </header>
+
         <div class="progress-wrap">
           <div class="progress-meta">
             <span id="progress-label">Bereit zum Starten</span>
@@ -214,73 +104,24 @@
             <div id="progress-bar" class="progress-bar"></div>
           </div>
         </div>
-        <pre id="result-output" class="output">Noch keine Analyse gestartet.</pre>
-      </section>
 
-      <section class="panel panel-chat">
-        <div class="section-head">
-          <h2>Projekt-Chat</h2>
-          <span class="pill">RAG mit Quellen</span>
-        </div>
-        <form id="chat-form" class="grid chat-grid">
+        <div id="chat-thread" class="chat-thread"></div>
+
+        <form id="chat-form" class="chat-composer">
           <label class="full">
             <span>Frage</span>
             <textarea
               id="chat-question"
               name="chat_question"
               rows="4"
-              placeholder="z. B. Welche Arten sind im Projekt am relevantesten und welche Quellen belegen das?"
+              placeholder="Frage an die KI stellen, z. B. Generiere einen Bericht als Word-Datei oder analysiere das Projekt."
               required
             ></textarea>
           </label>
-
-          <div class="actions full">
-            <button type="submit" id="chat-button">Antworten</button>
-            <button type="button" id="clear-chat-button" class="secondary">Leeren</button>
+          <div class="actions">
+            <button type="submit" id="chat-button">Senden</button>
           </div>
         </form>
-        <div id="chat-summary" class="project-summary">Noch keine Frage gestellt.</div>
-        <div id="chat-answer" class="chat-answer"></div>
-        <div id="chat-sources" class="chat-sources"></div>
-      </section>
-
-      <section class="panel panel-history">
-        <div class="section-head">
-          <h2>Verlauf</h2>
-          <button type="button" id="clear-history-button" class="secondary compact">Löschen</button>
-        </div>
-        <div id="history-list" class="history-list"></div>
-      </section>
-
-      <section class="panel panel-details">
-        <div class="section-head">
-          <h2>Laufdetails</h2>
-          <button type="button" id="load-history-button" class="secondary compact">Laden</button>
-        </div>
-        <div id="detail-empty" class="history-empty">Wähle einen Lauf aus dem Verlauf aus.</div>
-        <div id="detail-view" class="detail-view is-hidden">
-          <div class="detail-grid">
-            <div class="detail-section">
-              <div class="detail-label">Zeitpunkt</div>
-              <div id="detail-timestamp" class="detail-value"></div>
-            </div>
-            <div class="detail-section">
-              <div class="detail-label">Status</div>
-              <div id="detail-status" class="detail-value"></div>
-            </div>
-            <div class="detail-section">
-              <div class="detail-label">Eingabe</div>
-              <div id="detail-input" class="detail-value"></div>
-            </div>
-            <div class="detail-section">
-              <div class="detail-label">Ausgabe</div>
-              <div id="detail-output" class="detail-value"></div>
-            </div>
-          </div>
-          <div class="detail-command" id="detail-command"></div>
-          <div class="detail-stdout" id="detail-stdout"></div>
-          <div class="detail-stderr" id="detail-stderr"></div>
-        </div>
       </section>
     </main>
   </body>

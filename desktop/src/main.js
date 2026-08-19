@@ -1,122 +1,75 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { open, save } from '@tauri-apps/plugin-dialog';
+import { open } from '@tauri-apps/plugin-dialog';
 
-const form = document.getElementById('analysis-form');
+const projectSelect = document.getElementById('project-select');
+const projectList = document.getElementById('project-list');
+const projectSummary = document.getElementById('project-summary');
 const projectForm = document.getElementById('project-form');
-const runButton = document.getElementById('run-button');
-const exportTxtButton = document.getElementById('export-txt-button');
-const exportDocxButton = document.getElementById('export-docx-button');
-const exportPdfButton = document.getElementById('export-pdf-button');
-const resetButton = document.getElementById('reset-button');
-const output = document.getElementById('result-output');
-const statusPill = document.getElementById('status-pill');
-const progressLabel = document.getElementById('progress-label');
-const progressPercent = document.getElementById('progress-percent');
-const progressBar = document.getElementById('progress-bar');
-const historyList = document.getElementById('history-list');
-const clearHistoryButton = document.getElementById('clear-history-button');
-const loadHistoryButton = document.getElementById('load-history-button');
 const createProjectButton = document.getElementById('create-project-button');
 const attachProjectButton = document.getElementById('attach-project-button');
 const refreshProjectsButton = document.getElementById('refresh-projects-button');
 const refreshProjectInventoryButton = document.getElementById('refresh-project-inventory-button');
-const detailEmpty = document.getElementById('detail-empty');
-const detailView = document.getElementById('detail-view');
-const detailTimestamp = document.getElementById('detail-timestamp');
-const detailStatus = document.getElementById('detail-status');
-const detailInput = document.getElementById('detail-input');
-const detailOutput = document.getElementById('detail-output');
-const detailCommand = document.getElementById('detail-command');
-const detailStdout = document.getElementById('detail-stdout');
-const detailStderr = document.getElementById('detail-stderr');
-const projectSelect = document.getElementById('project-select');
-const projectSummary = document.getElementById('project-summary');
-const projectFileList = document.getElementById('project-file-list');
-const retrievalForm = document.getElementById('retrieval-form');
-const retrievalQuery = document.getElementById('retrieval-query');
-const retrievalSpecies = document.getElementById('retrieval-species');
-const retrievalFileType = document.getElementById('retrieval-file-type');
-const retrievalZone = document.getElementById('retrieval-zone');
-const retrievalDateFrom = document.getElementById('retrieval-date-from');
-const retrievalDateTo = document.getElementById('retrieval-date-to');
-const retrievalSummary = document.getElementById('retrieval-summary');
-const retrievalResults = document.getElementById('retrieval-results');
+const pickProjectFolderButton = document.querySelector('[data-action="pick-project-folder"]');
 const chatForm = document.getElementById('chat-form');
 const chatQuestion = document.getElementById('chat-question');
 const chatButton = document.getElementById('chat-button');
 const clearChatButton = document.getElementById('clear-chat-button');
-const chatSummary = document.getElementById('chat-summary');
-const chatAnswer = document.getElementById('chat-answer');
-const chatSources = document.getElementById('chat-sources');
-const indexProjectButton = document.getElementById('index-project-button');
-const clearRetrievalButton = document.getElementById('clear-retrieval-button');
-const pickInputButton = document.querySelector('[data-action="pick-input"]');
-const pickOutputButton = document.querySelector('[data-action="pick-output"]');
-const pickProjectFolderButton = document.querySelector('[data-action="pick-project-folder"]');
-const storageKey = 'hippo-ai.desktop.form';
-const historyKey = 'hippo-ai.desktop.history';
-const projectFormKey = 'hippo-ai.desktop.project.form';
+const chatThread = document.getElementById('chat-thread');
+const chatTitle = document.getElementById('chat-title');
+const chatContext = document.getElementById('chat-context');
+const sidebarModePill = document.getElementById('sidebar-mode-pill');
+const statusPill = document.getElementById('status-pill');
+const progressLabel = document.getElementById('progress-label');
+const progressPercent = document.getElementById('progress-percent');
+const progressBar = document.getElementById('progress-bar');
+
 const projectSelectionKey = 'hippo-ai.desktop.project.selected';
-const envReadyKey = 'hippo-ai.desktop.python-ready';
-const advancedFields = [
-  'python_executable',
-  'project_root',
-  'species_column',
-  'date_column',
-  'analysis_config_file',
-  'rules_file',
-  'docx_template_dir',
-];
-const visibleFields = ['input', 'output'];
-const allFields = [...visibleFields, ...advancedFields];
-let selectedHistoryIndex = null;
+const projectFormKey = 'hippo-ai.desktop.project.form';
+const chatThreadsKey = 'hippo-ai.desktop.chat.threads';
+
 let selectedProjectId = localStorage.getItem(projectSelectionKey) || '';
 let projectRecords = [];
-let selectedProjectRecord = null;
+let chatThreads = loadChatThreads();
 let activeChatRequestId = null;
 let activeChatUnlisten = null;
-let activeChatBuffer = '';
 
-restoreFormState();
 restoreProjectFormState();
-renderHistory();
-renderDetails(null);
 loadProjects();
+renderActiveChatContext();
+renderChatThread();
 
-allFields.forEach((name) => {
-  const element = document.getElementById(name);
-  if (element) {
-    element.addEventListener('change', persistFormState);
+projectSelect.addEventListener('change', async () => {
+  selectedProjectId = projectSelect.value || '';
+  if (selectedProjectId) {
+    localStorage.setItem(projectSelectionKey, selectedProjectId);
+  } else {
+    localStorage.removeItem(projectSelectionKey);
   }
+  renderActiveChatContext();
+  renderChatThread();
+  await loadSelectedProject();
 });
 
-['project-name', 'project-description', 'project-client', 'project-tags', 'project-source-path'].forEach((name) => {
-  const element = document.getElementById(name);
-  if (element) {
-    element.addEventListener('change', persistProjectFormState);
-    element.addEventListener('input', persistProjectFormState);
+projectList.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-project-id]');
+  if (!button) {
+    return;
   }
+  selectedProjectId = button.getAttribute('data-project-id') || '';
+  projectSelect.value = selectedProjectId;
+  if (selectedProjectId) {
+    localStorage.setItem(projectSelectionKey, selectedProjectId);
+  } else {
+    localStorage.removeItem(projectSelectionKey);
+  }
+  renderActiveChatContext();
+  renderChatThread();
+  await loadSelectedProject();
 });
 
-resetButton.addEventListener('click', () => {
-  form.reset();
-  document.getElementById('python_executable').value = '';
-  document.getElementById('project_root').value = '';
-  document.getElementById('species_column').value = '';
-  document.getElementById('date_column').value = '';
-  document.getElementById('analysis_config_file').value = '';
-  document.getElementById('rules_file').value = '';
-  document.getElementById('docx_template_dir').value = '';
-  chatQuestion.value = '';
-  chatSummary.textContent = 'Noch keine Frage gestellt.';
-  chatAnswer.textContent = '';
-  chatSources.innerHTML = '';
-  localStorage.removeItem(storageKey);
-  output.textContent = 'Noch keine Analyse gestartet.';
-  setStatus('Bereit');
-  setProgress('Bereit zum Starten', 0, false);
-});
+projectForm.addEventListener('input', persistProjectFormState);
+projectForm.addEventListener('change', persistProjectFormState);
 
 createProjectButton.addEventListener('click', async () => {
   const payload = getProjectPayload();
@@ -136,8 +89,13 @@ createProjectButton.addEventListener('click', async () => {
       source_path: payload.source_path || null,
     });
     await loadProjects(project.id);
-    setStatus('Projekt erstellt');
-    projectSummary.textContent = `Projekt "${project.name}" wurde erstellt.`;
+    projectSelect.value = project.id;
+    selectedProjectId = project.id;
+    localStorage.setItem(projectSelectionKey, selectedProjectId);
+    renderActiveChatContext();
+    renderChatThread();
+    await loadSelectedProject();
+    projectSummary.textContent = `Projekt "${project.name}" wurde angelegt.`;
   } catch (error) {
     projectSummary.textContent = `Projekt konnte nicht erstellt werden: ${error}`;
   } finally {
@@ -147,13 +105,13 @@ createProjectButton.addEventListener('click', async () => {
 });
 
 attachProjectButton.addEventListener('click', async () => {
-  const payload = getProjectPayload();
-  const projectId = selectedProjectId;
-  if (!projectId) {
+  if (!selectedProjectId) {
     projectSummary.textContent = 'Bitte zuerst ein Projekt auswählen.';
     return;
   }
-  if (!payload.source_path) {
+
+  const sourcePath = document.getElementById('project-source-path').value.trim();
+  if (!sourcePath) {
     projectSummary.textContent = 'Bitte zuerst einen Quellordner auswählen.';
     return;
   }
@@ -162,11 +120,12 @@ attachProjectButton.addEventListener('click', async () => {
   createProjectButton.disabled = true;
   try {
     await invoke('attach_project_folder', {
-      project_id: projectId,
-      source_path: payload.source_path,
+      project_id: selectedProjectId,
+      source_path: sourcePath,
     });
-    await loadProjects(projectId);
-    setStatus('Ordner angehängt');
+    await loadProjects(selectedProjectId);
+    await loadSelectedProject();
+    projectSummary.textContent = 'Ordner wurde dem Projekt angehängt.';
   } catch (error) {
     projectSummary.textContent = `Ordner konnte nicht angehängt werden: ${error}`;
   } finally {
@@ -177,6 +136,7 @@ attachProjectButton.addEventListener('click', async () => {
 
 refreshProjectsButton.addEventListener('click', async () => {
   await loadProjects(selectedProjectId || null);
+  await loadSelectedProject();
 });
 
 refreshProjectInventoryButton.addEventListener('click', async () => {
@@ -188,8 +148,8 @@ refreshProjectInventoryButton.addEventListener('click', async () => {
   refreshProjectInventoryButton.disabled = true;
   try {
     const inventory = await invoke('refresh_project_inventory', { project_id: selectedProjectId });
-    renderProjectInventory(inventory);
-    setStatus('Projekt gescannt');
+    renderProjectSummary(inventory);
+    projectSummary.textContent = 'Projektinhalt aktualisiert.';
   } catch (error) {
     projectSummary.textContent = `Projektinventar konnte nicht aktualisiert werden: ${error}`;
   } finally {
@@ -197,90 +157,7 @@ refreshProjectInventoryButton.addEventListener('click', async () => {
   }
 });
 
-indexProjectButton.addEventListener('click', async () => {
-  await runProjectIndex();
-});
-
-retrievalForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  await runProjectSearch();
-});
-
-clearRetrievalButton.addEventListener('click', () => {
-  retrievalForm.reset();
-  retrievalSummary.textContent = 'Kein Suchlauf gestartet.';
-  retrievalResults.innerHTML = '';
-});
-
-exportTxtButton.addEventListener('click', () => runDirectExport('txt', 'Text'));
-exportDocxButton.addEventListener('click', () => runDirectExport('docx', 'Word'));
-exportPdfButton.addEventListener('click', () => runDirectExport('pdf', 'PDF'));
-
-chatForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  await runProjectChat();
-});
-
-clearChatButton.addEventListener('click', () => {
-  chatQuestion.value = '';
-  chatSummary.textContent = 'Noch keine Frage gestellt.';
-  chatAnswer.textContent = '';
-  chatSources.innerHTML = '';
-});
-
-clearHistoryButton.addEventListener('click', () => {
-  localStorage.removeItem(historyKey);
-  selectedHistoryIndex = null;
-  renderHistory();
-  renderDetails(null);
-});
-
-loadHistoryButton.addEventListener('click', () => {
-  if (selectedHistoryIndex === null) {
-    return;
-  }
-  const history = loadHistory();
-  const entry = history[selectedHistoryIndex];
-  if (!entry) {
-    return;
-  }
-  loadHistoryEntry(entry);
-});
-
-pickInputButton.addEventListener('click', async () => {
-  const selected = await open({
-    multiple: false,
-    directory: false,
-    title: 'GeoPackage, Shape oder GeoJSON auswählen',
-    filters: [
-      { name: 'GeoPackage', extensions: ['gpkg'] },
-      { name: 'Shape', extensions: ['shp'] },
-      { name: 'GeoJSON', extensions: ['geojson', 'json'] },
-    ],
-  });
-
-  if (typeof selected === 'string' && selected.trim()) {
-    setInputPath(selected);
-  }
-});
-
-pickOutputButton.addEventListener('click', async () => {
-  const selected = await save({
-    title: 'Ausgabedatei speichern',
-    filters: [
-      { name: 'Word', extensions: ['docx'] },
-      { name: 'PDF', extensions: ['pdf'] },
-      { name: 'Text', extensions: ['txt'] },
-    ],
-  });
-
-  if (typeof selected === 'string' && selected.trim()) {
-    document.getElementById('output').value = selected;
-    persistFormState();
-  }
-});
-
-pickProjectFolderButton.addEventListener('click', async () => {
+pickProjectFolderButton?.addEventListener('click', async () => {
   const selected = await open({
     multiple: false,
     directory: true,
@@ -293,231 +170,369 @@ pickProjectFolderButton.addEventListener('click', async () => {
   }
 });
 
-projectSelect.addEventListener('change', async () => {
-  selectedProjectId = projectSelect.value || '';
-  localStorage.setItem(projectSelectionKey, selectedProjectId);
-  await loadSelectedProject();
-});
-
-form.addEventListener('submit', async (event) => {
+chatForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-
-  const payload = getCurrentPayload();
-
-  if (!payload.input) {
-    setStatus('Fehler', 'error');
-    output.textContent = 'Bitte eine Eingabedatei angeben.';
-    return;
-  }
-
-  if (!isSupportedInputFile(payload.input)) {
-    setStatus('Fehler', 'error');
-    output.textContent = [
-      'Bitte eine GeoPackage-, Shape- oder GeoJSON-Datei auswählen.',
-      'Dateien mit der Endung .cpg sind nur Begleitdateien und keine Analyse-Eingabe.',
-    ].join('\n');
-    return;
-  }
-
-  runButton.disabled = true;
-  setStatus('Vorbereitung', 'running');
-  setProgress('Python-Umgebung wird geprüft', 10, true);
-  output.textContent = 'Python-Umgebung wird vorbereitet...';
-
-  let progressTimer = null;
-  try {
-    persistFormState();
-    await ensurePythonEnvironment(payload);
-    setStatus('Läuft', 'running');
-    setProgress('Analyse wird gestartet', 18, true);
-    progressTimer = startProgressCycle();
-    const result = await invoke('run_analysis', payload);
-    stopProgressCycle(progressTimer);
-    setProgress('Analyse abgeschlossen', 100, false);
-    output.textContent = formatRunResult(result);
-    setStatus(result.exit_code === 0 ? 'Fertig' : 'Fehler', result.exit_code === 0 ? 'ready' : 'error');
-    addHistoryEntry({
-      timestamp: new Date().toISOString(),
-      input: payload.input,
-      output: payload.output || '',
-      exitCode: result.exit_code,
-      command: result.command,
-      python_executable: payload.python_executable,
-      project_root: payload.project_root,
-      species_column: payload.species_column,
-      date_column: payload.date_column,
-      analysis_config_file: payload.analysis_config_file,
-      rules_file: payload.rules_file,
-      docx_template_dir: payload.docx_template_dir,
-      stdout: result.stdout || '',
-      stderr: result.stderr || '',
-    });
-  } catch (error) {
-    if (progressTimer !== null) {
-      stopProgressCycle(progressTimer);
-    }
-
-    const errorText = String(error);
-    if (errorText.includes("No module named 'pandas'")) {
-      localStorage.removeItem(envReadyKey);
-      try {
-        output.textContent = 'Python-Umgebung wird nachinstalliert...';
-        setStatus('Vorbereitung', 'running');
-        setProgress('Python-Abhängigkeiten werden repariert', 35, true);
-        await forcePreparePythonEnvironment(payload);
-        const rerun = await invoke('run_analysis', payload);
-        setProgress('Analyse abgeschlossen', 100, false);
-        output.textContent = formatRunResult(rerun);
-        setStatus(rerun.exit_code === 0 ? 'Fertig' : 'Fehler', rerun.exit_code === 0 ? 'ready' : 'error');
-        addHistoryEntry({
-          timestamp: new Date().toISOString(),
-          input: payload.input,
-          output: payload.output || '',
-          exitCode: rerun.exit_code,
-          command: rerun.command,
-          python_executable: payload.python_executable,
-          project_root: payload.project_root,
-          species_column: payload.species_column,
-          date_column: payload.date_column,
-          analysis_config_file: payload.analysis_config_file,
-          rules_file: payload.rules_file,
-          docx_template_dir: payload.docx_template_dir,
-          stdout: rerun.stdout || '',
-          stderr: rerun.stderr || '',
-        });
-        return;
-      } catch (retryError) {
-        setProgress('Analyse fehlgeschlagen', 0, false);
-        output.textContent = `Fehler beim Starten der Analyse:\n${retryError}`;
-        setStatus('Fehler', 'error');
-      }
-    } else if (errorText.includes('Keine GeoPackage- oder Shape-Datei') || errorText.includes('GeoJSON')) {
-      output.textContent = 'Bitte eine .gpkg-, .shp- oder .geojson-Datei auswählen. .cpg ist keine Analyse-Eingabe.';
-      setStatus('Fehler', 'error');
-    } else {
-      setProgress('Analyse fehlgeschlagen', 0, false);
-      output.textContent = `Fehler beim Starten der Analyse:\n${error}`;
-      setStatus('Fehler', 'error');
-    }
-  } finally {
-    runButton.disabled = false;
-  }
+  await runChat();
 });
 
-function formatRunResult(result) {
+clearChatButton.addEventListener('click', () => {
+  const key = getChatThreadKey();
+  chatThreads[key] = [];
+  saveChatThreads();
+  renderChatThread();
+});
+
+function getChatThreadKey() {
+  return selectedProjectId ? `project:${selectedProjectId}` : 'general';
+}
+
+function getChatThreadTitle() {
+  if (!selectedProjectId) {
+    return 'Allgemeiner Chat';
+  }
+  const project = projectRecords.find((record) => record.id === selectedProjectId);
+  return project ? project.name : 'Projekt-Chat';
+}
+
+function renderActiveChatContext() {
+  const project = projectRecords.find((record) => record.id === selectedProjectId) || null;
+  if (!project) {
+    sidebarModePill.textContent = 'Allgemeiner Chat';
+    chatTitle.textContent = 'Allgemeiner Chat';
+    chatContext.textContent = 'Der Chat läuft ohne Projektbezug. Wähle links ein Projekt aus, um projektbezogen zu arbeiten.';
+    return;
+  }
+
+  sidebarModePill.textContent = project.name;
+  chatTitle.textContent = project.name;
+  const fileCount = project.metadata?.file_count ?? 0;
+  const sourcePath = project.metadata?.source_path || project.root_path || '';
+  chatContext.textContent = `${project.slug} · ${fileCount} Dateien · ${sourcePath}`;
+}
+
+function renderChatThread() {
+  const key = getChatThreadKey();
+  const messages = chatThreads[key] || [];
+  if (!messages.length) {
+    chatThread.innerHTML = `
+      <div class="chat-empty">
+        Noch keine Nachricht. Stelle eine Frage, um den Chat zu beginnen.
+      </div>
+    `;
+    return;
+  }
+
+  chatThread.innerHTML = messages
+    .map((message) => renderChatMessage(message))
+    .join('');
+  scrollChatToBottom();
+}
+
+function renderChatMessage(message) {
+  const roleClass = message.role === 'user' ? 'is-user' : 'is-assistant';
+  const label = message.role === 'user' ? 'Du' : 'hippo-ai';
+  const meta = message.created_at ? formatDateTime(message.created_at) : '';
+  const content = escapeHtml(message.content || '').replaceAll('\n', '<br />');
+  const sources = Array.isArray(message.sources) ? message.sources : [];
+  const sourcesHtml = sources.length
+    ? `
+      <div class="chat-sources">
+        ${sources
+          .map((source) => `
+            <div class="chat-source">
+              <div class="chat-source-title">[${escapeHtml(source.id || 'S?')}] ${escapeHtml(source.title || source.file_name || 'Quelle')}</div>
+              <div class="chat-source-meta">${escapeHtml(formatSourceMeta(source) || 'Ohne Metadaten')}</div>
+              <div class="chat-source-path">${escapeHtml(source.relative_path || source.source_path || '')}</div>
+              <div class="chat-source-snippet">${escapeHtml(source.snippet || '')}</div>
+            </div>
+          `)
+          .join('')}
+      </div>
+    `
+    : '';
+
+  return `
+    <article class="chat-message ${roleClass}">
+      <div class="chat-meta">${escapeHtml(label)}${meta ? ` · ${escapeHtml(meta)}` : ''}</div>
+      <div class="chat-bubble">${content || '&nbsp;'}</div>
+      ${sourcesHtml}
+    </article>
+  `;
+}
+
+function formatSourceMeta(source) {
   return [
-    `Exit-Code: ${result.exit_code}`,
-    '',
-    'Kommando:',
-    result.command,
-    '',
-    'stdout:',
-    result.stdout || '(leer)',
-    '',
-    'stderr:',
-    result.stderr || '(leer)',
-  ].join('\n');
+    source.species ? `Art: ${source.species}` : null,
+    source.zone ? `Zone: ${source.zone}` : null,
+    source.observed_at ? `Datum: ${source.observed_at}` : null,
+    source.category ? `Kategorie: ${source.category}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
-function setStatus(label, state = 'ready') {
-  statusPill.textContent = label;
-  statusPill.classList.remove('is-running', 'is-error');
-  if (state === 'running') {
-    statusPill.classList.add('is-running');
-  } else if (state === 'error') {
-    statusPill.classList.add('is-error');
-  }
-}
-
-function setProgress(label, percent, active) {
-  progressLabel.textContent = label;
-  progressPercent.textContent = `${Math.max(0, Math.min(100, Math.round(percent)))}%`;
-  progressBar.classList.toggle('is-active', active);
-  progressBar.style.transform = active ? 'translateX(-100%)' : 'translateX(0)';
-}
-
-function getCurrentPayload() {
-  return Object.fromEntries(
-    allFields.map((name) => [name, document.getElementById(name).value.trim()]),
-  );
-}
-
-function startProgressCycle(stages = [
-  { label: 'Projekt wird vorbereitet', percent: 20 },
-  { label: 'Analyse läuft', percent: 45 },
-  { label: 'Bericht wird aufgebaut', percent: 70 },
-  { label: 'Export wird abgeschlossen', percent: 88 },
-]) {
-  const cycle = stages;
-
-  let index = 0;
-  const timer = window.setInterval(() => {
-    const stage = cycle[index % cycle.length];
-    setProgress(stage.label, stage.percent, true);
-    index += 1;
-  }, 1400);
-
-  return timer;
-}
-
-function stopProgressCycle(timer) {
-  window.clearInterval(timer);
-}
-
-function persistFormState() {
-  const state = Object.fromEntries(
-    allFields.map((name) => [name, document.getElementById(name).value]),
-  );
-  localStorage.setItem(storageKey, JSON.stringify(state));
-}
-
-function restoreFormState() {
-  const stored = localStorage.getItem(storageKey);
-  if (!stored) {
+async function runChat() {
+  const question = chatQuestion.value.trim();
+  if (!question) {
     return;
   }
 
-  try {
-    const state = JSON.parse(stored);
-    allFields.forEach((name) => {
-      if (typeof state[name] === 'string') {
-        document.getElementById(name).value = state[name];
-      }
-    });
-  } catch {
-    localStorage.removeItem(storageKey);
-  }
-}
-
-function persistProjectFormState() {
-  const state = {
-    name: document.getElementById('project-name').value,
-    description: document.getElementById('project-description').value,
-    client: document.getElementById('project-client').value,
-    tags: document.getElementById('project-tags').value,
-    source_path: document.getElementById('project-source-path').value,
+  const key = getChatThreadKey();
+  const messages = chatThreads[key] || [];
+  const userMessage = {
+    role: 'user',
+    content: question,
+    created_at: new Date().toISOString(),
   };
-  localStorage.setItem(projectFormKey, JSON.stringify(state));
+  const assistantMessage = {
+    role: 'assistant',
+    content: '',
+    created_at: new Date().toISOString(),
+    streaming: true,
+    sources: [],
+  };
+  messages.push(userMessage, assistantMessage);
+  chatThreads[key] = messages;
+  saveChatThreads();
+  renderChatThread();
+
+  chatButton.disabled = true;
+  setStatus('Läuft', 'running');
+  setProgress('Antwort wird gestreamt', 22, true);
+  chatQuestion.value = '';
+
+  const requestId = crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  activeChatRequestId = requestId;
+
+  if (activeChatUnlisten) {
+    try {
+      await activeChatUnlisten();
+    } catch {
+      // ignore
+    }
+    activeChatUnlisten = null;
+  }
+
+  activeChatUnlisten = await listen('hippo-ai-chat-stream', (event) => {
+    const payload = event.payload || {};
+    if (payload.request_id !== activeChatRequestId) {
+      return;
+    }
+
+    if (payload.type === 'meta') {
+      if (Array.isArray(payload.sources)) {
+        assistantMessage.sources = payload.sources;
+        saveChatThreads();
+        renderChatThread();
+      }
+      return;
+    }
+
+    if (payload.type === 'delta') {
+      assistantMessage.content = `${assistantMessage.content || ''}${String(payload.delta || '')}`;
+      saveChatThreads();
+      renderChatThread();
+      return;
+    }
+
+    if (payload.type === 'final' && payload.response) {
+      assistantMessage.content = payload.response.answer || assistantMessage.content;
+      assistantMessage.sources = payload.response.sources || assistantMessage.sources;
+      assistantMessage.streaming = false;
+      saveChatThreads();
+      renderChatThread();
+      return;
+    }
+  });
+
+  const payload = {
+    question,
+    species: null,
+    file_type: null,
+    category: null,
+    zone: null,
+    date_from: null,
+    date_to: null,
+    limit: 6,
+    python_executable: null,
+    project_root: null,
+    request_id: requestId,
+  };
+
+  try {
+    const result = selectedProjectId
+      ? await invoke('chat_project_stream', { project_id: selectedProjectId, ...payload })
+      : await invoke('chat_general_stream', payload);
+
+    if (result.exit_code !== 0) {
+      assistantMessage.content = result.stderr || result.stdout || `Chat fehlgeschlagen (Exit-Code ${result.exit_code})`;
+      assistantMessage.sources = [];
+      assistantMessage.streaming = false;
+      saveChatThreads();
+      renderChatThread();
+      setStatus('Fehler', 'error');
+      return;
+    }
+
+    const parsed = parseChatResult(result.stdout || '');
+    assistantMessage.content = parsed.answer || assistantMessage.content || 'Keine Antwort erhalten.';
+    assistantMessage.sources = parsed.sources || assistantMessage.sources || [];
+    assistantMessage.streaming = false;
+    saveChatThreads();
+    renderChatThread();
+    setStatus('Fertig', 'ready');
+  } catch (error) {
+    assistantMessage.content = `Chat fehlgeschlagen: ${error}`;
+    assistantMessage.streaming = false;
+    saveChatThreads();
+    renderChatThread();
+    setStatus('Fehler', 'error');
+  } finally {
+    activeChatRequestId = null;
+    if (activeChatUnlisten) {
+      try {
+        await activeChatUnlisten();
+      } catch {
+        // ignore
+      }
+      activeChatUnlisten = null;
+    }
+    chatButton.disabled = false;
+    setProgress('Bereit', 0, false);
+  }
 }
 
-function restoreProjectFormState() {
-  const stored = localStorage.getItem(projectFormKey);
+function loadChatThreads() {
+  const stored = localStorage.getItem(chatThreadsKey);
   if (!stored) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(stored);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    localStorage.removeItem(chatThreadsKey);
+    return {};
+  }
+}
+
+function saveChatThreads() {
+  localStorage.setItem(chatThreadsKey, JSON.stringify(chatThreads));
+}
+
+function parseChatResult(stdout) {
+  if (!stdout || typeof stdout !== 'string') {
+    return { sources: [] };
+  }
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    return { sources: [], raw: stdout };
+  }
+}
+
+async function loadProjects(preferredProjectId = null) {
+  try {
+    const projects = await invoke('list_projects');
+    projectRecords = Array.isArray(projects) ? projects : [];
+    renderProjectSelect(projectRecords, preferredProjectId);
+    renderProjectList(projectRecords);
+    await loadSelectedProject();
+  } catch (error) {
+    projectSummary.textContent = `Projektliste konnte nicht geladen werden: ${error}`;
+    projectList.innerHTML = '';
+  }
+}
+
+function renderProjectSelect(projects, preferredProjectId = null) {
+  const knownIds = new Set(projects.map((project) => project.id));
+  const selectedId = preferredProjectId || selectedProjectId || '';
+
+  projectSelect.innerHTML = '';
+  const generalOption = document.createElement('option');
+  generalOption.value = '';
+  generalOption.textContent = 'Allgemeiner Chat';
+  projectSelect.appendChild(generalOption);
+
+  projects.forEach((project) => {
+    const option = document.createElement('option');
+    option.value = project.id;
+    const fileCount = project.metadata?.file_count ?? 0;
+    option.textContent = `${project.name} (${fileCount})`;
+    projectSelect.appendChild(option);
+  });
+
+  if (selectedId && knownIds.has(selectedId)) {
+    projectSelect.value = selectedId;
+    selectedProjectId = selectedId;
+    localStorage.setItem(projectSelectionKey, selectedId);
+  } else if (!selectedId) {
+    projectSelect.value = '';
+    selectedProjectId = '';
+    localStorage.removeItem(projectSelectionKey);
+  } else {
+    projectSelect.value = '';
+    selectedProjectId = '';
+    localStorage.removeItem(projectSelectionKey);
+  }
+}
+
+function renderProjectList(projects) {
+  if (!projects.length) {
+    projectList.innerHTML = '<div class="history-empty">Noch keine Projekte angelegt.</div>';
+    return;
+  }
+
+  projectList.innerHTML = projects
+    .map((project) => {
+      const fileCount = project.metadata?.file_count ?? 0;
+      const active = project.id === selectedProjectId ? ' is-active' : '';
+      return `
+        <button type="button" class="project-chip${active}" data-project-id="${escapeHtml(project.id)}">
+          <div class="project-chip-title">${escapeHtml(project.name)}</div>
+          <div class="project-chip-meta">${escapeHtml(project.slug)} · ${escapeHtml(String(fileCount))} Dateien</div>
+        </button>
+      `;
+    })
+    .join('');
+}
+
+async function loadSelectedProject() {
+  if (!selectedProjectId) {
+    projectSummary.textContent = 'Kein Projekt ausgewählt. Du kannst direkt im allgemeinen Chat arbeiten.';
+    renderProjectList(projectRecords);
+    renderActiveChatContext();
     return;
   }
 
   try {
-    const state = JSON.parse(stored);
-    document.getElementById('project-name').value = typeof state.name === 'string' ? state.name : '';
-    document.getElementById('project-description').value =
-      typeof state.description === 'string' ? state.description : '';
-    document.getElementById('project-client').value = typeof state.client === 'string' ? state.client : '';
-    document.getElementById('project-tags').value = typeof state.tags === 'string' ? state.tags : '';
-    document.getElementById('project-source-path').value =
-      typeof state.source_path === 'string' ? state.source_path : '';
-  } catch {
-    localStorage.removeItem(projectFormKey);
+    const inventory = await invoke('get_project_inventory', { project_id: selectedProjectId });
+    renderProjectSummary(inventory);
+    renderProjectList(projectRecords);
+    renderActiveChatContext();
+  } catch (error) {
+    projectSummary.textContent = `Projektinventar konnte nicht geladen werden: ${error}`;
   }
+}
+
+function renderProjectSummary(inventory) {
+  if (!inventory) {
+    projectSummary.textContent = 'Kein Projekt ausgewählt.';
+    return;
+  }
+
+  const lines = [
+    `Projekt: ${inventory.name || 'Projekt'}`,
+    `Pfad: ${inventory.root_path || ''}`,
+    `Quelle: ${inventory.source_path || inventory.root_path || ''}`,
+    `Dateien: ${inventory.summary?.total_files ?? inventory.files?.length ?? 0}`,
+    `Geodaten: ${inventory.summary?.geodata_files ?? 0}`,
+    `Dokumente: ${inventory.summary?.document_files ?? 0}`,
+    `Bilder: ${inventory.summary?.image_files ?? 0}`,
+    `QGIS: ${inventory.summary?.qgis_files ?? 0}`,
+    `Sonstige: ${inventory.summary?.other_files ?? 0}`,
+  ];
+  projectSummary.innerHTML = lines.map((line) => `<div>${escapeHtml(line)}</div>`).join('');
 }
 
 function getProjectPayload() {
@@ -537,474 +552,42 @@ function splitTags(value) {
     .filter(Boolean);
 }
 
-function loadHistory() {
-  const stored = localStorage.getItem(historyKey);
+function restoreProjectFormState() {
+  const stored = localStorage.getItem(projectFormKey);
   if (!stored) {
-    return [];
+    return;
   }
-
   try {
-    const history = JSON.parse(stored);
-    return Array.isArray(history) ? history : [];
+    const state = JSON.parse(stored);
+    document.getElementById('project-name').value = typeof state.name === 'string' ? state.name : '';
+    document.getElementById('project-description').value = typeof state.description === 'string' ? state.description : '';
+    document.getElementById('project-client').value = typeof state.client === 'string' ? state.client : '';
+    document.getElementById('project-tags').value = typeof state.tags === 'string' ? state.tags : '';
+    document.getElementById('project-source-path').value = typeof state.source_path === 'string' ? state.source_path : '';
   } catch {
-    localStorage.removeItem(historyKey);
-    return [];
+    localStorage.removeItem(projectFormKey);
   }
 }
 
-async function loadProjects(preferredProjectId = null) {
+function persistProjectFormState() {
+  localStorage.setItem(
+    projectFormKey,
+    JSON.stringify({
+      name: document.getElementById('project-name').value,
+      description: document.getElementById('project-description').value,
+      client: document.getElementById('project-client').value,
+      tags: document.getElementById('project-tags').value,
+      source_path: document.getElementById('project-source-path').value,
+    }),
+  );
+}
+
+function formatDateTime(value) {
   try {
-    const projects = await invoke('list_projects');
-    projectRecords = Array.isArray(projects) ? projects : [];
-    renderProjectSelect(projects, preferredProjectId);
-    if (selectedProjectId) {
-      await loadSelectedProject();
-    } else {
-      renderProjectInventory(null);
-    }
-  } catch (error) {
-    projectSummary.textContent = `Projektliste konnte nicht geladen werden: ${error}`;
-    projectFileList.innerHTML = '';
-  }
-}
-
-function renderProjectSelect(projects, preferredProjectId = null) {
-  const selectedId = preferredProjectId || selectedProjectId || localStorage.getItem(projectSelectionKey) || '';
-  projectSelect.innerHTML = '';
-
-  const emptyOption = document.createElement('option');
-  emptyOption.value = '';
-  emptyOption.textContent = 'Kein Projekt ausgewählt';
-  projectSelect.appendChild(emptyOption);
-
-  projects.forEach((project) => {
-    const option = document.createElement('option');
-    option.value = project.id;
-    const fileCount = project.metadata?.file_count ?? 0;
-    option.textContent = `${project.name} (${project.slug}) · ${fileCount} Dateien`;
-    projectSelect.appendChild(option);
-  });
-
-  const availableIds = new Set(projects.map((project) => project.id));
-  if (selectedId && availableIds.has(selectedId)) {
-    projectSelect.value = selectedId;
-    selectedProjectId = selectedId;
-    localStorage.setItem(projectSelectionKey, selectedId);
-  } else if (projects.length > 0) {
-    projectSelect.value = projects[0].id;
-    selectedProjectId = projects[0].id;
-    localStorage.setItem(projectSelectionKey, selectedProjectId);
-  } else {
-    selectedProjectId = '';
-    localStorage.removeItem(projectSelectionKey);
-  }
-  selectedProjectRecord = projectRecords.find((project) => project.id === selectedProjectId) || null;
-}
-
-async function loadSelectedProject() {
-  if (!selectedProjectId) {
-    renderProjectInventory(null);
-    return;
-  }
-
-  try {
-    const inventory = await invoke('get_project_inventory', { project_id: selectedProjectId });
-    selectedProjectRecord = projectRecords.find((project) => project.id === selectedProjectId) || null;
-    renderProjectInventory(inventory);
-  } catch (error) {
-    projectSummary.textContent = `Projektinventar konnte nicht geladen werden: ${error}`;
-    projectFileList.innerHTML = '';
-  }
-}
-
-function renderProjectInventory(inventory) {
-  if (!inventory) {
-    projectSummary.innerHTML = 'Kein Projekt ausgewählt.';
-    projectFileList.innerHTML = '<div class="history-empty">Noch keine Dateien gescannt.</div>';
-    return;
-  }
-
-  const summaryLines = [
-    `<strong>${escapeHtml(inventory.name || 'Projekt')}</strong>`,
-    `Pfad: ${escapeHtml(inventory.root_path || '')}`,
-    `Quelle: ${escapeHtml(inventory.source_path || inventory.root_path || '')}`,
-    `Dateien: ${escapeHtml(String(inventory.summary?.total_files ?? inventory.files?.length ?? 0))}`,
-    `Geodaten: ${escapeHtml(String(inventory.summary?.geodata_files ?? 0))}`,
-    `Dokumente: ${escapeHtml(String(inventory.summary?.document_files ?? 0))}`,
-    `Bilder: ${escapeHtml(String(inventory.summary?.image_files ?? 0))}`,
-    `QGIS: ${escapeHtml(String(inventory.summary?.qgis_files ?? 0))}`,
-    `Sonstige: ${escapeHtml(String(inventory.summary?.other_files ?? 0))}`,
-    `Gescannt: ${escapeHtml(inventory.scanned_at || '')}`,
-  ];
-  projectSummary.innerHTML = summaryLines.map((line) => `<div>${line}</div>`).join('');
-
-  const files = Array.isArray(inventory.files) ? inventory.files : [];
-  if (!files.length) {
-    projectFileList.innerHTML = '<div class="history-empty">Im Projekt wurden noch keine Dateien gefunden.</div>';
-    return;
-  }
-
-  projectFileList.innerHTML = files
-    .slice(0, 50)
-    .map((file) => {
-      const modified = file.modified_at ? ` · ${escapeHtml(file.modified_at)}` : '';
-      return `
-        <div class="project-file">
-          <div class="project-file-top">
-            <div class="project-file-name">${escapeHtml(file.file_name || file.relative_path)}</div>
-            <div class="project-file-tag">${escapeHtml(file.category || 'other')}</div>
-          </div>
-          <div class="project-file-path">${escapeHtml(file.relative_path || file.absolute_path || '')}</div>
-          <div class="project-file-meta">
-            ${escapeHtml(file.extension || 'ohne Endung')} · ${escapeHtml(String(file.size_bytes || 0))} Bytes${modified}
-          </div>
-        </div>
-      `;
-    })
-    .join('');
-}
-
-async function runProjectIndex() {
-  if (!selectedProjectId || !selectedProjectRecord) {
-    retrievalSummary.textContent = 'Bitte zuerst ein Projekt auswählen.';
-    return;
-  }
-
-  indexProjectButton.disabled = true;
-  retrievalSummary.textContent = 'Index wird erstellt...';
-  try {
-    const result = await invoke('index_project', {
-      project_id: selectedProjectId,
-      python_executable: document.getElementById('python_executable').value.trim() || null,
-      project_root: document.getElementById('project_root').value.trim() || null,
-    });
-    setStatus(result.exit_code === 0 ? 'Index erstellt' : 'Indexfehler', result.exit_code === 0 ? 'ready' : 'error');
-    retrievalSummary.textContent = formatRetrievalIndexResult(result);
-  } catch (error) {
-    retrievalSummary.textContent = `Indexierung fehlgeschlagen: ${error}`;
-  } finally {
-    indexProjectButton.disabled = false;
-  }
-}
-
-async function runProjectSearch() {
-  if (!selectedProjectId || !selectedProjectRecord) {
-    retrievalSummary.textContent = 'Bitte zuerst ein Projekt auswählen.';
-    return;
-  }
-
-  const payload = {
-    project_id: selectedProjectId,
-    query: retrievalQuery.value.trim(),
-    species: retrievalSpecies.value.trim() || null,
-    file_type: retrievalFileType.value.trim() || null,
-    category: null,
-    zone: retrievalZone.value.trim() || null,
-    date_from: retrievalDateFrom.value || null,
-    date_to: retrievalDateTo.value || null,
-    limit: 10,
-    python_executable: document.getElementById('python_executable').value.trim() || null,
-    project_root: document.getElementById('project_root').value.trim() || null,
-  };
-
-  if (!payload.query && !payload.species && !payload.file_type && !payload.zone && !payload.date_from && !payload.date_to) {
-    retrievalSummary.textContent = 'Bitte mindestens eine Suchanfrage oder einen Filter angeben.';
-    retrievalResults.innerHTML = '';
-    return;
-  }
-
-  retrievalSummary.textContent = 'Suche läuft...';
-  retrievalResults.innerHTML = '';
-  try {
-    const result = await invoke('search_project', payload);
-    const parsed = parseRetrievalResult(result.stdout || '');
-    if (result.exit_code !== 0) {
-      retrievalSummary.textContent = `Suche fehlgeschlagen (Exit-Code ${result.exit_code})`;
-    } else {
-      retrievalSummary.textContent = formatRetrievalSearchResult(parsed);
-      renderRetrievalHits(parsed.hits || []);
-    }
-  } catch (error) {
-    retrievalSummary.textContent = `Suche fehlgeschlagen: ${error}`;
-  }
-}
-
-function parseRetrievalResult(stdout) {
-  if (!stdout || typeof stdout !== 'string') {
-    return { hits: [] };
-  }
-
-  try {
-    return JSON.parse(stdout);
+    return new Date(value).toLocaleString('de-DE');
   } catch {
-    return { hits: [], raw: stdout };
+    return value;
   }
-}
-
-function formatRetrievalIndexResult(result) {
-  const parsed = parseRetrievalResult(result.stdout || '');
-  if (parsed.indexed_documents !== undefined) {
-    return [
-      `Index: ${parsed.backend || 'local'}`,
-      `Dokumente: ${parsed.indexed_documents}`,
-      `Pfad: ${parsed.index_path || 'unbekannt'}`,
-      `Modell: ${parsed.embedding_model || 'n/a'}`,
-      `Reranker: ${parsed.reranker_model || 'n/a'}`,
-    ].join(' · ');
-  }
-
-  return formatRunResult(result);
-}
-
-function formatRetrievalSearchResult(parsed) {
-  const hits = Array.isArray(parsed.hits) ? parsed.hits.length : 0;
-  return [
-    `Index: ${parsed.backend || 'local'}`,
-    `Treffer: ${hits}`,
-    `Dokumente geprüft: ${parsed.total_candidates ?? 0}`,
-  ].join(' · ');
-}
-
-function renderRetrievalHits(hits) {
-  if (!Array.isArray(hits) || !hits.length) {
-    retrievalResults.innerHTML = '<div class="history-empty">Keine Treffer gefunden.</div>';
-    return;
-  }
-
-  retrievalResults.innerHTML = hits
-    .map((hit) => {
-      const meta = [
-        hit.species ? `Art: ${escapeHtml(hit.species)}` : null,
-        hit.zone ? `Zone: ${escapeHtml(hit.zone)}` : null,
-        hit.observed_at ? `Datum: ${escapeHtml(hit.observed_at)}` : null,
-        hit.category ? `Kategorie: ${escapeHtml(hit.category)}` : null,
-      ].filter(Boolean).join(' · ');
-      return `
-        <article class="retrieval-hit">
-          <div class="retrieval-hit-top">
-            <div>
-              <div class="retrieval-hit-title">${escapeHtml(hit.title || hit.file_name || 'Treffer')}</div>
-              <div class="retrieval-hit-meta">${escapeHtml(meta || 'Ohne Metadaten')}</div>
-            </div>
-            <div class="retrieval-hit-score">${escapeHtml((Number(hit.score) || 0).toFixed(3))}</div>
-          </div>
-          <div class="retrieval-hit-path">${escapeHtml(hit.relative_path || hit.source_path || '')}</div>
-          <div class="retrieval-hit-snippet">${escapeHtml(hit.snippet || '')}</div>
-        </article>
-      `;
-    })
-    .join('');
-}
-
-async function runProjectChat() {
-  if (!selectedProjectId || !selectedProjectRecord) {
-    chatSummary.textContent = 'Bitte zuerst ein Projekt auswählen.';
-    return;
-  }
-
-  const question = chatQuestion.value.trim();
-  if (!question) {
-    chatSummary.textContent = 'Bitte eine Frage eingeben.';
-    return;
-  }
-
-  chatButton.disabled = true;
-  chatSummary.textContent = 'Antwort wird gestreamt...';
-  chatAnswer.textContent = '';
-  chatSources.innerHTML = '';
-  activeChatBuffer = '';
-
-  const requestId = crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  activeChatRequestId = requestId;
-  if (activeChatUnlisten) {
-    try {
-      await activeChatUnlisten();
-    } catch {
-      // Ignore listener teardown errors.
-    }
-    activeChatUnlisten = null;
-  }
-
-  activeChatUnlisten = await listen('hippo-ai-chat-stream', (event) => {
-    const payload = event.payload || {};
-    if (payload.request_id !== activeChatRequestId) {
-      return;
-    }
-    if (payload.type === 'meta') {
-      chatSummary.textContent = formatChatStreamMeta(payload);
-      if (Array.isArray(payload.sources) && payload.sources.length) {
-        renderChatSources(payload.sources);
-      }
-      return;
-    }
-    if (payload.type === 'delta') {
-      activeChatBuffer += String(payload.delta || '');
-      chatAnswer.textContent = activeChatBuffer;
-      return;
-    }
-    if (payload.type === 'final' && payload.response) {
-      renderChatResponse(payload.response);
-    }
-  });
-
-  const payload = {
-    project_id: selectedProjectId,
-    question,
-    species: retrievalSpecies.value.trim() || null,
-    file_type: retrievalFileType.value.trim() || null,
-    category: null,
-    zone: retrievalZone.value.trim() || null,
-    date_from: retrievalDateFrom.value || null,
-    date_to: retrievalDateTo.value || null,
-    limit: 6,
-    python_executable: document.getElementById('python_executable').value.trim() || null,
-    project_root: document.getElementById('project_root').value.trim() || null,
-    request_id: requestId,
-  };
-
-  try {
-    const result = await invoke('chat_project_stream', payload);
-    const parsed = parseChatResult(result.stdout || '');
-    if (result.exit_code !== 0) {
-      chatSummary.textContent = `Chat fehlgeschlagen (Exit-Code ${result.exit_code})`;
-      chatAnswer.textContent = result.stderr || result.stdout || 'Keine Ausgabe';
-    } else {
-      chatSummary.textContent = formatChatResult(parsed);
-      renderChatResponse(parsed);
-    }
-  } catch (error) {
-    chatSummary.textContent = `Chat fehlgeschlagen: ${error}`;
-  } finally {
-    activeChatRequestId = null;
-    if (activeChatUnlisten) {
-      try {
-        await activeChatUnlisten();
-      } catch {
-        // Ignore listener teardown errors.
-      }
-      activeChatUnlisten = null;
-    }
-    chatButton.disabled = false;
-  }
-}
-
-function parseChatResult(stdout) {
-  if (!stdout || typeof stdout !== 'string') {
-    return { sources: [] };
-  }
-
-  try {
-    return JSON.parse(stdout);
-  } catch {
-    return { sources: [], raw: stdout };
-  }
-}
-
-function formatChatResult(parsed) {
-  return [
-    `Index: ${parsed.backend || 'local'}`,
-    `Treffer: ${parsed.returned_hits ?? 0}`,
-    `Quellen: ${Array.isArray(parsed.sources) ? parsed.sources.length : 0}`,
-    `Modell: ${parsed.model_name || 'n/a'}`,
-  ].join(' · ');
-}
-
-function formatChatStreamMeta(parsed) {
-  return [
-    `Index: ${parsed.backend || 'local'}`,
-    `Treffer: ${parsed.returned_hits ?? 0}`,
-    `Quellen vorbereitet: ${Array.isArray(parsed.sources) ? parsed.sources.length : 0}`,
-  ].join(' · ');
-}
-
-function renderChatResponse(parsed) {
-  const answer = typeof parsed.answer === 'string' && parsed.answer.trim()
-    ? parsed.answer.trim()
-    : 'Keine Antwort erhalten.';
-  chatAnswer.innerHTML = escapeHtml(answer).replaceAll('\n', '<br />');
-
-  const sources = Array.isArray(parsed.sources) ? parsed.sources : [];
-  renderChatSources(sources);
-}
-
-function renderChatSources(sources) {
-  if (!Array.isArray(sources) || !sources.length) {
-    chatSources.innerHTML = '<div class="history-empty">Keine Quellen gefunden.</div>';
-    return;
-  }
-
-  chatSources.innerHTML = sources
-    .map((source) => {
-      const meta = [
-        source.species ? `Art: ${escapeHtml(source.species)}` : null,
-        source.zone ? `Zone: ${escapeHtml(source.zone)}` : null,
-        source.observed_at ? `Datum: ${escapeHtml(source.observed_at)}` : null,
-      ].filter(Boolean).join(' · ');
-      return `
-        <article class="chat-source">
-          <div class="chat-source-top">
-            <div>
-              <div class="chat-source-title">[${escapeHtml(source.id || 'S?')}] ${escapeHtml(source.title || source.file_name || 'Quelle')}</div>
-              <div class="chat-source-meta">${escapeHtml(meta || 'Ohne Metadaten')}</div>
-            </div>
-            <div class="chat-source-score">${escapeHtml((Number(source.score) || 0).toFixed(3))}</div>
-          </div>
-          <div class="chat-source-path">${escapeHtml(source.relative_path || source.source_path || '')}</div>
-          <div class="chat-source-snippet">${escapeHtml(source.snippet || '')}</div>
-        </article>
-      `;
-    })
-    .join('');
-}
-
-function saveHistory(entries) {
-  localStorage.setItem(historyKey, JSON.stringify(entries.slice(0, 10)));
-}
-
-function addHistoryEntry(entry) {
-  const history = loadHistory();
-  history.unshift(entry);
-  saveHistory(history);
-  renderHistory();
-  renderDetails({ ...entry, index: 0 });
-}
-
-function renderHistory() {
-  const history = loadHistory();
-  if (!history.length) {
-    historyList.innerHTML = '<div class="history-empty">Noch keine Läufe gespeichert.</div>';
-    return;
-  }
-
-  historyList.innerHTML = history
-    .map((entry, index) => {
-      const when = new Date(entry.timestamp).toLocaleString('de-DE');
-      const statusText = entry.exitCode === 0 ? 'Erfolgreich' : `Fehler (${entry.exitCode})`;
-      const isActive = index === selectedHistoryIndex ? ' is-active' : '';
-      return `
-        <button type="button" class="history-item${isActive}" data-history-index="${index}">
-          <div class="history-top">
-            <div>
-              <div class="history-title">${escapeHtml(entry.input || 'Unbekannte Eingabe')}</div>
-              <div class="history-meta">${escapeHtml(when)} · ${escapeHtml(statusText)}</div>
-            </div>
-            <div class="history-meta">${escapeHtml(entry.output || 'Keine Ausgabe')}</div>
-          </div>
-          <div class="history-command">${escapeHtml(entry.command || '')}</div>
-        </button>
-      `;
-    })
-    .join('');
-
-  historyList.querySelectorAll('[data-history-index]').forEach((item) => {
-    item.addEventListener('click', () => {
-      const index = Number(item.getAttribute('data-history-index'));
-      selectedHistoryIndex = Number.isNaN(index) ? null : index;
-      const entry = history[index];
-      renderDetails(entry ? { ...entry, index } : null);
-      renderHistory();
-    });
-  });
 }
 
 function escapeHtml(value) {
@@ -1016,76 +599,43 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function renderDetails(entry) {
-  if (!entry) {
-    detailEmpty.classList.remove('is-hidden');
-    detailView.classList.add('is-hidden');
-    loadHistoryButton.disabled = true;
-    return;
+function setStatus(label, state = 'ready') {
+  statusPill.textContent = label;
+  statusPill.classList.remove('is-running', 'is-error');
+  if (state === 'running') {
+    statusPill.classList.add('is-running');
+  } else if (state === 'error') {
+    statusPill.classList.add('is-error');
   }
-
-  detailEmpty.classList.add('is-hidden');
-  detailView.classList.remove('is-hidden');
-  loadHistoryButton.disabled = false;
-  detailTimestamp.textContent = new Date(entry.timestamp).toLocaleString('de-DE');
-  detailStatus.textContent = entry.exitCode === 0 ? 'Erfolgreich' : `Fehler (${entry.exitCode})`;
-  detailInput.textContent = entry.input || 'Unbekannt';
-  detailOutput.textContent = entry.output || 'Keine Ausgabe';
-  detailCommand.textContent = entry.command || '';
-  detailStdout.textContent = entry.stdout ? `stdout:\n${entry.stdout}` : 'stdout: (leer)';
-  detailStderr.textContent = entry.stderr ? `stderr:\n${entry.stderr}` : 'stderr: (leer)';
 }
 
-function loadHistoryEntry(entry) {
-  allFields.forEach((name) => {
-    if (typeof entry[name] === 'string') {
-      document.getElementById(name).value = entry[name];
-    }
+function setProgress(label, percent, active) {
+  progressLabel.textContent = label;
+  progressPercent.textContent = `${Math.max(0, Math.min(100, Math.round(percent)))}%`;
+  progressBar.classList.toggle('is-active', active);
+  progressBar.style.transform = active ? 'translateX(-100%)' : 'translateX(0)';
+}
+
+function scrollChatToBottom() {
+  requestAnimationFrame(() => {
+    chatThread.scrollTop = chatThread.scrollHeight;
   });
-  persistFormState();
-  setStatus('Bereit');
-  setProgress('Lauf geladen', 100, false);
-  output.textContent = `Geladener Lauf:\n${entry.command || ''}`;
 }
 
-async function runDirectExport(extension, label) {
-  const selected = await save({
-    title: `${label}-Ausgabe speichern`,
-    filters: [{ name: label, extensions: [extension] }],
-  });
-
-  if (typeof selected !== 'string' || !selected.trim()) {
-    return;
-  }
-
-  document.getElementById('output').value = selected;
-  persistFormState();
-  await form.requestSubmit();
+function startProgressCycle(stages = [
+  { label: 'Modell wird vorbereitet', percent: 18 },
+  { label: 'Kontext wird aufgebaut', percent: 42 },
+  { label: 'Antwort wird erstellt', percent: 68 },
+  { label: 'Ausgabe wird finalisiert', percent: 86 },
+]) {
+  let index = 0;
+  return window.setInterval(() => {
+    const stage = stages[index % stages.length];
+    setProgress(stage.label, stage.percent, true);
+    index += 1;
+  }, 1400);
 }
 
-async function ensurePythonEnvironment(payload) {
-  if (localStorage.getItem(envReadyKey) === 'true') {
-    return;
-  }
-
-  const result = await invoke('prepare_environment', payload);
-  if (result.exit_code !== 0) {
-    throw new Error(formatRunResult(result));
-  }
-
-  localStorage.setItem(envReadyKey, 'true');
-}
-
-async function forcePreparePythonEnvironment(payload) {
-  localStorage.removeItem(envReadyKey);
-  await ensurePythonEnvironment(payload);
-}
-
-function setInputPath(value) {
-  document.getElementById('input').value = value;
-  persistFormState();
-}
-
-function isSupportedInputFile(path) {
-  return /\.(gpkg|shp|geojson|json)$/i.test(path);
+function stopProgressCycle(timer) {
+  window.clearInterval(timer);
 }
