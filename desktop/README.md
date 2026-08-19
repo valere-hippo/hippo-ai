@@ -1,4 +1,4 @@
-# Tier AI Desktop
+# hippo-ai Desktop
 
 Windows-App auf Basis von Tauri.
 

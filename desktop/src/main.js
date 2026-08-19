@@ -26,9 +26,9 @@ const detailStdout = document.getElementById('detail-stdout');
 const detailStderr = document.getElementById('detail-stderr');
 const pickInputButton = document.querySelector('[data-action="pick-input"]');
 const pickOutputButton = document.querySelector('[data-action="pick-output"]');
-const storageKey = 'tier-ai.desktop.form';
-const historyKey = 'tier-ai.desktop.history';
-const envReadyKey = 'tier-ai.desktop.python-ready';
+const storageKey = 'hippo-ai.desktop.form';
+const historyKey = 'hippo-ai.desktop.history';
+const envReadyKey = 'hippo-ai.desktop.python-ready';
 const advancedFields = [
   'python_executable',
   'project_root',

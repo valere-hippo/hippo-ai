@@ -4,3 +4,15 @@ desktop/node_modules/
 desktop/dist/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
+backend/.venv/
+workspace/logs/*
+workspace/audit/*
+workspace/backups/*
+workspace/state/*
+!workspace/logs/.gitkeep
+!workspace/audit/.gitkeep
+!workspace/backups/.gitkeep
+!workspace/state/.gitkeep
+!workspace/projects/.gitkeep
+!workspace/inbox/.gitkeep
+!workspace/cache/.gitkeep

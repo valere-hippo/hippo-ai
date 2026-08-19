@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tier-ai"
+name = "hippo-ai"
 version = "0.1.0"
 description = "Geospatial analysis and report generation for wildlife observation data"
 readme = "README.md"
@@ -15,6 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
+hippo-ai = "tier_ai.cli:main"
 tier-ai = "tier_ai.cli:main"
 
 [tool.setuptools]

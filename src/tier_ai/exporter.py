@@ -179,7 +179,7 @@ def _header_xml() -> str:
 <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:p>
     <w:pPr><w:jc w:val="center"/></w:pPr>
-    <w:r><w:rPr><w:b/><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">Tier-KI Auswertung</w:t></w:r>
+    <w:r><w:rPr><w:b/><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">hippo-ai Auswertung</w:t></w:r>
   </w:p>
   <w:p>
     <w:pPr><w:jc w:val="center"/></w:pPr>
@@ -194,7 +194,7 @@ def _footer_xml() -> str:
 <w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:p>
     <w:pPr><w:jc w:val="center"/></w:pPr>
-    <w:r><w:t xml:space="preserve">tier-ai</w:t></w:r>
+    <w:r><w:t xml:space="preserve">hippo-ai</w:t></w:r>
     <w:r><w:t xml:space="preserve"> | </w:t></w:r>
     <w:r><w:fldChar w:fldCharType="begin"/></w:r>
     <w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>
@@ -213,9 +213,9 @@ def _core_props_xml() -> str:
  xmlns:dcterms="http://purl.org/dc/terms/"
  xmlns:dcmitype="http://purl.org/dc/dcmitype/"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>Tier-KI Auswertung</dc:title>
-  <dc:creator>tier-ai</dc:creator>
-  <cp:lastModifiedBy>tier-ai</cp:lastModifiedBy>
+  <dc:title>hippo-ai Auswertung</dc:title>
+  <dc:creator>hippo-ai</dc:creator>
+  <cp:lastModifiedBy>hippo-ai</cp:lastModifiedBy>
 </cp:coreProperties>
 """
 
@@ -224,7 +224,7 @@ def _app_props_xml() -> str:
     return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
  xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>tier-ai</Application>
+  <Application>hippo-ai</Application>
 </Properties>
 """
 
@@ -355,7 +355,7 @@ def _logo_paragraph_xml(logo_rel_id: str) -> str:
         '<wp:inline distT="0" distB="0" distL="0" distR="0">'
         '<wp:extent cx="1440000" cy="1440000"/>'
         '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
-        '<wp:docPr id="1" name="Tier-KI Logo"/>'
+        '<wp:docPr id="1" name="hippo-ai Logo"/>'
         '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
         '<a:graphic>'
         '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
@@ -422,13 +422,13 @@ def _build_pdf_pages(report_text: str) -> list[dict[str, object]]:
         pages.append(_pdf_list_page("Warnungen", sections["warnings"]))
     if sections["validation"]:
         pages.append(_pdf_list_page("Validierung", sections["validation"]))
-    return pages or [{"lines": ["Tier-KI Auswertung"], "logo": False}]
+    return pages or [{"lines": ["hippo-ai Auswertung"], "logo": False}]
 
 
 def _parse_report_sections(report_text: str) -> dict[str, object]:
     lines = [line.rstrip() for line in report_text.rstrip("\n").split("\n")]
     sections: dict[str, object] = {
-        "title": lines[0] if lines else "Tier-KI Auswertung",
+        "title": lines[0] if lines else "hippo-ai Auswertung",
         "source": lines[1] if len(lines) > 1 else "",
         "summary": "",
         "conclusion": "",
@@ -580,7 +580,7 @@ def _build_pdf_document(pages: list[dict[str, object]]) -> bytes:
     catalog_obj_id = len(objects) + 1
     objects.append(b"")
     info_obj_id = add_object(
-        "<< /Producer (tier-ai) /Title (Tier-KI Auswertung) /Creator (tier-ai) >>"
+        "<< /Producer (hippo-ai) /Title (hippo-ai Auswertung) /Creator (hippo-ai) >>"
     )
 
     page_object_templates: list[bytes] = []

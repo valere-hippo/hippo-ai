@@ -1,4 +1,4 @@
-# Produktionsplan für `animals-ai`
+# Produktionsplan für `hippo-ai`
 
 ## Ziel
 

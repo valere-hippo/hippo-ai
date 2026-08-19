@@ -1,4 +1,4 @@
-"""tier-ai package."""
+"""hippo-ai package."""
 
 from .config import AnalyzerConfig, FieldMapping
 from .models import (

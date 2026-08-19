@@ -11,7 +11,7 @@ from .rules import set_rule_source
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="tier-ai", description="Analyse geospatialer Tierbeobachtungen")
+    parser = argparse.ArgumentParser(prog="hippo-ai", description="Analyse geospatialer Tierbeobachtungen")
     parser.add_argument("input", help="GeoPackage, Shapefile oder GeoJSON")
     parser.add_argument("--output", "-o", help="Zieldatei für den Bericht", default=None)
     parser.add_argument("--species-column", default="species", help="Name der Art-Spalte")

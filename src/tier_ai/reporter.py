@@ -5,7 +5,7 @@ from .models import AnalysisResult
 
 def render_report(result: AnalysisResult) -> str:
     lines: list[str] = []
-    lines.append("Tier-KI Auswertung")
+    lines.append("hippo-ai Auswertung")
     lines.append(f"Quelle: {result.source_path}")
     lines.append("")
 

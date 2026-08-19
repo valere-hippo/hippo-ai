@@ -1,4 +1,4 @@
-# Datenformat für `tier-ai`
+# Datenformat für `hippo-ai`
 
 ## Ziel
 

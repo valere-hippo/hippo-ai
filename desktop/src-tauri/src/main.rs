@@ -138,7 +138,7 @@ fn main() {
     .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![run_analysis, prepare_environment])
     .run(tauri::generate_context!())
-    .expect("error while running tier-ai desktop app");
+    .expect("error while running hippo-ai desktop app");
 }
 
 #[derive(Clone)]

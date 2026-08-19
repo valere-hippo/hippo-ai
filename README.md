@@ -1,10 +1,10 @@
-# animals-ai
+# hippo-ai
 
-Dieses Repository enthält die professionelle Arbeitsaufteilung für das KI-Projekt
-zur Auswertung von GeoPackage-/Shape-Daten und zur automatischen Erstellung
-fachlicher Texte für Berichte.
+Dieses Repository enthält die Arbeitsbasis für `hippo-ai`, eine Plattform für
+projektbezogene Geo-KI, Berichte und Dokumentenarbeit.
 
 Siehe:
+- [Phase 0](docs/PHASE-0.md)
 - [Produktionsplan](docs/PRODUKTIONSPLAN.md)
 - [Datenformat](docs/DATENFORMAT.md)
 
@@ -15,43 +15,49 @@ Siehe:
 Das Projekt läuft direkt mit Python, ohne extra Build-Schritt:
 
 ```bash
+hippo-ai path/zur/datei.gpkg
+```
+
+Falls das Paket noch nicht installiert ist:
+
+```bash
 PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg
 ```
 
 Mit Ausgabe in eine Datei:
 
 ```bash
-PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg -o bericht.txt
+hippo-ai path/zur/datei.gpkg -o bericht.txt
 ```
 
 Ou en `DOCX`:
 
 ```bash
-PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg -o bericht.docx
+hippo-ai path/zur/datei.gpkg -o bericht.docx
 ```
 
 Ein eigenes DOCX-Template-Verzeichnis kann zusätzlich übergeben werden:
 
 ```bash
-PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg -o bericht.docx --docx-template-dir /pfad/zu/template
+hippo-ai path/zur/datei.gpkg -o bericht.docx --docx-template-dir /pfad/zu/template
 ```
 
 Ou en `PDF`:
 
 ```bash
-PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg -o bericht.pdf
+hippo-ai path/zur/datei.gpkg -o bericht.pdf
 ```
 
 Wenn die Spaltennamen abweichen:
 
 ```bash
-PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg --species-column art --date-column datum
+hippo-ai path/zur/datei.gpkg --species-column art --date-column datum
 ```
 
 Analyseparameter laden:
 
 ```bash
-PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg --analysis-config-file /pfad/zu/analyse.json
+hippo-ai path/zur/datei.gpkg --analysis-config-file /pfad/zu/analyse.json
 ```
 
 Beispiel für `analyse.json`:
@@ -80,11 +86,25 @@ Beispiel für `analyse.json`:
 Eigene Artenregeln laden:
 
 ```bash
-PYTHONPATH=src python3 -m tier_ai path/zur/datei.gpkg --rules-file /pfad/zu/eigenen_regeln.json
+hippo-ai path/zur/datei.gpkg --rules-file /pfad/zu/eigenen_regeln.json
 ```
 
 In den Regeln können auch Prioritäten je Art definiert werden, z. B. für Brutverdacht,
 Transit oder Konzentrationsbereiche.
+
+## Plattform-Basis
+
+Die aktuelle Codebasis ist als Monorepo aufgebaut. Phase 0 umfasst:
+
+- einfache Authentifizierung
+- Projektordner mit Logs, Audit und Backups
+- Docker Compose für Backend und spätere Services
+- klare Namenskonventionen
+- lokale und Windows-UI-Nutzung
+
+### Backend
+
+Das Backend liegt unter [backend](backend/README.md).
 
 ## Windows-App
 
