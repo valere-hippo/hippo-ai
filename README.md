@@ -12,7 +12,15 @@ Siehe:
 
 ## Erste Nutzung
 
-### Lokale Ausführung
+### Entwicklung vor Ort
+
+Für Entwicklung und Tests kann das Projekt direkt mit Python laufen. Der
+produktive Modellbetrieb soll jedoch in GPU Hub stattfinden:
+
+- Chat-LLM: remote
+- Embeddings: remote
+- Reranker: remote
+- Qdrant: zentral
 
 Das Projekt läuft direkt mit Python, ohne extra Build-Schritt:
 
@@ -104,10 +112,9 @@ Die aktuelle Codebasis ist als Monorepo aufgebaut. Phase 0 umfasst:
 - klare Namenskonventionen
 - lokale und Windows-UI-Nutzung
 
-### GPU-Hub-ready
+### GPU Hub-Betrieb
 
-Wenn du die Modelle extern auf GPU Hub betreiben willst, setze diese
-Umgebungsvariablen:
+Für den produktiven Betrieb setze diese Umgebungsvariablen:
 
 - `HIPPO_AI_EMBEDDING_URL`
 - `HIPPO_AI_EMBEDDING_MODEL`
@@ -115,9 +122,9 @@ Umgebungsvariablen:
 - `HIPPO_AI_RERANKER_MODEL`
 - `HIPPO_AI_LLM_URL`
 - `HIPPO_AI_LLM_MODEL`
+- `HIPPO_AI_MODEL_MODE=remote`
 
-Dann ruft `hippo-ai` Embeddings und Re-Ranking über HTTP ab und kann den
-Chat-LLM ebenfalls extern anfragen.
+Dann ruft `hippo-ai` Embeddings, Re-Ranking und Chat über HTTP im GPU Hub ab.
 
 ### Backend
 
@@ -128,8 +135,9 @@ Das Backend liegt unter [backend](backend/README.md).
 Für eine Windows-Oberfläche ohne Terminal gibt es jetzt einen Tauri-Prototyp unter
 [desktop/](desktop/README.md).
 
-Der Prototyp startet die bestehende Python-Analyse lokal und zeigt das Ergebnis im Fenster an.
-Außerdem kann er Projekte anlegen, Ordner anhängen und den Projektinhalt scannen.
+Der Prototyp dient als Arbeitsoberfläche, während die eigentliche KI-Verarbeitung
+über GPU Hub erfolgen soll. Außerdem kann er Projekte anlegen, Ordner anhängen
+und den Projektinhalt scannen.
 
 ### Lokal testen
 

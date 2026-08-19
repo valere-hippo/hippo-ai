@@ -11,8 +11,7 @@ Projektinhalte semantisch durchsuchen und Treffer mit Metadaten anzeigen.
 - GeoPackage, Shape, GeoJSON, QGIS und klassische Dokumente erfassen
 - Embeddings mit `BGE-M3`
 - Re-Ranking mit `bge-reranker-v2-m3`
-- Qdrant als Vektor-Store nutzen, falls verfügbar
-- Lokalen Fallback-Index verwenden, falls Qdrant nicht läuft
+- Qdrant als Vektor-Store nutzen
 - Externe Modell-Endpunkte im GPU-Hub über OpenAI-kompatible HTTP-APIs anbinden
 - Suche nach:
   - Art
@@ -32,12 +31,13 @@ Projektinhalte semantisch durchsuchen und Treffer mit Metadaten anzeigen.
 6. Die Suche filtert zuerst nach Projekt und Metadaten.
 7. Relevante Treffer werden mit Re-Ranker sortiert.
 8. Wenn externe Modell-URLs gesetzt sind, werden Embeddings und Re-Ranking
-   nicht lokal gerechnet, sondern über HTTP im GPU-Hub angefragt.
+   im produktiven Modus über HTTP im GPU-Hub angefragt.
 
 ## Suchlogik
 
 - Wenn Qdrant verfügbar ist, wird der Projektindex dort gespeichert.
-- Wenn Qdrant nicht verfügbar ist, wird der lokale JSON-Index verwendet.
+- Wenn Qdrant nicht verfügbar ist, bleibt der lokale JSON-Index als
+  Entwicklungs- und Fallback-Option nutzbar.
 - Artfilter werden tolerant auf Alias, deutsche Namen und wissenschaftliche Namen gemappt.
 - Leere Suchanfragen mit Filtern sind erlaubt.
 
@@ -61,11 +61,12 @@ Wichtige Umgebungsvariablen:
 - `HIPPO_AI_LLM_URL`
 - `HIPPO_AI_LLM_MODEL`
 - `HIPPO_AI_REMOTE_TIMEOUT_SECONDS`
+- `HIPPO_AI_MODEL_MODE`
 
 ## DoD
 
 - Ein Projekt kann indexiert werden.
 - Eine Suche liefert Treffer mit Metadaten.
 - Qdrant ist optional, aber aktiv nutzbar.
-- Der lokale Fallback bleibt funktionsfähig.
-- Der GPU-Hub kann Embeddings und Re-Ranking extern liefern.
+- Im produktiven Betrieb ist `HIPPO_AI_MODEL_MODE=remote` gesetzt.
+- Der GPU-Hub liefert Embeddings, Re-Ranking und Chat extern.

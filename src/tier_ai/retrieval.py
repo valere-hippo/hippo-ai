@@ -354,6 +354,7 @@ class QdrantProjectIndexStore:
 
 
 def create_embedding_backend(prefer_real: bool = True) -> EmbeddingBackend:
+    mode = _model_mode()
     remote_url = _remote_embedding_url()
     if remote_url:
         remote_backend = OpenAICompatibleEmbeddingClient(
@@ -362,11 +363,16 @@ def create_embedding_backend(prefer_real: bool = True) -> EmbeddingBackend:
             api_key=_remote_embedding_api_key(),
             timeout=_remote_timeout_seconds(),
         )
-        return FallbackEmbeddingBackend(remote_backend, _local_embedding_backend(prefer_real=prefer_real))
+        if mode == "local":
+            return _local_embedding_backend(prefer_real=prefer_real)
+        return remote_backend
+    if mode == "remote":
+        raise RuntimeError("HIPPO_AI_EMBEDDING_URL is not configured while HIPPO_AI_MODEL_MODE=remote")
     return _local_embedding_backend(prefer_real=prefer_real)
 
 
 def create_reranker_backend(prefer_real: bool = True) -> RerankerBackend:
+    mode = _model_mode()
     remote_url = _remote_reranker_url()
     if remote_url:
         remote_backend = OpenAICompatibleRerankerClient(
@@ -375,7 +381,11 @@ def create_reranker_backend(prefer_real: bool = True) -> RerankerBackend:
             api_key=_remote_reranker_api_key(),
             timeout=_remote_timeout_seconds(),
         )
-        return FallbackRerankerBackend(remote_backend, _local_reranker_backend(prefer_real=prefer_real))
+        if mode == "local":
+            return _local_reranker_backend(prefer_real=prefer_real)
+        return remote_backend
+    if mode == "remote":
+        raise RuntimeError("HIPPO_AI_RERANKER_URL is not configured while HIPPO_AI_MODEL_MODE=remote")
     return _local_reranker_backend(prefer_real=prefer_real)
 
 
@@ -1124,6 +1134,14 @@ def _remote_timeout_seconds() -> int:
         return max(1, int(raw))
     except ValueError:
         return 60
+
+
+def _model_mode() -> str:
+    raw = getenv("HIPPO_AI_MODEL_MODE") or "auto"
+    mode = raw.strip().lower()
+    if mode in {"remote", "auto", "local"}:
+        return mode
+    return "auto"
 
 
 def _qdrant_filter(project_id: str, filters: RetrievalFilter):

@@ -82,7 +82,7 @@ def answer_project_question(
         max_sources=max_sources,
     )
     model_name = _chat_model_name()
-    backend = "remote" if _remote_chat_url() else "local"
+    backend = _chat_backend_name()
     answer, citations = _generate_answer(
         question=question,
         search=search,
@@ -121,7 +121,7 @@ def answer_general_question(
     response = GeneralChatResponse(
         question=question,
         answer=answer,
-        backend="remote" if _remote_chat_url() else "local",
+        backend=_chat_backend_name(),
         model_name=_chat_model_name(),
         created_at=_now_iso(),
     )
@@ -164,7 +164,7 @@ def stream_general_question(
 ) -> Iterator[dict[str, Any]]:
     yield {
         "type": "meta",
-        "backend": "remote" if _remote_chat_url() else "local",
+        "backend": _chat_backend_name(),
         "model_name": _chat_model_name(),
         "sources": [],
     }
@@ -180,7 +180,7 @@ def stream_general_question(
     response = GeneralChatResponse(
         question=question,
         answer=answer,
-        backend="remote" if _remote_chat_url() else "local",
+        backend=_chat_backend_name(),
         model_name=_chat_model_name(),
         created_at=_now_iso(),
     )
@@ -242,7 +242,7 @@ def stream_project_question(
         project_slug=project_slug,
         question=question,
         answer=answer,
-        backend="remote" if _remote_chat_url() else "local",
+        backend=_chat_backend_name(),
         index_path=search.index_path,
         model_name=_chat_model_name(),
         total_candidates=search.total_candidates,
@@ -547,8 +547,11 @@ def _chunk_text(text: str, *, chunk_size: int = 120) -> list[str]:
 
 
 def _chat_client(prefer_real_models: bool = True) -> OpenAICompatibleChatClient | None:
+    mode = _model_mode()
     remote_url = _remote_chat_url()
     if not remote_url:
+        if mode == "remote":
+            raise RuntimeError("HIPPO_AI_LLM_URL is not configured while HIPPO_AI_MODEL_MODE=remote")
         return None
     return OpenAICompatibleChatClient(
         base_url=remote_url,
@@ -556,6 +559,14 @@ def _chat_client(prefer_real_models: bool = True) -> OpenAICompatibleChatClient 
         api_key=_remote_chat_api_key(),
         timeout=_remote_timeout_seconds(),
     )
+
+
+def _chat_backend_name() -> str:
+    if _remote_chat_url():
+        return "remote"
+    if _model_mode() == "remote":
+        return "remote"
+    return "local"
 
 
 def _parse_response_json(raw: str) -> dict[str, Any]:
@@ -624,6 +635,14 @@ def _remote_timeout_seconds() -> int:
 
 def _chat_model_name() -> str:
     return os.getenv("HIPPO_AI_LLM_MODEL") or DEFAULT_CHAT_MODEL
+
+
+def _model_mode() -> str:
+    raw = os.getenv("HIPPO_AI_MODEL_MODE") or "auto"
+    mode = raw.strip().lower()
+    if mode in {"remote", "auto", "local"}:
+        return mode
+    return "auto"
 
 
 def _now_iso() -> str:

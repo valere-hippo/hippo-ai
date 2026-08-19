@@ -3,6 +3,14 @@
 This document describes the external model services hippo-ai expects when the
 models are hosted in GPU Hub.
 
+Production mode for `hippo-ai` should be GPU Hub-first. The app should call the
+remote model services for chat, embeddings, and reranking. Local model fallback
+is only for development and must be disabled in production by setting:
+
+```bash
+HIPPO_AI_MODEL_MODE=remote
+```
+
 ## Services to expose
 
 ### 1. Main chat model
@@ -55,8 +63,7 @@ HIPPO_AI_REMOTE_TIMEOUT_SECONDS=60
 
 ## Notes
 
-- hippo-ai will fall back to local models if the remote endpoints are not set.
-- Retrieval already uses the remote embedding and reranker endpoints when
-  configured.
-- The chat client is ready in code and can be wired into the next phase.
-
+- In production, `hippo-ai` should use GPU Hub endpoints only.
+- Retrieval and chat will use the remote endpoints when they are configured.
+- If `HIPPO_AI_MODEL_MODE=remote` is set and an endpoint is missing, `hippo-ai`
+  fails fast so the deployment is never silently local.

@@ -14,11 +14,11 @@ Der Projekt-Chat:
 - erlaubt Fragen mit optionalen Filtern wie Art, Dateityp, Zone und Datum
 - liefert eine professionelle Antwort auf Deutsch
 - zeigt die verwendeten Quellen transparent an
-- kann lokal oder über GPU-Hub-Modelle arbeiten
+- arbeitet im produktiven Betrieb über GPU-Hub-Modelle
 
 ## Technische Bausteine
 
-- Retrieval per Qdrant oder lokalem Index
+- Retrieval per Qdrant oder lokalem Index als Entwicklungs-Backup
 - Embeddings über `BGE-M3`
 - Re-Ranking über `bge-reranker-v2-m3`
 - Antwortgenerierung über ein OpenAI-kompatibles Chat-Modell
@@ -40,6 +40,6 @@ Der Projekt-Chat:
 
 ## Hinweis
 
-Wenn kein Remote-Modell konfiguriert ist, kann der Chat auf lokale Fallbacks
-zurückfallen. Für die GPU-Hub-Betriebsart sollten die Umgebungsvariablen für
-Chat, Embeddings, Reranking und Qdrant gesetzt sein.
+Für den produktiven Betrieb sollten die Umgebungsvariablen für Chat,
+Embeddings, Reranking und Qdrant gesetzt sein und `HIPPO_AI_MODEL_MODE=remote`
+aktiv sein. Lokale Fallbacks sind nur für Entwicklung gedacht.

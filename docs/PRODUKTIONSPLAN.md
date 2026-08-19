@@ -3,8 +3,10 @@
 ## Ziel
 
 Das Ziel ist ein produktionsreifes System, das geospatiale Beobachtungsdaten
-(GeoPackage und optional Shapefile) einliest, pro Art auswertet, räumliche
-Konzentrationen erkennt und daraus fachlich plausible Berichtstexte erzeugt.
+(GeoPackage und optional Shapefile) auf Projektbasis bereitstellt, die eigentliche
+fachliche Auswertung aber über GPU-Hub-Modelle durchführen lässt. Das System
+liest Daten, organisiert Projekte, stellt Kontexte bereit und erzeugt daraus
+fachlich plausible Berichtstexte.
 
 Das System soll ohne manuelle Detailanalyse die erste fachliche Auswertung
 erstellen. Ein Mensch bleibt für die Endfreigabe im Loop.
@@ -15,8 +17,8 @@ Für den Start wird **kein Modell von Grund auf trainiert**.
 Stattdessen wird eine **hybride Architektur** gebaut:
 
 1. Fachlogik in Code
-2. Geodatenanalyse in Code
-3. Textgenerierung mit einem vorhandenen Modell oder Template-Generator
+2. Kontextaufbereitung und Tool-Orchestrierung in Code
+3. Geodatenanalyse, Interpretation und Textgenerierung durch vorhandene Modelle
 4. Fachliche Endprüfung durch Menschen
 
 ## Lieferumfang der Produktionsversion
@@ -27,7 +29,7 @@ Am Ende der ersten produktionsreifen Version muss das System folgendes können:
 2. Beobachtungen pro Art gruppieren
 3. Häufungen und Konzentrationszonen erkennen
 4. Brutverdacht / Revierverdacht nach Regeln ableiten
-5. Zeitraum und artspezifische Habitatregeln berücksichtigen
+5. Zeitraum und artspezifische Habitatregeln als Kontext an das Modell übergeben
 6. Einen deutschsprachigen Berichtstext erzeugen
 7. Statistiken und Zusammenfassungen ausgeben
 8. Ergebnisse exportieren, idealerweise als `TXT`, `DOCX` oder `PDF`
@@ -247,7 +249,7 @@ Die Produktivversion muss zusätzlich:
 2. Welche Arten werden in Version 1 unterstützt?
 3. Wie werden Brutzeiten gepflegt?
 4. Welche Schwellenwerte pro Art gelten?
-5. Wird ein lokales Modell, ein regelbasierter Generator oder beides genutzt?
+5. Werden GPU-Hub-Modelle, Template-Generatoren oder beides für Textausgabe genutzt?
 6. Welche Exportformate sind verpflichtend?
 
 ## Definition of Done für das Gesamtprojekt

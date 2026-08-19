@@ -485,7 +485,7 @@ class ProjectStore:
         patterns = [
             re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL),
             re.compile(r'title\s*=\s*"([^"]+)"', re.IGNORECASE),
-            re.compile(r"name=\"([^"]+)\"", re.IGNORECASE),
+            re.compile(r'name="([^"]+)"', re.IGNORECASE),
         ]
         for text in texts:
             for pattern in patterns:
