@@ -96,7 +96,10 @@ function renderActiveChatContext() {
   chatTitle.textContent = project.name;
   const fileCount = project.metadata?.file_count ?? 0;
   const sourcePath = project.metadata?.source_path || project.root_path || '';
-  chatContext.textContent = `${project.slug} · ${fileCount} Dateien · ${sourcePath}`;
+  const speciesHints = formatHintList(project.metadata?.species_hints || []);
+  chatContext.textContent = speciesHints
+    ? `${project.slug} · ${fileCount} Dateien · ${sourcePath} · Hinweise: ${speciesHints}`
+    : `${project.slug} · ${fileCount} Dateien · ${sourcePath}`;
 }
 
 function renderChatThread() {
@@ -402,6 +405,10 @@ function renderProjectSummary(inventory) {
     return;
   }
 
+  const project = getSelectedProject();
+  const speciesHints = formatHintList(project?.metadata?.species_hints || []);
+  const connectorNotes = formatHintList(project?.metadata?.connector_notes || []);
+
   const lines = [
     `Projekt: ${inventory.name || 'Projekt'}`,
     `Pfad: ${inventory.root_path || ''}`,
@@ -413,7 +420,23 @@ function renderProjectSummary(inventory) {
     `QGIS: ${inventory.summary?.qgis_files ?? 0}`,
     `Sonstige: ${inventory.summary?.other_files ?? 0}`,
   ];
+  if (speciesHints) {
+    lines.push(`Artenhinweise: ${speciesHints}`);
+  }
+  if (connectorNotes) {
+    lines.push(`Connector: ${connectorNotes}`);
+  }
   projectSummary.innerHTML = lines.map((line) => `<div>${escapeHtml(line)}</div>`).join('');
+}
+
+function formatHintList(items, limit = 4) {
+  if (!Array.isArray(items) || !items.length) {
+    return '';
+  }
+  return items
+    .filter((item) => String(item).trim())
+    .slice(0, limit)
+    .join(' · ');
 }
 
 function getPrimaryGeodataPath(inventory = currentProjectInventory) {

@@ -41,6 +41,7 @@ class BackendProjectStoreTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (source_root / "Amsel_fieldnotes.txt").write_text("Beobachtung Amsel im Untersuchungsgebiet", encoding="utf-8")
 
             original_env = {"HIPPO_AI_DATA_ROOT": os.environ.get("HIPPO_AI_DATA_ROOT")}
             try:
@@ -61,6 +62,8 @@ class BackendProjectStoreTests(unittest.TestCase):
                 inventory = store.get_project_inventory(project.id)
                 self.assertGreaterEqual(inventory.summary.total_files, 1)
                 self.assertTrue(any(item.file_name == "observations.geojson" for item in inventory.files))
+                self.assertIn("Amsel", json.dumps(project.metadata, ensure_ascii=False))
+                self.assertIn("species_hints", project.metadata)
 
                 refreshed = store.refresh_project_inventory(project.id)
                 self.assertGreaterEqual(refreshed.summary.total_files, 1)

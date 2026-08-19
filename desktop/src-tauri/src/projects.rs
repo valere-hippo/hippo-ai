@@ -3,8 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use serde_json::Value;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectMetadata {
@@ -30,6 +32,12 @@ pub struct ProjectMetadata {
   pub other_count: usize,
   #[serde(default)]
   pub scanned_at: Option<String>,
+  #[serde(default)]
+  pub species_hints: Vec<String>,
+  #[serde(default)]
+  pub connector_notes: Vec<String>,
+  #[serde(default)]
+  pub qgis_projects: Vec<String>,
 }
 
 fn default_metadata_source() -> String {
@@ -212,6 +220,7 @@ impl ProjectStore {
           "manual",
           Some(source_root.to_string_lossy().into_owned()),
           Some(&inventory),
+          Some(self.build_project_intelligence(&source_root, &inventory)),
         );
         record.updated_at = inventory.scanned_at.clone();
         self.write_project_manifest(&record)?;
@@ -234,6 +243,7 @@ impl ProjectStore {
       "attached",
       Some(source_root.to_string_lossy().into_owned()),
       Some(&inventory),
+      Some(self.build_project_intelligence(&source_root, &inventory)),
     );
     project.updated_at = inventory.scanned_at.clone();
     self.write_project_manifest(&project)?;
@@ -263,6 +273,7 @@ impl ProjectStore {
       &updated.metadata.source,
       updated.metadata.source_path.clone(),
       Some(&inventory),
+      Some(self.build_project_intelligence(&source_root, &inventory)),
     );
     self.write_project_manifest(&updated)?;
     self.save_record(&updated)?;
@@ -401,6 +412,71 @@ impl ProjectStore {
     Ok(())
   }
 
+  fn build_project_intelligence(&self, source_root: &Path, inventory: &ProjectInventory) -> ProjectIntelligence {
+    let mut species_hints = Vec::new();
+    let mut connector_notes = Vec::new();
+    let mut qgis_projects = Vec::new();
+
+    for file in &inventory.files {
+      for candidate in [
+        infer_species_from_text(&file.file_name),
+        infer_species_from_text(&file.relative_path),
+        infer_species_from_text(&Path::new(&file.relative_path).file_stem().and_then(|stem| stem.to_str()).unwrap_or("")),
+      ] {
+        if let Some(species) = candidate {
+          if !species_hints.iter().any(|hint| hint.eq_ignore_ascii_case(&species)) {
+            species_hints.push(species);
+          }
+        }
+      }
+
+      match file.extension.as_str() {
+        "gpkg" => connector_notes.push(format!("GeoPackage erkannt: {}", file.file_name)),
+        "shp" => {
+          if let Some(note) = self.inspect_shapefile_bundle(source_root, &file.relative_path) {
+            connector_notes.push(note);
+          }
+        }
+        "qgs" | "qgz" => {
+          qgis_projects.push(file.file_name.clone());
+          connector_notes.push(format!("QGIS-Projekt erkannt: {}", file.file_name));
+        }
+        _ => {}
+      }
+    }
+
+    species_hints.sort();
+    species_hints.dedup();
+    connector_notes.sort();
+    connector_notes.dedup();
+    qgis_projects.sort();
+    qgis_projects.dedup();
+
+    ProjectIntelligence {
+      species_hints: species_hints.into_iter().take(20).collect(),
+      connector_notes: connector_notes.into_iter().take(20).collect(),
+      qgis_projects: qgis_projects.into_iter().take(10).collect(),
+    }
+  }
+
+  fn inspect_shapefile_bundle(&self, source_root: &Path, relative_path: &str) -> Option<String> {
+    let shp_path = source_root.join(relative_path);
+    if shp_path.extension().and_then(|value| value.to_str()).map(|value| value.eq_ignore_ascii_case("shp")).unwrap_or(false) {
+      let base = shp_path.with_extension("");
+      let required = [base.with_extension("shx"), base.with_extension("dbf")];
+      let missing: Vec<String> = required
+        .iter()
+        .filter(|path| !path.exists())
+        .map(|path| path.extension().and_then(|value| value.to_str()).unwrap_or("").to_string())
+        .collect();
+      if !missing.is_empty() {
+        return Some(format!("Shapefile-Bundle unvollständig für {}: fehlt {}", shp_path.file_name().and_then(|v| v.to_str()).unwrap_or(relative_path), missing.join(", ")));
+      }
+      return Some(format!("Shapefile-Bundle vollständig für {}", shp_path.file_name().and_then(|v| v.to_str()).unwrap_or(relative_path)));
+    }
+    None
+  }
+
   fn project_root(&self, record: &ProjectRecord) -> PathBuf {
     PathBuf::from(&record.root_path)
   }
@@ -464,7 +540,12 @@ impl ProjectStore {
   }
 }
 
-fn metadata_from_inventory(source: &str, source_path: Option<String>, inventory: Option<&ProjectInventory>) -> ProjectMetadata {
+fn metadata_from_inventory(
+  source: &str,
+  source_path: Option<String>,
+  inventory: Option<&ProjectInventory>,
+  intelligence: Option<ProjectIntelligence>,
+) -> ProjectMetadata {
   let mut metadata = ProjectMetadata {
     source: source.to_string(),
     source_path,
@@ -481,9 +562,24 @@ fn metadata_from_inventory(source: &str, source_path: Option<String>, inventory:
     metadata.qgis_count = inventory.summary.qgis_files;
     metadata.other_count = inventory.summary.other_files;
     metadata.scanned_at = Some(inventory.scanned_at.clone());
+    if let Some(intelligence) = intelligence {
+      metadata.species_hints = intelligence.species_hints;
+      metadata.connector_notes = intelligence.connector_notes;
+      metadata.qgis_projects = intelligence.qgis_projects;
+    }
   }
 
   metadata
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProjectIntelligence {
+  #[serde(default)]
+  pub species_hints: Vec<String>,
+  #[serde(default)]
+  pub connector_notes: Vec<String>,
+  #[serde(default)]
+  pub qgis_projects: Vec<String>,
 }
 
 fn classify_extension(extension: &str) -> &'static str {
@@ -556,6 +652,127 @@ fn uuid_hex() -> String {
 
 fn normalize_source_path(path: &Path) -> PathBuf {
   path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn species_alias_map() -> &'static HashMap<String, String> {
+  static MAP: OnceLock<HashMap<String, String>> = OnceLock::new();
+  MAP.get_or_init(load_species_alias_map)
+}
+
+fn load_species_alias_map() -> HashMap<String, String> {
+  let data_root = resolve_workspace_root().join("src").join("tier_ai").join("data");
+  let mut map = HashMap::new();
+  let Ok(entries) = fs::read_dir(data_root) else {
+    return map;
+  };
+
+  for entry in entries.flatten() {
+    let path = entry.path();
+    let file_name = path.file_name().and_then(|value| value.to_str()).unwrap_or("");
+    if !file_name.starts_with("species_rules") || path.extension().and_then(|value| value.to_str()) != Some("json") {
+      continue;
+    }
+    let Ok(text) = fs::read_to_string(&path) else {
+      continue;
+    };
+    let Ok(payload) = serde_json::from_str::<Value>(&text) else {
+      continue;
+    };
+    for entry in iter_rule_items(&payload) {
+      if let Some((species, aliases)) = parse_rule_entry(&entry) {
+        for alias in aliases {
+          map.entry(normalize_species_name(&alias)).or_insert(species.clone());
+        }
+      }
+    }
+  }
+
+  map
+}
+
+fn iter_rule_items(payload: &Value) -> Vec<Value> {
+  match payload {
+    Value::Object(map) => map.values().cloned().collect(),
+    Value::Array(items) => items.clone(),
+    _ => Vec::new(),
+  }
+}
+
+fn parse_rule_entry(payload: &Value) -> Option<(String, Vec<String>)> {
+  let species = payload.get("species")?.as_str()?.trim().to_string();
+  if species.is_empty() {
+    return None;
+  }
+  let mut aliases = vec![species.clone()];
+  if let Some(alias_values) = payload.get("aliases").and_then(|value| value.as_array()) {
+    for alias in alias_values {
+      if let Some(text) = alias.as_str() {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+          aliases.push(trimmed.to_string());
+        }
+      }
+    }
+  }
+  Some((species, aliases))
+}
+
+fn normalize_species_name(value: &str) -> String {
+  let mut text = value.trim().to_lowercase();
+  for (source, target) in [("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")] {
+    text = text.replace(source, target);
+  }
+  text.chars().filter(|char| char.is_ascii_alphanumeric()).collect()
+}
+
+fn infer_species_from_text(value: &str) -> Option<String> {
+  if value.trim().is_empty() {
+    return None;
+  }
+  let map = species_alias_map();
+  let normalized = normalize_species_name(value);
+  if let Some(canonical) = map.get(&normalized) {
+    return Some(canonical.clone());
+  }
+
+  for (alias, canonical) in map.iter() {
+    if alias.len() >= 4 && normalized.contains(alias) {
+      return Some(canonical.clone());
+    }
+  }
+
+  let tokens: Vec<String> = normalized
+    .split(|char: char| !char.is_ascii_alphanumeric())
+    .filter(|token| token.len() >= 3)
+    .map(|token| token.to_string())
+    .collect();
+  if tokens.is_empty() {
+    return None;
+  }
+
+  let mut best: Option<(usize, String)> = None;
+  for (alias, canonical) in map.iter() {
+    let alias_tokens: Vec<String> = alias
+      .split(|char: char| !char.is_ascii_alphanumeric())
+      .filter(|token| token.len() >= 3)
+      .map(|token| token.to_string())
+      .collect();
+    if alias_tokens.is_empty() {
+      continue;
+    }
+    let overlap = alias_tokens.iter().filter(|token| tokens.iter().any(|candidate| candidate == *token)).count();
+    if overlap == 0 {
+      continue;
+    }
+    if overlap >= 2 || (alias_tokens.len() == 1 && overlap >= 1) {
+      let score = overlap * 10 + alias_tokens.len();
+      if best.as_ref().map(|(best_score, _)| score > *best_score).unwrap_or(true) {
+        best = Some((score, canonical.clone()));
+      }
+    }
+  }
+
+  best.map(|(_, canonical)| canonical)
 }
 
 fn io_error(error: std::io::Error) -> String {

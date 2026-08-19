@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import zipfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +20,7 @@ from .models import (
     UserContext,
 )
 from .settings import get_settings
+from tier_ai.rules import infer_species_from_filename, infer_species_from_text
 
 
 PROJECT_FOLDERS = ("input", "analysis", "reports", "exports", "notes", "attachments", "chat")
@@ -69,7 +71,12 @@ def normalize_source_path(path: Path) -> Path:
         return path
 
 
-def metadata_from_inventory(source: str, source_path: str | None, inventory: ProjectInventory | None) -> dict[str, Any]:
+def metadata_from_inventory(
+    source: str,
+    source_path: str | None,
+    inventory: ProjectInventory | None,
+    intelligence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     metadata: dict[str, Any] = {
         "source": source,
         "source_path": source_path,
@@ -90,6 +97,18 @@ def metadata_from_inventory(source: str, source_path: str | None, inventory: Pro
             "scanned_at": inventory.scanned_at,
         }
     )
+    intelligence = intelligence or {}
+    species_hints = intelligence.get("species_hints", [])
+    connector_notes = intelligence.get("connector_notes", [])
+    qgis_titles = intelligence.get("qgis_titles", [])
+    if species_hints:
+        metadata["species_hints"] = species_hints
+    if connector_notes:
+        metadata["connector_notes"] = connector_notes
+    if qgis_titles:
+        metadata["qgis_titles"] = qgis_titles
+    if intelligence:
+        metadata["project_intelligence"] = intelligence
     return metadata
 
 
@@ -147,7 +166,12 @@ class ProjectStore:
 
         if source_path is not None:
             inventory = self._scan_and_store_inventory(record, source_path)
-            record.metadata = metadata_from_inventory("manual", str(source_path), inventory)
+            record.metadata = metadata_from_inventory(
+                "manual",
+                str(source_path),
+                inventory,
+                self._build_project_intelligence(source_path, inventory),
+            )
             record.updated_at = datetime.now(timezone.utc)
             self._write_manifest(record)
 
@@ -163,7 +187,12 @@ class ProjectStore:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert")
         source_root = normalize_source_path(Path(source_path))
         inventory = self._scan_and_store_inventory(project, source_root)
-        project.metadata = metadata_from_inventory("attached", str(source_root), inventory)
+        project.metadata = metadata_from_inventory(
+            "attached",
+            str(source_root),
+            inventory,
+            self._build_project_intelligence(source_root, inventory),
+        )
         project.updated_at = datetime.now(timezone.utc)
         self._write_manifest(project)
         self._save_record(project)
@@ -187,7 +216,12 @@ class ProjectStore:
         source_root = self._project_source_root(project)
         inventory = self._scan_and_store_inventory(project, source_root)
         project.updated_at = datetime.now(timezone.utc)
-        project.metadata = metadata_from_inventory(project.metadata.get("source", "attached"), project.metadata.get("source_path"), inventory)
+        project.metadata = metadata_from_inventory(
+            project.metadata.get("source", "attached"),
+            project.metadata.get("source_path"),
+            inventory,
+            self._build_project_intelligence(source_root, inventory),
+        )
         self._write_manifest(project)
         self._save_record(project)
         return inventory
@@ -390,3 +424,85 @@ class ProjectStore:
         for share in shares:
             unique[share.username.lower()] = share
         return list(unique.values())
+
+    def _build_project_intelligence(self, source_root: Path, inventory: ProjectInventory) -> dict[str, Any]:
+        species_hints: list[str] = []
+        qgis_titles: list[str] = []
+        connector_notes: list[str] = []
+
+        for file in inventory.files:
+            hint_candidates = [
+                infer_species_from_filename(file.file_name),
+                infer_species_from_text(file.relative_path),
+                infer_species_from_text(Path(file.relative_path).stem),
+            ]
+            for hint in hint_candidates:
+                if hint and hint not in species_hints:
+                    species_hints.append(hint)
+
+            extension = file.extension.lower().lstrip(".")
+            file_path = Path(file.absolute_path)
+
+            if extension in {"qgs", "qml", "qgz"}:
+                qgis_titles.extend(self._extract_qgis_titles(file_path))
+                connector_notes.append(f"QGIS-Datei erkannt: {file.file_name}")
+
+            if extension == "shp":
+                bundle_note = self._inspect_shapefile_bundle(file_path)
+                if bundle_note:
+                    connector_notes.append(bundle_note)
+
+            if extension == "gpkg":
+                connector_notes.append(f"GeoPackage erkannt: {file.file_name}")
+
+        intelligence = {
+            "species_hints": species_hints[:20],
+            "qgis_titles": qgis_titles[:10],
+            "connector_notes": connector_notes[:20],
+            "source_root": str(source_root),
+        }
+        if species_hints:
+            intelligence["dominant_species"] = species_hints[0]
+        return intelligence
+
+    def _extract_qgis_titles(self, path: Path) -> list[str]:
+        texts: list[str] = []
+        try:
+            if path.suffix.lower() == ".qgz":
+                with zipfile.ZipFile(path) as archive:
+                    for name in archive.namelist():
+                        if name.lower().endswith((".qgs", ".qml")):
+                            try:
+                                texts.append(archive.read(name).decode("utf-8", errors="ignore"))
+                            except Exception:
+                                continue
+            else:
+                texts.append(path.read_text(encoding="utf-8", errors="ignore"))
+        except Exception:
+            return []
+
+        titles: list[str] = []
+        patterns = [
+            re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL),
+            re.compile(r'title\s*=\s*"([^"]+)"', re.IGNORECASE),
+            re.compile(r"name=\"([^"]+)\"", re.IGNORECASE),
+        ]
+        for text in texts:
+            for pattern in patterns:
+                for match in pattern.findall(text):
+                    title = str(match).strip()
+                    if title and title not in titles:
+                        titles.append(title)
+        return titles
+
+    def _inspect_shapefile_bundle(self, path: Path) -> str | None:
+        base = path.with_suffix("")
+        required = [base.with_suffix(ext) for ext in (".shx", ".dbf")]
+        optional = [base.with_suffix(ext) for ext in (".prj", ".cpg")]
+        missing_required = [file.suffix for file in required if not file.exists()]
+        if missing_required:
+            return f"Shapefile-Bundle unvollständig für {path.name}: fehlt {', '.join(sorted(missing_required))}"
+        present_optional = [file.suffix for file in optional if file.exists()]
+        if present_optional:
+            return f"Shapefile-Bundle vollständig für {path.name} ({', '.join(sorted(present_optional))} vorhanden)"
+        return f"Shapefile-Bundle vollständig für {path.name}"
