@@ -165,6 +165,23 @@ input:focus {
   box-shadow: 0 0 0 3px rgba(123, 211, 137, 0.16);
 }
 
+select {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: rgba(10, 14, 19, 0.8);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font: inherit;
+  font-size: 1.08rem;
+  outline: none;
+}
+
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(123, 211, 137, 0.16);
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -341,6 +358,78 @@ h2 {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.project-grid {
+  margin-top: 4px;
+}
+
+.project-selector {
+  margin-bottom: 8px;
+}
+
+.project-summary {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 0.98rem;
+  line-height: 1.5;
+}
+
+.project-summary strong {
+  color: var(--text);
+}
+
+.project-file-list {
+  display: grid;
+  gap: 10px;
+}
+
+.project-file {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(8, 12, 17, 0.72);
+}
+
+.project-file-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.project-file-name {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.project-file-meta {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.project-file-path {
+  color: #d9e2ee;
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.84rem;
+  word-break: break-word;
+}
+
+.project-file-tag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: rgba(123, 211, 137, 0.12);
+  color: #c9f4d0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .history-list {

@@ -24,6 +24,64 @@
         </p>
       </section>
 
+      <section class="panel panel-projects">
+        <div class="section-head">
+          <h2>Projekt</h2>
+          <button type="button" id="refresh-projects-button" class="secondary compact">Neu laden</button>
+        </div>
+
+        <div class="project-selector">
+          <label class="full">
+            <span>Aktives Projekt</span>
+            <select id="project-select" name="project_select"></select>
+          </label>
+        </div>
+
+        <form id="project-form" class="grid project-grid">
+          <label class="full">
+            <span>Projektname</span>
+            <input id="project-name" name="project_name" placeholder="z. B. Gebietsprüfung Boesner" />
+          </label>
+
+          <label class="full">
+            <span>Beschreibung</span>
+            <input id="project-description" name="project_description" placeholder="Optional" />
+          </label>
+
+          <label>
+            <span>Kunde</span>
+            <input id="project-client" name="project_client" placeholder="Optional" />
+          </label>
+
+          <label>
+            <span>Tags</span>
+            <input id="project-tags" name="project_tags" placeholder="z. B. avifauna, reptilien" />
+          </label>
+
+          <label class="full">
+            <span>Quellordner / Netzwerkpfad</span>
+            <div class="input-row">
+              <input id="project-source-path" name="project_source_path" placeholder="C:\\Daten\\Projekt oder \\server\\share\\projekt" />
+              <button type="button" class="secondary compact" data-action="pick-project-folder">Wählen</button>
+            </div>
+          </label>
+
+          <div class="actions full">
+            <button type="button" id="create-project-button">Projekt erstellen</button>
+            <button type="button" id="attach-project-button" class="secondary">Ordner anhängen</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel panel-project-files">
+        <div class="section-head">
+          <h2>Projektinhalt</h2>
+          <button type="button" id="refresh-project-inventory-button" class="secondary compact">Scannen</button>
+        </div>
+        <div id="project-summary" class="project-summary">Kein Projekt ausgewählt.</div>
+        <div id="project-file-list" class="project-file-list"></div>
+      </section>
+
       <section class="panel panel-form">
         <form id="analysis-form" class="grid">
           <label class="full">

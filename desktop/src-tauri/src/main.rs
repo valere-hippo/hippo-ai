@@ -1,3 +1,6 @@
+mod projects;
+
+use projects::{ProjectCreateInput, ProjectInventory, ProjectRecord, ProjectStore};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
@@ -133,10 +136,43 @@ fn run_analysis(
   })
 }
 
+#[tauri::command]
+fn list_projects() -> Result<Vec<ProjectRecord>, String> {
+  project_store().list_projects()
+}
+
+#[tauri::command]
+fn create_project(payload: ProjectCreateInput) -> Result<ProjectRecord, String> {
+  project_store().create_project(payload)
+}
+
+#[tauri::command]
+fn attach_project_folder(project_id: String, source_path: String) -> Result<ProjectRecord, String> {
+  project_store().attach_project_folder(&project_id, &source_path)
+}
+
+#[tauri::command]
+fn get_project_inventory(project_id: String) -> Result<ProjectInventory, String> {
+  project_store().get_project_inventory(&project_id)
+}
+
+#[tauri::command]
+fn refresh_project_inventory(project_id: String) -> Result<ProjectInventory, String> {
+  project_store().refresh_project_inventory(&project_id)
+}
+
 fn main() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
-    .invoke_handler(tauri::generate_handler![run_analysis, prepare_environment])
+    .invoke_handler(tauri::generate_handler![
+      run_analysis,
+      prepare_environment,
+      list_projects,
+      create_project,
+      attach_project_folder,
+      get_project_inventory,
+      refresh_project_inventory
+    ])
     .run(tauri::generate_context!())
     .expect("error while running hippo-ai desktop app");
 }
@@ -224,4 +260,8 @@ where
   parts.extend(args.iter().cloned());
   parts.extend(extra.into_iter().map(|arg| arg.as_ref().to_string()));
   parts.join(" ")
+}
+
+fn project_store() -> ProjectStore {
+  ProjectStore::new()
 }

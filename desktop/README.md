@@ -4,6 +4,8 @@ Windows-App auf Basis von Tauri.
 
 ## Zweck
 
+- Projekte anlegen und Ordner anhängen
+- Projektinhalt mit Metadaten scannen
 - GeoPackage auswählen
 - lokale Python-Analyse starten
 - Ergebnis direkt im Fenster anzeigen
@@ -66,6 +68,7 @@ Im aktuellen Prototyp wird dafür der Projekt-Root per Formularfeld übergeben.
 - Ein animierter Fortschrittsbalken zeigt den aktuellen Analysezustand
 - Die letzten Läufe werden lokal als Verlauf gespeichert
 - Die App kann direkt TXT, DOCX und PDF exportieren, ohne Terminal
+- Die App kann Projekte anlegen, Ordner anhängen und den Inhalt des Projekts auflisten
 - GeoJSON kann direkt mit importiert werden
 - Beim ersten Analyse-Start richtet die App automatisch eine lokale `.venv` ein und installiert das Projekt
 - Alle `species_rules*.json` im Projekt werden beim Start automatisch zusammengeführt; ein `Analyse-Config`-Feld ist daher meist nicht nötig

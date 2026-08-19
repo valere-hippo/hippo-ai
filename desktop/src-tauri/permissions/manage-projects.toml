@@ -1,0 +1,10 @@
+[[permission]]
+identifier = "allow-manage-projects"
+description = "Allows the frontend to manage local projects, folders and inventories."
+commands.allow = [
+  "list_projects",
+  "create_project",
+  "attach_project_folder",
+  "get_project_inventory",
+  "refresh_project_inventory"
+]

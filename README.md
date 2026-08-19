@@ -5,6 +5,7 @@ projektbezogene Geo-KI, Berichte und Dokumentenarbeit.
 
 Siehe:
 - [Phase 0](docs/PHASE-0.md)
+- [Phase 1](docs/PHASE-1.md)
 - [Produktionsplan](docs/PRODUKTIONSPLAN.md)
 - [Datenformat](docs/DATENFORMAT.md)
 
@@ -112,6 +113,7 @@ Für eine Windows-Oberfläche ohne Terminal gibt es jetzt einen Tauri-Prototyp u
 [desktop/](desktop/README.md).
 
 Der Prototyp startet die bestehende Python-Analyse lokal und zeigt das Ergebnis im Fenster an.
+Außerdem kann er Projekte anlegen, Ordner anhängen und den Projektinhalt scannen.
 
 ### Lokal testen
 
