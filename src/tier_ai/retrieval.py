@@ -8,12 +8,14 @@ import json
 import math
 import re
 import zipfile
+from os import getenv
 from dataclasses import dataclass, field, asdict
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable, Protocol
 
 from .rules import infer_species_from_filename, infer_species_from_text, normalize_species_name, resolve_species_label
+from .remote_clients import OpenAICompatibleEmbeddingClient, OpenAICompatibleRerankerClient
 
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-m3"
 DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
@@ -233,6 +235,32 @@ class CrossEncoderReranker:
         return [float(score) for score in scores]
 
 
+class FallbackEmbeddingBackend:
+    def __init__(self, primary: EmbeddingBackend, fallback: EmbeddingBackend) -> None:
+        self.primary = primary
+        self.fallback = fallback
+        self.model_name = getattr(primary, "model_name", getattr(fallback, "model_name", DEFAULT_EMBEDDING_MODEL))
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        try:
+            return self.primary.embed(texts)
+        except Exception:
+            return self.fallback.embed(texts)
+
+
+class FallbackRerankerBackend:
+    def __init__(self, primary: RerankerBackend, fallback: RerankerBackend) -> None:
+        self.primary = primary
+        self.fallback = fallback
+        self.model_name = getattr(primary, "model_name", getattr(fallback, "model_name", DEFAULT_RERANKER_MODEL))
+
+    def rerank(self, query: str, documents: list[RetrievalDocument]) -> list[float]:
+        try:
+            return self.primary.rerank(query, documents)
+        except Exception:
+            return self.fallback.rerank(query, documents)
+
+
 class LocalProjectIndexStore:
     def __init__(self, index_root: Path) -> None:
         self.index_root = index_root
@@ -326,6 +354,32 @@ class QdrantProjectIndexStore:
 
 
 def create_embedding_backend(prefer_real: bool = True) -> EmbeddingBackend:
+    remote_url = _remote_embedding_url()
+    if remote_url:
+        remote_backend = OpenAICompatibleEmbeddingClient(
+            base_url=remote_url,
+            model_name=_remote_embedding_model() or DEFAULT_EMBEDDING_MODEL,
+            api_key=_remote_embedding_api_key(),
+            timeout=_remote_timeout_seconds(),
+        )
+        return FallbackEmbeddingBackend(remote_backend, _local_embedding_backend(prefer_real=prefer_real))
+    return _local_embedding_backend(prefer_real=prefer_real)
+
+
+def create_reranker_backend(prefer_real: bool = True) -> RerankerBackend:
+    remote_url = _remote_reranker_url()
+    if remote_url:
+        remote_backend = OpenAICompatibleRerankerClient(
+            base_url=remote_url,
+            model_name=_remote_reranker_model() or DEFAULT_RERANKER_MODEL,
+            api_key=_remote_reranker_api_key(),
+            timeout=_remote_timeout_seconds(),
+        )
+        return FallbackRerankerBackend(remote_backend, _local_reranker_backend(prefer_real=prefer_real))
+    return _local_reranker_backend(prefer_real=prefer_real)
+
+
+def _local_embedding_backend(prefer_real: bool = True) -> EmbeddingBackend:
     if prefer_real and SentenceTransformer is not None:
         try:  # pragma: no cover - optional dependency
             return SentenceTransformerEmbeddingBackend(DEFAULT_EMBEDDING_MODEL)
@@ -334,7 +388,7 @@ def create_embedding_backend(prefer_real: bool = True) -> EmbeddingBackend:
     return HashEmbeddingBackend()
 
 
-def create_reranker_backend(prefer_real: bool = True) -> RerankerBackend:
+def _local_reranker_backend(prefer_real: bool = True) -> RerankerBackend:
     if prefer_real and CrossEncoder is not None:
         try:  # pragma: no cover - optional dependency
             return CrossEncoderReranker(DEFAULT_RERANKER_MODEL)
@@ -1037,9 +1091,39 @@ def _qdrant_url() -> str | None:
 
 
 def _qdrant_path(index_root: Path) -> str | None:
-    from os import getenv
-
     return getenv("HIPPO_AI_QDRANT_PATH") or str(index_root / "qdrant")
+
+
+def _remote_embedding_url() -> str | None:
+    return getenv("HIPPO_AI_EMBEDDING_URL") or getenv("HIPPO_AI_EMBEDDINGS_URL") or None
+
+
+def _remote_embedding_model() -> str | None:
+    return getenv("HIPPO_AI_EMBEDDING_MODEL") or None
+
+
+def _remote_embedding_api_key() -> str | None:
+    return getenv("HIPPO_AI_EMBEDDING_API_KEY") or getenv("HIPPO_AI_REMOTE_API_KEY") or None
+
+
+def _remote_reranker_url() -> str | None:
+    return getenv("HIPPO_AI_RERANKER_URL") or getenv("HIPPO_AI_RERANK_URL") or None
+
+
+def _remote_reranker_model() -> str | None:
+    return getenv("HIPPO_AI_RERANKER_MODEL") or None
+
+
+def _remote_reranker_api_key() -> str | None:
+    return getenv("HIPPO_AI_RERANKER_API_KEY") or getenv("HIPPO_AI_REMOTE_API_KEY") or None
+
+
+def _remote_timeout_seconds() -> int:
+    raw = getenv("HIPPO_AI_REMOTE_TIMEOUT_SECONDS") or "60"
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 60
 
 
 def _qdrant_filter(project_id: str, filters: RetrievalFilter):

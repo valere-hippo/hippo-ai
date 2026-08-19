@@ -8,6 +8,7 @@ Siehe:
 - [Phase 1](docs/PHASE-1.md)
 - [Produktionsplan](docs/PRODUKTIONSPLAN.md)
 - [Datenformat](docs/DATENFORMAT.md)
+- [GPU Hub Setup](docs/GPU-HUB.md)
 
 ## Erste Nutzung
 
@@ -102,6 +103,21 @@ Die aktuelle Codebasis ist als Monorepo aufgebaut. Phase 0 umfasst:
 - Docker Compose für Backend und spätere Services
 - klare Namenskonventionen
 - lokale und Windows-UI-Nutzung
+
+### GPU-Hub-ready
+
+Wenn du die Modelle extern auf GPU Hub betreiben willst, setze diese
+Umgebungsvariablen:
+
+- `HIPPO_AI_EMBEDDING_URL`
+- `HIPPO_AI_EMBEDDING_MODEL`
+- `HIPPO_AI_RERANKER_URL`
+- `HIPPO_AI_RERANKER_MODEL`
+- `HIPPO_AI_LLM_URL`
+- `HIPPO_AI_LLM_MODEL`
+
+Dann ruft `hippo-ai` Embeddings und Re-Ranking über HTTP ab und kann den
+Chat-LLM ebenfalls extern anfragen.
 
 ### Backend
 

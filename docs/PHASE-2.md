@@ -13,6 +13,7 @@ Projektinhalte semantisch durchsuchen und Treffer mit Metadaten anzeigen.
 - Re-Ranking mit `bge-reranker-v2-m3`
 - Qdrant als Vektor-Store nutzen, falls verfügbar
 - Lokalen Fallback-Index verwenden, falls Qdrant nicht läuft
+- Externe Modell-Endpunkte im GPU-Hub über OpenAI-kompatible HTTP-APIs anbinden
 - Suche nach:
   - Art
   - Datum
@@ -30,6 +31,8 @@ Projektinhalte semantisch durchsuchen und Treffer mit Metadaten anzeigen.
 5. Dokumente werden lokal und optional in Qdrant gespeichert.
 6. Die Suche filtert zuerst nach Projekt und Metadaten.
 7. Relevante Treffer werden mit Re-Ranker sortiert.
+8. Wenn externe Modell-URLs gesetzt sind, werden Embeddings und Re-Ranking
+   nicht lokal gerechnet, sondern über HTTP im GPU-Hub angefragt.
 
 ## Suchlogik
 
@@ -51,6 +54,13 @@ Wichtige Umgebungsvariablen:
 
 - `HIPPO_AI_QDRANT_URL`
 - `HIPPO_AI_QDRANT_PATH`
+- `HIPPO_AI_EMBEDDING_URL`
+- `HIPPO_AI_EMBEDDING_MODEL`
+- `HIPPO_AI_RERANKER_URL`
+- `HIPPO_AI_RERANKER_MODEL`
+- `HIPPO_AI_LLM_URL`
+- `HIPPO_AI_LLM_MODEL`
+- `HIPPO_AI_REMOTE_TIMEOUT_SECONDS`
 
 ## DoD
 
@@ -58,3 +68,4 @@ Wichtige Umgebungsvariablen:
 - Eine Suche liefert Treffer mit Metadaten.
 - Qdrant ist optional, aber aktiv nutzbar.
 - Der lokale Fallback bleibt funktionsfähig.
+- Der GPU-Hub kann Embeddings und Re-Ranking extern liefern.

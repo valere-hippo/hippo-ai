@@ -21,6 +21,13 @@ uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 - `HIPPO_AI_DATA_ROOT`
 - `HIPPO_AI_QDRANT_URL`
 - `HIPPO_AI_QDRANT_PATH`
+- `HIPPO_AI_EMBEDDING_URL`
+- `HIPPO_AI_EMBEDDING_MODEL`
+- `HIPPO_AI_RERANKER_URL`
+- `HIPPO_AI_RERANKER_MODEL`
+- `HIPPO_AI_LLM_URL`
+- `HIPPO_AI_LLM_MODEL`
+- `HIPPO_AI_REMOTE_TIMEOUT_SECONDS`
 
 ## Retrieval
 
@@ -30,4 +37,13 @@ Der Backend-Service stellt zusätzlich Projekt-Retrieval-Endpunkte bereit:
 - `POST /projects/{project_id}/retrieval/search`
 
 Diese Endpunkte nutzen `BGE-M3` für Embeddings, `bge-reranker-v2-m3` für das
-Re-Ranking und speichern optional in Qdrant.
+Re-Ranking und speichern optional in Qdrant. Wenn die GPU-Hub-Variablen gesetzt
+sind, ruft der Backend-Service die Modelle über OpenAI-kompatible HTTP-Endpoints
+ab:
+
+- `POST /v1/embeddings`
+- `POST /v1/rerank`
+- `POST /v1/chat/completions`
+
+Damit kann `hippo-ai` die Modelle extern beziehen, während Qdrant und die
+Projektlogik lokal oder auf dem Backend-Server laufen.
