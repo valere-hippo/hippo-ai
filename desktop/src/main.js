@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { open, save } from '@tauri-apps/plugin-dialog';
 
 const form = document.getElementById('analysis-form');
@@ -73,6 +74,9 @@ let selectedHistoryIndex = null;
 let selectedProjectId = localStorage.getItem(projectSelectionKey) || '';
 let projectRecords = [];
 let selectedProjectRecord = null;
+let activeChatRequestId = null;
+let activeChatUnlisten = null;
+let activeChatBuffer = '';
 
 restoreFormState();
 restoreProjectFormState();
@@ -805,9 +809,43 @@ async function runProjectChat() {
   }
 
   chatButton.disabled = true;
-  chatSummary.textContent = 'Antwort wird erzeugt...';
+  chatSummary.textContent = 'Antwort wird gestreamt...';
   chatAnswer.textContent = '';
   chatSources.innerHTML = '';
+  activeChatBuffer = '';
+
+  const requestId = crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  activeChatRequestId = requestId;
+  if (activeChatUnlisten) {
+    try {
+      await activeChatUnlisten();
+    } catch {
+      // Ignore listener teardown errors.
+    }
+    activeChatUnlisten = null;
+  }
+
+  activeChatUnlisten = await listen('hippo-ai-chat-stream', (event) => {
+    const payload = event.payload || {};
+    if (payload.request_id !== activeChatRequestId) {
+      return;
+    }
+    if (payload.type === 'meta') {
+      chatSummary.textContent = formatChatStreamMeta(payload);
+      if (Array.isArray(payload.sources) && payload.sources.length) {
+        renderChatSources(payload.sources);
+      }
+      return;
+    }
+    if (payload.type === 'delta') {
+      activeChatBuffer += String(payload.delta || '');
+      chatAnswer.textContent = activeChatBuffer;
+      return;
+    }
+    if (payload.type === 'final' && payload.response) {
+      renderChatResponse(payload.response);
+    }
+  });
 
   const payload = {
     project_id: selectedProjectId,
@@ -821,10 +859,11 @@ async function runProjectChat() {
     limit: 6,
     python_executable: document.getElementById('python_executable').value.trim() || null,
     project_root: document.getElementById('project_root').value.trim() || null,
+    request_id: requestId,
   };
 
   try {
-    const result = await invoke('chat_project', payload);
+    const result = await invoke('chat_project_stream', payload);
     const parsed = parseChatResult(result.stdout || '');
     if (result.exit_code !== 0) {
       chatSummary.textContent = `Chat fehlgeschlagen (Exit-Code ${result.exit_code})`;
@@ -836,6 +875,15 @@ async function runProjectChat() {
   } catch (error) {
     chatSummary.textContent = `Chat fehlgeschlagen: ${error}`;
   } finally {
+    activeChatRequestId = null;
+    if (activeChatUnlisten) {
+      try {
+        await activeChatUnlisten();
+      } catch {
+        // Ignore listener teardown errors.
+      }
+      activeChatUnlisten = null;
+    }
     chatButton.disabled = false;
   }
 }
@@ -861,6 +909,14 @@ function formatChatResult(parsed) {
   ].join(' · ');
 }
 
+function formatChatStreamMeta(parsed) {
+  return [
+    `Index: ${parsed.backend || 'local'}`,
+    `Treffer: ${parsed.returned_hits ?? 0}`,
+    `Quellen vorbereitet: ${Array.isArray(parsed.sources) ? parsed.sources.length : 0}`,
+  ].join(' · ');
+}
+
 function renderChatResponse(parsed) {
   const answer = typeof parsed.answer === 'string' && parsed.answer.trim()
     ? parsed.answer.trim()
@@ -868,7 +924,11 @@ function renderChatResponse(parsed) {
   chatAnswer.innerHTML = escapeHtml(answer).replaceAll('\n', '<br />');
 
   const sources = Array.isArray(parsed.sources) ? parsed.sources : [];
-  if (!sources.length) {
+  renderChatSources(sources);
+}
+
+function renderChatSources(sources) {
+  if (!Array.isArray(sources) || !sources.length) {
     chatSources.innerHTML = '<div class="history-empty">Keine Quellen gefunden.</div>';
     return;
   }

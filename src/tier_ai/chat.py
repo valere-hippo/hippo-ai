@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from .remote_clients import OpenAICompatibleChatClient
 from .retrieval import RetrievalFilter, RetrievalHit, RetrievalSearchSummary, search_project
@@ -59,16 +59,15 @@ def answer_project_question(
     prefer_real_models: bool = True,
     max_sources: int = 6,
 ) -> ChatResponse:
-    filters = filters or RetrievalFilter(limit=max_sources)
-    search = search_project(
+    search, sources = prepare_project_question(
         project_id=project_id,
         project_slug=project_slug,
-        query=question,
+        question=question,
         index_root=index_root,
-        filters=dataclasses.replace(filters, limit=max_sources),
+        filters=filters,
         prefer_real_models=prefer_real_models,
+        max_sources=max_sources,
     )
-    sources = _sources_from_hits(search.hits[:max_sources])
     model_name = _chat_model_name()
     backend = "remote" if _remote_chat_url() else "local"
     answer, citations = _generate_answer(
@@ -91,6 +90,90 @@ def answer_project_question(
         sources=sources,
         created_at=_now_iso(),
     )
+
+
+def prepare_project_question(
+    *,
+    project_id: str,
+    project_slug: str,
+    question: str,
+    index_root: Path,
+    filters: RetrievalFilter | None = None,
+    prefer_real_models: bool = True,
+    max_sources: int = 6,
+) -> tuple[RetrievalSearchSummary, list[ChatSource]]:
+    filters = filters or RetrievalFilter(limit=max_sources)
+    search = search_project(
+        project_id=project_id,
+        project_slug=project_slug,
+        query=question,
+        index_root=index_root,
+        filters=dataclasses.replace(filters, limit=max_sources),
+        prefer_real_models=prefer_real_models,
+    )
+    sources = _sources_from_hits(search.hits[:max_sources])
+    return search, sources
+
+
+def stream_project_question(
+    *,
+    project_id: str,
+    project_slug: str,
+    question: str,
+    index_root: Path,
+    filters: RetrievalFilter | None = None,
+    prefer_real_models: bool = True,
+    max_sources: int = 6,
+) -> Iterator[dict[str, Any]]:
+    search, sources = prepare_project_question(
+        project_id=project_id,
+        project_slug=project_slug,
+        question=question,
+        index_root=index_root,
+        filters=filters,
+        prefer_real_models=prefer_real_models,
+        max_sources=max_sources,
+    )
+
+    yield {
+        "type": "meta",
+        "project_id": project_id,
+        "project_slug": project_slug,
+        "backend": search.backend,
+        "index_path": search.index_path,
+        "total_candidates": search.total_candidates,
+        "returned_hits": search.returned_hits,
+        "sources": [dataclasses.asdict(source) for source in sources],
+    }
+
+    answer, citations = _generate_answer(
+        question=question,
+        search=search,
+        sources=sources,
+        prefer_real_models=prefer_real_models,
+    )
+    emitted = False
+    for chunk in _chunk_text(answer):
+        emitted = True
+        yield {"type": "delta", "delta": chunk}
+    if not emitted:
+        yield {"type": "delta", "delta": answer}
+
+    response = ChatResponse(
+        project_id=project_id,
+        project_slug=project_slug,
+        question=question,
+        answer=answer,
+        backend="remote" if _remote_chat_url() else "local",
+        index_path=search.index_path,
+        model_name=_chat_model_name(),
+        total_candidates=search.total_candidates,
+        returned_hits=search.returned_hits,
+        citations=citations,
+        sources=sources,
+        created_at=_now_iso(),
+    )
+    yield {"type": "final", "response": to_dict(response)}
 
 
 def to_dict(response: ChatResponse) -> dict[str, Any]:
@@ -229,6 +312,28 @@ def _sources_from_hits(hits: list[RetrievalHit]) -> list[ChatSource]:
             )
         )
     return sources
+
+
+def _chunk_text(text: str, *, chunk_size: int = 120) -> list[str]:
+    normalized = " ".join(text.strip().split())
+    if not normalized:
+        return []
+    chunks: list[str] = []
+    current = ""
+    for part in re.split(r"(?<=[.!?])\s+", normalized):
+        candidate = f"{current} {part}".strip() if current else part
+        if len(candidate) <= chunk_size:
+            current = candidate
+            continue
+        if current:
+            chunks.append(current)
+        while len(part) > chunk_size:
+            chunks.append(part[:chunk_size])
+            part = part[chunk_size:]
+        current = part
+    if current:
+        chunks.append(current)
+    return chunks
 
 
 def _chat_client(prefer_real_models: bool = True) -> OpenAICompatibleChatClient | None:

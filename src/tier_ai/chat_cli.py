@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .chat import answer_project_question, to_dict
+from .chat import answer_project_question, stream_project_question, to_dict
 from .retrieval import RetrievalFilter
 
 
@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--date-to", default=None)
     parser.add_argument("--limit", type=int, default=6)
     parser.add_argument("--no-real-models", action="store_true")
+    parser.add_argument("--stream", action="store_true")
     return parser
 
 
@@ -40,6 +41,19 @@ def main() -> None:
         date_to=args.date_to,
         limit=args.limit,
     )
+    if args.stream:
+        for event in stream_project_question(
+            project_id=args.project_id,
+            project_slug=args.project_slug,
+            question=args.question,
+            index_root=index_root,
+            filters=filters,
+            prefer_real_models=not args.no_real_models,
+            max_sources=args.limit,
+        ):
+            print(json.dumps(event, ensure_ascii=False), flush=True)
+        return
+
     response = answer_project_question(
         project_id=args.project_id,
         project_slug=args.project_slug,
