@@ -14,6 +14,8 @@ from .retrieval import RetrievalFilter, RetrievalHit, RetrievalSearchSummary, se
 
 
 DEFAULT_CHAT_MODEL = "Qwen3-30B-A3B-Instruct-2507"
+CHAT_HISTORY_FILE = "history.json"
+GENERAL_CHAT_FILE = "general.json"
 
 
 @dataclass(slots=True)
@@ -64,6 +66,8 @@ def answer_project_question(
     project_slug: str,
     question: str,
     index_root: Path,
+    project_data_root: Path | None = None,
+    history_root: Path | None = None,
     filters: RetrievalFilter | None = None,
     prefer_real_models: bool = True,
     max_sources: int = 6,
@@ -85,7 +89,7 @@ def answer_project_question(
         sources=sources,
         prefer_real_models=prefer_real_models,
     )
-    return ChatResponse(
+    response = ChatResponse(
         project_id=project_id,
         project_slug=project_slug,
         question=question,
@@ -99,21 +103,34 @@ def answer_project_question(
         sources=sources,
         created_at=_now_iso(),
     )
+    _persist_project_chat_turn(
+        project_data_root=project_data_root,
+        question=question,
+        response=response,
+    )
+    return response
 
 
 def answer_general_question(
     *,
     question: str,
+    history_root: Path | None = None,
     prefer_real_models: bool = True,
 ) -> GeneralChatResponse:
     answer = _generate_general_answer(question=question, prefer_real_models=prefer_real_models)
-    return GeneralChatResponse(
+    response = GeneralChatResponse(
         question=question,
         answer=answer,
         backend="remote" if _remote_chat_url() else "local",
         model_name=_chat_model_name(),
         created_at=_now_iso(),
     )
+    _persist_general_chat_turn(
+        history_root=history_root,
+        question=question,
+        response=response,
+    )
+    return response
 
 
 def prepare_project_question(
@@ -142,6 +159,7 @@ def prepare_project_question(
 def stream_general_question(
     *,
     question: str,
+    history_root: Path | None = None,
     prefer_real_models: bool = True,
 ) -> Iterator[dict[str, Any]]:
     yield {
@@ -166,6 +184,11 @@ def stream_general_question(
         model_name=_chat_model_name(),
         created_at=_now_iso(),
     )
+    _persist_general_chat_turn(
+        history_root=history_root,
+        question=question,
+        response=response,
+    )
     yield {"type": "final", "response": dataclasses.asdict(response)}
 
 
@@ -175,6 +198,7 @@ def stream_project_question(
     project_slug: str,
     question: str,
     index_root: Path,
+    project_data_root: Path | None = None,
     filters: RetrievalFilter | None = None,
     prefer_real_models: bool = True,
     max_sources: int = 6,
@@ -227,6 +251,11 @@ def stream_project_question(
         sources=sources,
         created_at=_now_iso(),
     )
+    _persist_project_chat_turn(
+        project_data_root=project_data_root,
+        question=question,
+        response=response,
+    )
     yield {"type": "final", "response": to_dict(response)}
 
 
@@ -265,6 +294,16 @@ def _fallback_general_answer(question: str) -> str:
 def to_dict(response: ChatResponse) -> dict[str, Any]:
     payload = dataclasses.asdict(response)
     return payload
+
+
+def load_chat_history(history_path: Path) -> list[dict[str, Any]]:
+    if not history_path.exists():
+        return []
+    try:
+        loaded = json.loads(history_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    return loaded if isinstance(loaded, list) else []
 
 
 def _generate_answer(
@@ -398,6 +437,91 @@ def _sources_from_hits(hits: list[RetrievalHit]) -> list[ChatSource]:
             )
         )
     return sources
+
+
+def _persist_project_chat_turn(
+    *,
+    project_data_root: Path | None,
+    question: str,
+    response: ChatResponse,
+) -> None:
+    if project_data_root is None:
+        return
+    history_path = Path(project_data_root).joinpath("chat", CHAT_HISTORY_FILE)
+    _append_chat_turn(
+        history_path,
+        question=question,
+        answer=response.answer,
+        created_at=response.created_at,
+        backend=response.backend,
+        model_name=response.model_name,
+        citations=response.citations,
+        sources=[dataclasses.asdict(source) for source in response.sources],
+        project_id=response.project_id,
+        project_slug=response.project_slug,
+    )
+
+
+def _persist_general_chat_turn(
+    *,
+    history_root: Path | None,
+    question: str,
+    response: GeneralChatResponse,
+) -> None:
+    if history_root is None:
+        return
+    history_path = Path(history_root).joinpath("chat", GENERAL_CHAT_FILE)
+    _append_chat_turn(
+        history_path,
+        question=question,
+        answer=response.answer,
+        created_at=response.created_at,
+        backend=response.backend,
+        model_name=response.model_name,
+        citations=[],
+        sources=[],
+        project_id="general",
+        project_slug="general",
+    )
+
+
+def _append_chat_turn(
+    history_path: Path,
+    *,
+    question: str,
+    answer: str,
+    created_at: str,
+    backend: str,
+    model_name: str,
+    citations: list[str],
+    sources: list[dict[str, Any]],
+    project_id: str,
+    project_slug: str,
+) -> None:
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    messages = load_chat_history(history_path)
+    messages.append(
+        {
+            "role": "user",
+            "content": question,
+            "created_at": created_at,
+        }
+    )
+    messages.append(
+        {
+            "role": "assistant",
+            "content": answer,
+            "created_at": created_at,
+            "backend": backend,
+            "model_name": model_name,
+            "citations": citations,
+            "sources": sources,
+            "project_id": project_id,
+            "project_slug": project_slug,
+            "streaming": False,
+        }
+    )
+    history_path.write_text(json.dumps(messages, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def _chunk_text(text: str, *, chunk_size: int = 120) -> list[str]:

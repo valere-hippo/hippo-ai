@@ -209,6 +209,8 @@ def chat_project(
         project_slug=project.slug,
         question=payload.question,
         index_root=index_root,
+        project_data_root=Path(project.root_path),
+        history_root=settings.state_dir,
         filters=filters,
         prefer_real_models=payload.prefer_real_models,
         max_sources=payload.limit,

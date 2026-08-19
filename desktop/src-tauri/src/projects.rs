@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectMetadata {
@@ -107,6 +108,27 @@ pub struct ProjectInventory {
   pub scanned_at: String,
   pub summary: ProjectInventorySummary,
   pub files: Vec<ProjectFileEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ChatMessageRecord {
+  pub role: String,
+  pub content: String,
+  pub created_at: String,
+  #[serde(default)]
+  pub streaming: bool,
+  #[serde(default)]
+  pub backend: Option<String>,
+  #[serde(default)]
+  pub model_name: Option<String>,
+  #[serde(default)]
+  pub citations: Vec<String>,
+  #[serde(default)]
+  pub sources: Vec<Value>,
+  #[serde(default)]
+  pub project_id: Option<String>,
+  #[serde(default)]
+  pub project_slug: Option<String>,
 }
 
 #[derive(Clone)]
@@ -279,6 +301,9 @@ impl ProjectStore {
       fs::create_dir_all(&path).map_err(io_error)?;
       directories.insert(name.to_string(), path.to_string_lossy().into_owned());
     }
+    let chat_path = root_path.join("chat");
+    fs::create_dir_all(&chat_path).map_err(io_error)?;
+    directories.insert("chat".to_string(), chat_path.to_string_lossy().into_owned());
     Ok(directories)
   }
 
@@ -387,6 +412,39 @@ impl ProjectStore {
       .as_ref()
       .map(PathBuf::from)
       .unwrap_or_else(|| self.project_root(record))
+  }
+
+  pub fn load_chat_history(&self, project_id: Option<&str>) -> Result<Vec<ChatMessageRecord>, String> {
+    let history_path = self.chat_history_path(project_id)?;
+    if !history_path.exists() {
+      return Ok(Vec::new());
+    }
+    let text = fs::read_to_string(&history_path).map_err(io_error)?;
+    if text.trim().is_empty() {
+      return Ok(Vec::new());
+    }
+    serde_json::from_str::<Vec<ChatMessageRecord>>(&text)
+      .map_err(|error| format!("Chat-Verlauf konnte nicht gelesen werden: {error}"))
+  }
+
+  fn chat_history_path(&self, project_id: Option<&str>) -> Result<PathBuf, String> {
+    match project_id.filter(|value| !value.trim().is_empty()) {
+      Some(project_id) => {
+        let project = self.get_project(project_id)?;
+        let path = self.project_root(&project).join("chat").join("history.json");
+        if let Some(parent) = path.parent() {
+          fs::create_dir_all(parent).map_err(io_error)?;
+        }
+        Ok(path)
+      }
+      None => {
+        let path = self.state_dir.join("chat").join("general.json");
+        if let Some(parent) = path.parent() {
+          fs::create_dir_all(parent).map_err(io_error)?;
+        }
+        Ok(path)
+      }
+    }
   }
 
   fn unique_slug(&self, name: &str) -> Result<String, String> {

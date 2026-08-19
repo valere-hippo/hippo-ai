@@ -1,6 +1,6 @@
 mod projects;
 
-use projects::{ProjectCreateInput, ProjectInventory, ProjectRecord, ProjectStore};
+use projects::{ChatMessageRecord, ProjectCreateInput, ProjectInventory, ProjectRecord, ProjectStore};
 use serde_json::Value;
 use serde::Serialize;
 use std::env;
@@ -244,6 +244,7 @@ fn chat_project(
   let project = project_store().get_project(&project_id)?;
   let mut extras: Vec<(&str, Option<String>)> = vec![
     ("--question", Some(question)),
+    ("--project-data-root", Some(project.root_path.clone())),
     ("--species", species),
     ("--file-type", file_type),
     ("--category", category),
@@ -277,6 +278,7 @@ fn chat_project_stream(
   let project = project_store().get_project(&project_id)?;
   let mut extras: Vec<(&str, Option<String>)> = vec![
     ("--question", Some(question)),
+    ("--project-data-root", Some(project.root_path.clone())),
     ("--species", species),
     ("--file-type", file_type),
     ("--category", category),
@@ -323,6 +325,11 @@ fn chat_general_stream(
   run_tier_ai_general_chat_command_stream(&app, python_executable, project_root, request_id, &extras)
 }
 
+#[tauri::command]
+fn load_chat_thread(project_id: Option<String>) -> Result<Vec<ChatMessageRecord>, String> {
+  project_store().load_chat_history(project_id.as_deref())
+}
+
 fn main() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
@@ -339,7 +346,8 @@ fn main() {
       chat_project,
       chat_project_stream,
       chat_general,
-      chat_general_stream
+      chat_general_stream,
+      load_chat_thread
     ])
     .run(tauri::generate_context!())
     .expect("error while running hippo-ai desktop app");
@@ -666,6 +674,7 @@ fn run_tier_ai_general_chat_command(
   command.args(&python.args);
   command.env("PYTHONPATH", &src_path);
   command.arg("-m").arg("tier_ai.chat_cli");
+  command.arg("--project-root").arg(project_root.to_string_lossy().into_owned());
 
   for (flag, value) in extras {
     if let Some(value) = value.as_ref().filter(|value| !value.trim().is_empty()) {
@@ -713,6 +722,7 @@ fn run_tier_ai_general_chat_command_stream(
   command.args(&python.args);
   command.env("PYTHONPATH", &src_path);
   command.arg("-m").arg("tier_ai.chat_cli");
+  command.arg("--project-root").arg(project_root.to_string_lossy().into_owned());
 
   for (flag, value) in extras {
     if let Some(value) = value.as_ref().filter(|value| !value.trim().is_empty()) {

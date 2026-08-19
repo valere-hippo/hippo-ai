@@ -13,7 +13,7 @@ from .models import ProjectCreate, ProjectFileEntry, ProjectInventory, ProjectIn
 from .settings import get_settings
 
 
-PROJECT_FOLDERS = ("input", "analysis", "reports", "exports", "notes", "attachments")
+PROJECT_FOLDERS = ("input", "analysis", "reports", "exports", "notes", "attachments", "chat")
 
 
 def slugify(value: str) -> str:

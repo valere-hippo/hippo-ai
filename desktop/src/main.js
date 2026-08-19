@@ -5,16 +5,9 @@ import { open } from '@tauri-apps/plugin-dialog';
 const projectSelect = document.getElementById('project-select');
 const projectList = document.getElementById('project-list');
 const projectSummary = document.getElementById('project-summary');
-const projectForm = document.getElementById('project-form');
-const createProjectButton = document.getElementById('create-project-button');
-const attachProjectButton = document.getElementById('attach-project-button');
-const refreshProjectsButton = document.getElementById('refresh-projects-button');
-const refreshProjectInventoryButton = document.getElementById('refresh-project-inventory-button');
-const pickProjectFolderButton = document.querySelector('[data-action="pick-project-folder"]');
 const chatForm = document.getElementById('chat-form');
 const chatQuestion = document.getElementById('chat-question');
 const chatButton = document.getElementById('chat-button');
-const clearChatButton = document.getElementById('clear-chat-button');
 const chatThread = document.getElementById('chat-thread');
 const chatTitle = document.getElementById('chat-title');
 const chatContext = document.getElementById('chat-context');
@@ -26,15 +19,14 @@ const progressBar = document.getElementById('progress-bar');
 
 const projectSelectionKey = 'hippo-ai.desktop.project.selected';
 const projectFormKey = 'hippo-ai.desktop.project.form';
-const chatThreadsKey = 'hippo-ai.desktop.chat.threads';
 
 let selectedProjectId = localStorage.getItem(projectSelectionKey) || '';
 let projectRecords = [];
-let chatThreads = loadChatThreads();
+let currentProjectInventory = null;
+let chatThreads = {};
 let activeChatRequestId = null;
 let activeChatUnlisten = null;
 
-restoreProjectFormState();
 loadProjects();
 renderActiveChatContext();
 renderChatThread();
@@ -47,8 +39,9 @@ projectSelect.addEventListener('change', async () => {
     localStorage.removeItem(projectSelectionKey);
   }
   renderActiveChatContext();
-  renderChatThread();
   await loadSelectedProject();
+  await loadChatThreadForSelection();
+  renderChatThread();
 });
 
 projectList.addEventListener('click', async (event) => {
@@ -64,122 +57,14 @@ projectList.addEventListener('click', async (event) => {
     localStorage.removeItem(projectSelectionKey);
   }
   renderActiveChatContext();
+  await loadSelectedProject();
+  await loadChatThreadForSelection();
   renderChatThread();
-  await loadSelectedProject();
-});
-
-projectForm.addEventListener('input', persistProjectFormState);
-projectForm.addEventListener('change', persistProjectFormState);
-
-createProjectButton.addEventListener('click', async () => {
-  const payload = getProjectPayload();
-  if (!payload.name) {
-    projectSummary.textContent = 'Bitte zuerst einen Projektnamen eingeben.';
-    return;
-  }
-
-  createProjectButton.disabled = true;
-  attachProjectButton.disabled = true;
-  try {
-    const project = await invoke('create_project', {
-      name: payload.name,
-      description: payload.description,
-      client: payload.client,
-      tags: splitTags(payload.tags),
-      source_path: payload.source_path || null,
-    });
-    await loadProjects(project.id);
-    projectSelect.value = project.id;
-    selectedProjectId = project.id;
-    localStorage.setItem(projectSelectionKey, selectedProjectId);
-    renderActiveChatContext();
-    renderChatThread();
-    await loadSelectedProject();
-    projectSummary.textContent = `Projekt "${project.name}" wurde angelegt.`;
-  } catch (error) {
-    projectSummary.textContent = `Projekt konnte nicht erstellt werden: ${error}`;
-  } finally {
-    createProjectButton.disabled = false;
-    attachProjectButton.disabled = false;
-  }
-});
-
-attachProjectButton.addEventListener('click', async () => {
-  if (!selectedProjectId) {
-    projectSummary.textContent = 'Bitte zuerst ein Projekt auswählen.';
-    return;
-  }
-
-  const sourcePath = document.getElementById('project-source-path').value.trim();
-  if (!sourcePath) {
-    projectSummary.textContent = 'Bitte zuerst einen Quellordner auswählen.';
-    return;
-  }
-
-  attachProjectButton.disabled = true;
-  createProjectButton.disabled = true;
-  try {
-    await invoke('attach_project_folder', {
-      project_id: selectedProjectId,
-      source_path: sourcePath,
-    });
-    await loadProjects(selectedProjectId);
-    await loadSelectedProject();
-    projectSummary.textContent = 'Ordner wurde dem Projekt angehängt.';
-  } catch (error) {
-    projectSummary.textContent = `Ordner konnte nicht angehängt werden: ${error}`;
-  } finally {
-    attachProjectButton.disabled = false;
-    createProjectButton.disabled = false;
-  }
-});
-
-refreshProjectsButton.addEventListener('click', async () => {
-  await loadProjects(selectedProjectId || null);
-  await loadSelectedProject();
-});
-
-refreshProjectInventoryButton.addEventListener('click', async () => {
-  if (!selectedProjectId) {
-    projectSummary.textContent = 'Bitte zuerst ein Projekt auswählen.';
-    return;
-  }
-
-  refreshProjectInventoryButton.disabled = true;
-  try {
-    const inventory = await invoke('refresh_project_inventory', { project_id: selectedProjectId });
-    renderProjectSummary(inventory);
-    projectSummary.textContent = 'Projektinhalt aktualisiert.';
-  } catch (error) {
-    projectSummary.textContent = `Projektinventar konnte nicht aktualisiert werden: ${error}`;
-  } finally {
-    refreshProjectInventoryButton.disabled = false;
-  }
-});
-
-pickProjectFolderButton?.addEventListener('click', async () => {
-  const selected = await open({
-    multiple: false,
-    directory: true,
-    title: 'Projektordner oder Netzlaufwerk auswählen',
-  });
-
-  if (typeof selected === 'string' && selected.trim()) {
-    document.getElementById('project-source-path').value = selected;
-    persistProjectFormState();
-  }
 });
 
 chatForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   await runChat();
-});
-
-clearChatButton.addEventListener('click', () => {
-  const key = getChatThreadKey();
-  chatThreads[key] = [];
-  saveChatThreads();
-  renderChatThread();
 });
 
 function getChatThreadKey() {
@@ -192,6 +77,10 @@ function getChatThreadTitle() {
   }
   const project = projectRecords.find((record) => record.id === selectedProjectId);
   return project ? project.name : 'Projekt-Chat';
+}
+
+function getSelectedProject() {
+  return projectRecords.find((record) => record.id === selectedProjectId) || null;
 }
 
 function renderActiveChatContext() {
@@ -293,7 +182,6 @@ async function runChat() {
   };
   messages.push(userMessage, assistantMessage);
   chatThreads[key] = messages;
-  saveChatThreads();
   renderChatThread();
 
   chatButton.disabled = true;
@@ -322,7 +210,6 @@ async function runChat() {
     if (payload.type === 'meta') {
       if (Array.isArray(payload.sources)) {
         assistantMessage.sources = payload.sources;
-        saveChatThreads();
         renderChatThread();
       }
       return;
@@ -330,7 +217,6 @@ async function runChat() {
 
     if (payload.type === 'delta') {
       assistantMessage.content = `${assistantMessage.content || ''}${String(payload.delta || '')}`;
-      saveChatThreads();
       renderChatThread();
       return;
     }
@@ -339,7 +225,6 @@ async function runChat() {
       assistantMessage.content = payload.response.answer || assistantMessage.content;
       assistantMessage.sources = payload.response.sources || assistantMessage.sources;
       assistantMessage.streaming = false;
-      saveChatThreads();
       renderChatThread();
       return;
     }
@@ -368,7 +253,6 @@ async function runChat() {
       assistantMessage.content = result.stderr || result.stdout || `Chat fehlgeschlagen (Exit-Code ${result.exit_code})`;
       assistantMessage.sources = [];
       assistantMessage.streaming = false;
-      saveChatThreads();
       renderChatThread();
       setStatus('Fehler', 'error');
       return;
@@ -378,13 +262,13 @@ async function runChat() {
     assistantMessage.content = parsed.answer || assistantMessage.content || 'Keine Antwort erhalten.';
     assistantMessage.sources = parsed.sources || assistantMessage.sources || [];
     assistantMessage.streaming = false;
-    saveChatThreads();
     renderChatThread();
     setStatus('Fertig', 'ready');
+    await loadChatThreadForSelection();
+    renderChatThread();
   } catch (error) {
     assistantMessage.content = `Chat fehlgeschlagen: ${error}`;
     assistantMessage.streaming = false;
-    saveChatThreads();
     renderChatThread();
     setStatus('Fehler', 'error');
   } finally {
@@ -400,24 +284,6 @@ async function runChat() {
     chatButton.disabled = false;
     setProgress('Bereit', 0, false);
   }
-}
-
-function loadChatThreads() {
-  const stored = localStorage.getItem(chatThreadsKey);
-  if (!stored) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(stored);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    localStorage.removeItem(chatThreadsKey);
-    return {};
-  }
-}
-
-function saveChatThreads() {
-  localStorage.setItem(chatThreadsKey, JSON.stringify(chatThreads));
 }
 
 function parseChatResult(stdout) {
@@ -438,6 +304,8 @@ async function loadProjects(preferredProjectId = null) {
     renderProjectSelect(projectRecords, preferredProjectId);
     renderProjectList(projectRecords);
     await loadSelectedProject();
+    await loadChatThreadForSelection();
+    renderChatThread();
   } catch (error) {
     projectSummary.textContent = `Projektliste konnte nicht geladen werden: ${error}`;
     projectList.innerHTML = '';
@@ -499,19 +367,32 @@ function renderProjectList(projects) {
 
 async function loadSelectedProject() {
   if (!selectedProjectId) {
+    currentProjectInventory = null;
     projectSummary.textContent = 'Kein Projekt ausgewählt. Du kannst direkt im allgemeinen Chat arbeiten.';
     renderProjectList(projectRecords);
     renderActiveChatContext();
+    currentProjectInventory = null;
     return;
   }
 
   try {
     const inventory = await invoke('get_project_inventory', { project_id: selectedProjectId });
+    currentProjectInventory = inventory;
     renderProjectSummary(inventory);
     renderProjectList(projectRecords);
     renderActiveChatContext();
   } catch (error) {
     projectSummary.textContent = `Projektinventar konnte nicht geladen werden: ${error}`;
+  }
+}
+
+async function loadChatThreadForSelection() {
+  const key = getChatThreadKey();
+  try {
+    const messages = await invoke('load_chat_thread', { project_id: selectedProjectId || null });
+    chatThreads[key] = Array.isArray(messages) ? messages : [];
+  } catch {
+    chatThreads[key] = chatThreads[key] || [];
   }
 }
 
@@ -535,51 +416,10 @@ function renderProjectSummary(inventory) {
   projectSummary.innerHTML = lines.map((line) => `<div>${escapeHtml(line)}</div>`).join('');
 }
 
-function getProjectPayload() {
-  return {
-    name: document.getElementById('project-name').value.trim(),
-    description: document.getElementById('project-description').value.trim(),
-    client: document.getElementById('project-client').value.trim(),
-    tags: document.getElementById('project-tags').value.trim(),
-    source_path: document.getElementById('project-source-path').value.trim(),
-  };
-}
-
-function splitTags(value) {
-  return value
-    .split(/[;,]/)
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
-
-function restoreProjectFormState() {
-  const stored = localStorage.getItem(projectFormKey);
-  if (!stored) {
-    return;
-  }
-  try {
-    const state = JSON.parse(stored);
-    document.getElementById('project-name').value = typeof state.name === 'string' ? state.name : '';
-    document.getElementById('project-description').value = typeof state.description === 'string' ? state.description : '';
-    document.getElementById('project-client').value = typeof state.client === 'string' ? state.client : '';
-    document.getElementById('project-tags').value = typeof state.tags === 'string' ? state.tags : '';
-    document.getElementById('project-source-path').value = typeof state.source_path === 'string' ? state.source_path : '';
-  } catch {
-    localStorage.removeItem(projectFormKey);
-  }
-}
-
-function persistProjectFormState() {
-  localStorage.setItem(
-    projectFormKey,
-    JSON.stringify({
-      name: document.getElementById('project-name').value,
-      description: document.getElementById('project-description').value,
-      client: document.getElementById('project-client').value,
-      tags: document.getElementById('project-tags').value,
-      source_path: document.getElementById('project-source-path').value,
-    }),
-  );
+function getPrimaryGeodataPath(inventory = currentProjectInventory) {
+  const files = Array.isArray(inventory?.files) ? inventory.files : [];
+  const geodata = files.find((file) => file.category === 'geodata' && file.absolute_path);
+  return geodata?.absolute_path || '';
 }
 
 function formatDateTime(value) {

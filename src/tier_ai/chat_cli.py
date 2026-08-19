@@ -5,7 +5,13 @@ import dataclasses
 import json
 from pathlib import Path
 
-from .chat import answer_general_question, answer_project_question, stream_general_question, stream_project_question, to_dict
+from .chat import (
+    answer_general_question,
+    answer_project_question,
+    stream_general_question,
+    stream_project_question,
+    to_dict,
+)
 from .retrieval import RetrievalFilter
 
 
@@ -15,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--project-id", default="general")
     parser.add_argument("--project-slug", default="general")
     parser.add_argument("--project-root", default=None)
+    parser.add_argument("--project-data-root", default=None)
     parser.add_argument("--index-root", default=None)
     parser.add_argument("--question", required=True)
     parser.add_argument("--species", default=None)
@@ -36,6 +43,7 @@ def main() -> None:
         if args.stream:
             for event in stream_general_question(
                 question=args.question,
+                history_root=resolve_history_root(args.project_root),
                 prefer_real_models=not args.no_real_models,
             ):
                 print(json.dumps(event, ensure_ascii=False), flush=True)
@@ -43,12 +51,14 @@ def main() -> None:
 
         response = answer_general_question(
             question=args.question,
+            history_root=resolve_history_root(args.project_root),
             prefer_real_models=not args.no_real_models,
         )
         print(json.dumps(dataclasses.asdict(response), ensure_ascii=False, indent=2))
         return
 
     project_root = resolve_project_root(args.project_root)
+    project_data_root = resolve_project_data_root(args.project_data_root, project_root)
     index_root = Path(args.index_root) if args.index_root else project_root / "workspace" / "state" / "retrieval"
     filters = RetrievalFilter(
         species=args.species,
@@ -65,6 +75,7 @@ def main() -> None:
             project_slug=args.project_slug,
             question=args.question,
             index_root=index_root,
+            project_data_root=project_data_root,
             filters=filters,
             prefer_real_models=not args.no_real_models,
             max_sources=args.limit,
@@ -77,6 +88,7 @@ def main() -> None:
         project_slug=args.project_slug,
         question=args.question,
         index_root=index_root,
+        project_data_root=project_data_root,
         filters=filters,
         prefer_real_models=not args.no_real_models,
         max_sources=args.limit,
@@ -97,6 +109,16 @@ def resolve_project_root(project_root: str | None) -> Path:
         if not candidate.parent or candidate == candidate.parent:
             return start
         candidate = candidate.parent
+
+
+def resolve_project_data_root(project_data_root: str | None, project_root: Path) -> Path | None:
+    if project_data_root:
+        return Path(project_data_root).resolve()
+    return None
+
+
+def resolve_history_root(project_root: str | None) -> Path:
+    return resolve_project_root(project_root) / "workspace" / "state"
 
 
 if __name__ == "__main__":
