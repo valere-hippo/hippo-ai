@@ -18,7 +18,6 @@ dependencies = [
 
 [project.scripts]
 hippo-ai = "tier_ai.cli:main"
-tier-ai = "tier_ai.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
