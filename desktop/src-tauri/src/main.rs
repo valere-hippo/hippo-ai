@@ -421,7 +421,7 @@ fn run_tier_ai_retrieval_command(
   command.arg("--project-slug").arg(&project.slug);
 
   for (flag, value) in extras {
-    if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
+    if let Some(value) = value.as_ref().filter(|value| !value.trim().is_empty()) {
       command.arg(flag).arg(value);
     }
   }
@@ -468,7 +468,7 @@ fn run_tier_ai_chat_command(
   command.arg("--project-slug").arg(&project.slug);
 
   for (flag, value) in extras {
-    if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
+    if let Some(value) = value.as_ref().filter(|value| !value.trim().is_empty()) {
       command.arg(flag).arg(value);
     }
   }
@@ -518,7 +518,7 @@ fn run_tier_ai_chat_command_stream(
   command.arg("--project-slug").arg(&project.slug);
 
   for (flag, value) in extras {
-    if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
+    if let Some(value) = value.as_ref().filter(|value| !value.trim().is_empty()) {
       command.arg(flag).arg(value);
     }
   }

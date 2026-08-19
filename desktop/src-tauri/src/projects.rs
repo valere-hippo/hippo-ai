@@ -238,7 +238,7 @@ impl ProjectStore {
     let mut updated = project.clone();
     updated.updated_at = inventory.scanned_at.clone();
     updated.metadata = metadata_from_inventory(
-      updated.metadata.source.clone(),
+      &updated.metadata.source,
       updated.metadata.source_path.clone(),
       Some(&inventory),
     );
