@@ -1,6 +1,7 @@
 # hippo-ai backend
 
-Phase-0 backend für Projektverwaltung, Authentifizierung, Audit-Logging und Backups.
+Phase-0/5 backend für Projektverwaltung, Authentifizierung, Audit-Logging, Backups,
+Projektfreigaben und Rechteverwaltung.
 
 ## Lokaler Start
 
@@ -54,3 +55,20 @@ Projektlogik lokal oder auf dem Backend-Server laufen.
 Der Chat-Endpunkt beantwortet Fragen auf Basis des aktiven Projektindex und
 liefert die zugehörigen Quellen mit. Die Antwort wird bewusst auf Deutsch
 erzeugt und soll inhaltlich nur die geladenen Projektquellen verwenden.
+
+## Projekte und Rechte
+
+Das Backend speichert Benutzer und Freigaben lokal im Workspace. Ein Projekt
+hat einen Besitzer und kann für weitere Benutzer mit den Rechten `read`,
+`write`, `export` und `validate` freigegeben werden.
+
+Wichtige Endpunkte:
+
+- `GET /projects`
+- `GET /projects/{project_id}`
+- `GET /projects/{project_id}/access`
+- `POST /projects/{project_id}/share`
+- `DELETE /projects/{project_id}/share/{username}`
+- `GET /projects/{project_id}/audit`
+- `GET /users`
+- `POST /users`

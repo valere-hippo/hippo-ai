@@ -37,8 +37,11 @@ class Settings(BaseSettings):
     def state_dir(self) -> Path:
         return self.data_root / "state"
 
+    @property
+    def users_path(self) -> Path:
+        return self.state_dir / "users.json"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-

@@ -5,18 +5,19 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 from .models import UserContext
+from .users import UserStore
 from .settings import get_settings
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def create_access_token(username: str) -> str:
+def create_access_token(username: str, role: str = "member") -> str:
     settings = get_settings()
     expiry = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
     payload = {
         "sub": username,
-        "role": "admin",
+        "role": role,
         "exp": expiry,
         "iat": datetime.now(timezone.utc),
     }
@@ -24,8 +25,7 @@ def create_access_token(username: str) -> str:
 
 
 def verify_credentials(username: str, password: str) -> bool:
-    settings = get_settings()
-    return username == settings.admin_user and password == settings.admin_password
+    return UserStore().verify_credentials(username, password)
 
 
 def get_current_user(
@@ -50,4 +50,3 @@ def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
 
     return UserContext(username=username, role=role)
-

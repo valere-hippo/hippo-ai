@@ -19,6 +19,41 @@ class UserContext(BaseModel):
     role: str = "admin"
 
 
+class UserRecord(BaseModel):
+    username: str
+    display_name: str = ""
+    role: str = "member"
+    password_hash: str = ""
+    active: bool = True
+    created_at: datetime
+    updated_at: datetime
+
+
+class UserCreate(BaseModel):
+    username: str
+    display_name: str = ""
+    role: str = "member"
+    password: str
+
+
+class ProjectShareEntry(BaseModel):
+    username: str
+    permissions: list[str] = Field(default_factory=list)
+    granted_by: str = ""
+    granted_at: datetime
+
+
+class ProjectShareRequest(BaseModel):
+    username: str
+    permissions: list[str] = Field(default_factory=list)
+    replace: bool = False
+
+
+class ProjectAccessView(BaseModel):
+    owner_username: str = ""
+    shared_with: list[ProjectShareEntry] = Field(default_factory=list)
+
+
 class ProjectCreate(BaseModel):
     name: str
     description: str = ""
@@ -40,6 +75,8 @@ class ProjectRecord(BaseModel):
     updated_at: datetime
     directories: dict[str, str] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    owner_username: str = ""
+    shared_with: list[ProjectShareEntry] = Field(default_factory=list)
 
 
 class ProjectFileEntry(BaseModel):

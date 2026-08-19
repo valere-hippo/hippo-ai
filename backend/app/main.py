@@ -1,4 +1,5 @@
 import logging
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -6,7 +7,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import create_access_token, get_current_user, verify_credentials
-from .audit import write_audit
+from .audit import list_audit_events, render_audit_event, write_audit
 from .backups import create_project_backup
 from .logging_config import configure_logging
 from .models import (
@@ -15,17 +16,22 @@ from .models import (
     HealthResponse,
     LoginRequest,
     ProjectCreate,
+    ProjectAccessView,
     ProjectInventory,
     ProjectRecord,
+    ProjectShareRequest,
     ProjectChatRequest,
     ProjectChatResponse,
     RetrievalIndexRequest,
     RetrievalSearchRequest,
     TokenResponse,
     UserContext,
+    UserCreate,
+    UserRecord,
 )
 from .project_store import ProjectStore
 from .settings import get_settings
+from .users import UserStore
 from tier_ai.chat import answer_project_question
 from tier_ai.retrieval import RetrievalFilter, index_project, search_project, to_dict
 
@@ -33,6 +39,7 @@ configure_logging()
 logger = logging.getLogger(__name__)
 settings = get_settings()
 store = ProjectStore()
+users = UserStore()
 
 app = FastAPI(title=settings.app_name, version=settings.version)
 
@@ -59,7 +66,8 @@ def health() -> HealthResponse:
 def login(payload: LoginRequest) -> TokenResponse:
     if not verify_credentials(payload.username, payload.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    token = create_access_token(payload.username)
+    user = users.get_user(payload.username.strip().lower())
+    token = create_access_token(user.username, user.role)
     write_audit("auth.login", "user", payload.username, payload.username, {"ip": "unknown"})
     return TokenResponse(access_token=token)
 
@@ -72,12 +80,14 @@ def me(user: UserContext = Depends(get_current_user)) -> UserContext:
 @app.get("/projects", response_model=list[ProjectRecord])
 def list_projects(user: UserContext = Depends(get_current_user)) -> list[ProjectRecord]:
     logger.info("List projects requested by %s", user.username)
-    return store.list_projects()
+    projects = store.list_projects(user.username, user.role)
+    write_audit("project.list", "project", "*", user.username, {"count": len(projects)})
+    return projects
 
 
 @app.post("/projects", response_model=ProjectRecord, status_code=status.HTTP_201_CREATED)
 def create_project(payload: ProjectCreate, user: UserContext = Depends(get_current_user)) -> ProjectRecord:
-    project = store.create_project(payload)
+    project = store.create_project(payload, owner_username=user.username)
     write_audit("project.create", "project", project.id, user.username, {"name": project.name, "slug": project.slug})
     return project
 
@@ -85,12 +95,48 @@ def create_project(payload: ProjectCreate, user: UserContext = Depends(get_curre
 @app.get("/projects/{project_id}", response_model=ProjectRecord)
 def get_project(project_id: str, user: UserContext = Depends(get_current_user)) -> ProjectRecord:
     logger.info("Project %s requested by %s", project_id, user.username)
-    return store.get_project(project_id)
+    project = store.get_project_for_user(project_id, user, "read")
+    write_audit("project.view", "project", project.id, user.username, {"source": "api"})
+    return project
+
+
+@app.get("/projects/{project_id}/access", response_model=ProjectAccessView)
+def get_project_access(project_id: str, user: UserContext = Depends(get_current_user)) -> ProjectAccessView:
+    project = store.get_project_for_user(project_id, user, "read")
+    write_audit("project.access.view", "project", project.id, user.username, {"source": "api"})
+    return ProjectAccessView(owner_username=project.owner_username, shared_with=project.shared_with)
+
+
+@app.post("/projects/{project_id}/share", response_model=ProjectAccessView)
+def share_project(project_id: str, payload: ProjectShareRequest, user: UserContext = Depends(get_current_user)) -> ProjectAccessView:
+    project = store.get_project_for_user(project_id, user, "read")
+    if not store.can_manage_shares(project, user.username, user.role):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert")
+    users.get_user(payload.username.strip().lower())
+    updated = store.share_project(project.id, payload.username, payload.permissions, user.username, replace=payload.replace)
+    write_audit(
+        "project.share",
+        "project",
+        project.id,
+        user.username,
+        {"target_user": payload.username, "permissions": payload.permissions, "replace": payload.replace},
+    )
+    return ProjectAccessView(owner_username=updated.owner_username, shared_with=updated.shared_with)
+
+
+@app.delete("/projects/{project_id}/share/{username}", response_model=ProjectAccessView)
+def revoke_project_share(project_id: str, username: str, user: UserContext = Depends(get_current_user)) -> ProjectAccessView:
+    project = store.get_project_for_user(project_id, user, "read")
+    if not store.can_manage_shares(project, user.username, user.role):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert")
+    updated = store.revoke_project_access(project.id, username, user.username)
+    write_audit("project.share.revoke", "project", project.id, user.username, {"target_user": username})
+    return ProjectAccessView(owner_username=updated.owner_username, shared_with=updated.shared_with)
 
 
 @app.post("/projects/{project_id}/backup", response_model=BackupResult)
 def backup_project(project_id: str, user: UserContext = Depends(get_current_user)) -> BackupResult:
-    project = store.get_project(project_id)
+    project = store.get_project_for_user(project_id, user, "export")
     backup = create_project_backup(project)
     write_audit(
         "project.backup",
@@ -104,23 +150,32 @@ def backup_project(project_id: str, user: UserContext = Depends(get_current_user
 
 @app.get("/projects/{project_id}/files")
 def list_project_files(project_id: str, user: UserContext = Depends(get_current_user)) -> dict:
-    project = store.get_project(project_id)
+    project = store.get_project_for_user(project_id, user, "read")
     root = Path(project.metadata.get("source_path") or project.root_path)
     files = [str(path.relative_to(root)) for path in root.rglob("*") if path.is_file()]
+    write_audit(
+        "project.files.list",
+        "project",
+        project.id,
+        user.username,
+        {"file_count": len(files)},
+    )
     return {"project_id": project.id, "files": files}
 
 
 @app.get("/projects/{project_id}/inventory", response_model=ProjectInventory)
 def get_project_inventory(project_id: str, user: UserContext = Depends(get_current_user)) -> ProjectInventory:
-    project = store.get_project(project_id)
+    project = store.get_project_for_user(project_id, user, "read")
     logger.info("Project inventory requested by %s for %s", user.username, project_id)
-    return store.get_project_inventory(project_id)
+    write_audit("project.inventory.view", "project", project.id, user.username, {"source": "api"})
+    return store.get_project_inventory(project_id, actor=user.username, role=user.role)
 
 
 @app.post("/projects/{project_id}/inventory/refresh", response_model=ProjectInventory)
 def refresh_project_inventory(project_id: str, user: UserContext = Depends(get_current_user)) -> ProjectInventory:
     logger.info("Project inventory refresh requested by %s for %s", user.username, project_id)
-    inventory = store.refresh_project_inventory(project_id)
+    project = store.get_project_for_user(project_id, user, "write")
+    inventory = store.refresh_project_inventory(project.id, actor=user.username, role=user.role)
     write_audit("project.inventory.refresh", "project", project_id, user.username, {"record_count": inventory.summary.total_files})
     return inventory
 
@@ -131,7 +186,7 @@ def index_project_retrieval(
     payload: RetrievalIndexRequest,
     user: UserContext = Depends(get_current_user),
 ) -> dict:
-    project = store.get_project(project_id)
+    project = store.get_project_for_user(project_id, user, "write")
     source_root = Path(payload.source_root or project.metadata.get("source_path") or project.root_path)
     index_root = Path(payload.index_root or settings.state_dir / "retrieval")
     summary = index_project(
@@ -158,7 +213,7 @@ def search_project_retrieval(
     payload: RetrievalSearchRequest,
     user: UserContext = Depends(get_current_user),
 ) -> dict:
-    project = store.get_project(project_id)
+    project = store.get_project_for_user(project_id, user, "read")
     index_root = Path(payload.index_root or settings.state_dir / "retrieval")
     filters = RetrievalFilter(
         species=payload.species,
@@ -193,7 +248,7 @@ def chat_project(
     payload: ProjectChatRequest,
     user: UserContext = Depends(get_current_user),
 ) -> ProjectChatResponse:
-    project = store.get_project(project_id)
+    project = store.get_project_for_user(project_id, user, "read")
     index_root = Path(payload.index_root or settings.state_dir / "retrieval")
     filters = RetrievalFilter(
         species=payload.species,
@@ -253,3 +308,32 @@ def chat_project(
         ],
         created_at=datetime.fromisoformat(response.created_at),
     )
+
+
+@app.get("/projects/{project_id}/audit")
+def get_project_audit(project_id: str, user: UserContext = Depends(get_current_user)) -> dict:
+    project = store.get_project_for_user(project_id, user, "read")
+    events = list_audit_events(subject_type="project", subject_id=project.id)
+    write_audit("project.audit.view", "project", project.id, user.username, {"event_count": len(events)})
+    return {
+        "project_id": project.id,
+        "project_slug": project.slug,
+        "events": [json.loads(event.model_dump_json()) for event in events],
+        "readable": [render_audit_event(event) for event in events],
+    }
+
+
+@app.get("/users", response_model=list[UserRecord])
+def list_users(user: UserContext = Depends(get_current_user)) -> list[UserRecord]:
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert")
+    return users.list_users()
+
+
+@app.post("/users", response_model=UserRecord, status_code=status.HTTP_201_CREATED)
+def create_user(payload: UserCreate, user: UserContext = Depends(get_current_user)) -> UserRecord:
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert")
+    created = users.create_user(payload)
+    write_audit("user.create", "user", created.username, user.username, {"role": created.role})
+    return created

@@ -9,11 +9,20 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from .models import ProjectCreate, ProjectFileEntry, ProjectInventory, ProjectInventorySummary, ProjectRecord
+from .models import (
+    ProjectCreate,
+    ProjectFileEntry,
+    ProjectInventory,
+    ProjectInventorySummary,
+    ProjectRecord,
+    ProjectShareEntry,
+    UserContext,
+)
 from .settings import get_settings
 
 
 PROJECT_FOLDERS = ("input", "analysis", "reports", "exports", "notes", "attachments", "chat")
+PROJECT_PERMISSIONS = {"read", "write", "export", "validate"}
 
 
 def slugify(value: str) -> str:
@@ -93,8 +102,11 @@ class ProjectStore:
         if not self.registry_path.exists():
             self.registry_path.write_text("[]", encoding="utf-8")
 
-    def list_projects(self) -> list[ProjectRecord]:
-        return [ProjectRecord.model_validate(item) for item in self._load_registry()]
+    def list_projects(self, username: str | None = None, role: str | None = None) -> list[ProjectRecord]:
+        projects = [ProjectRecord.model_validate(item) for item in self._load_registry()]
+        if not username or (role or "").lower() == "admin":
+            return projects
+        return [project for project in projects if self.can_access(project, username, "read")]
 
     def get_project(self, project_id: str) -> ProjectRecord:
         for project in self.list_projects():
@@ -102,7 +114,13 @@ class ProjectStore:
                 return project
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Projekt nicht gefunden")
 
-    def create_project(self, payload: ProjectCreate) -> ProjectRecord:
+    def get_project_for_user(self, project_id: str, user: UserContext, permission: str = "read") -> ProjectRecord:
+        project = self.get_project(project_id)
+        if not self.can_access(project, user.username, permission, role=user.role):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert")
+        return project
+
+    def create_project(self, payload: ProjectCreate, owner_username: str = "") -> ProjectRecord:
         created_at = datetime.now(timezone.utc)
         slug = self._unique_slug(payload.name)
         project_id = uuid.uuid4().hex
@@ -123,6 +141,8 @@ class ProjectStore:
             updated_at=created_at,
             directories={key: str(path) for key, path in directories.items()},
             metadata={"source": "manual", "source_path": str(source_path) if source_path else None},
+            owner_username=owner_username.strip().lower(),
+            shared_with=[],
         )
 
         if source_path is not None:
@@ -134,11 +154,13 @@ class ProjectStore:
         self._save_record(record)
         return record
 
-    def attach_project_folder(self, project_id: str, source_path: str) -> ProjectRecord:
+    def attach_project_folder(self, project_id: str, source_path: str, actor: str | None = None) -> ProjectRecord:
         if not source_path.strip():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ordnerpfad fehlt")
 
         project = self.get_project(project_id)
+        if actor and not self.can_access(project, actor, "write"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert")
         source_root = normalize_source_path(Path(source_path))
         inventory = self._scan_and_store_inventory(project, source_root)
         project.metadata = metadata_from_inventory("attached", str(source_root), inventory)
@@ -147,8 +169,10 @@ class ProjectStore:
         self._save_record(project)
         return project
 
-    def get_project_inventory(self, project_id: str) -> ProjectInventory:
+    def get_project_inventory(self, project_id: str, actor: str | None = None, role: str | None = None) -> ProjectInventory:
         project = self.get_project(project_id)
+        if actor and not self.can_access(project, actor, "read", role=role):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert")
         inventory_path = self._project_root(project) / "inventory.json"
         if inventory_path.exists():
             return ProjectInventory.model_validate_json(inventory_path.read_text(encoding="utf-8"))
@@ -156,8 +180,10 @@ class ProjectStore:
         source_root = self._project_source_root(project)
         return self._scan_and_store_inventory(project, source_root)
 
-    def refresh_project_inventory(self, project_id: str) -> ProjectInventory:
+    def refresh_project_inventory(self, project_id: str, actor: str | None = None, role: str | None = None) -> ProjectInventory:
         project = self.get_project(project_id)
+        if actor and not self.can_access(project, actor, "write", role=role):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert")
         source_root = self._project_source_root(project)
         inventory = self._scan_and_store_inventory(project, source_root)
         project.updated_at = datetime.now(timezone.utc)
@@ -177,6 +203,69 @@ class ProjectStore:
         records = [item for item in records if item.get("id") != record.id and item.get("slug") != record.slug]
         records.append(json.loads(record.model_dump_json()))
         self._save_registry(records)
+
+    def share_project(self, project_id: str, username: str, permissions: list[str], granted_by: str, replace: bool = False) -> ProjectRecord:
+        project = self.get_project(project_id)
+        normalized_username = username.strip().lower()
+        if not normalized_username:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Benutzername fehlt")
+
+        normalized_permissions = self._normalize_permissions(permissions)
+        if not normalized_permissions:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Keine Berechtigungen angegeben")
+
+        shares = [share for share in project.shared_with if share.username != normalized_username or not replace]
+        if replace:
+            shares = [share for share in shares if share.username != normalized_username]
+        shares.append(
+            ProjectShareEntry(
+                username=normalized_username,
+                permissions=normalized_permissions,
+                granted_by=granted_by.strip().lower(),
+                granted_at=datetime.now(timezone.utc),
+            )
+        )
+        project.shared_with = self._deduplicate_shares(shares)
+        project.updated_at = datetime.now(timezone.utc)
+        self._write_manifest(project)
+        self._save_record(project)
+        return project
+
+    def revoke_project_access(self, project_id: str, username: str, revoked_by: str) -> ProjectRecord:
+        project = self.get_project(project_id)
+        normalized_username = username.strip().lower()
+        project.shared_with = [share for share in project.shared_with if share.username != normalized_username]
+        project.updated_at = datetime.now(timezone.utc)
+        self._write_manifest(project)
+        self._save_record(project)
+        return project
+
+    def get_project_access(self, project_id: str) -> dict[str, Any]:
+        project = self.get_project(project_id)
+        return {
+            "project_id": project.id,
+            "owner_username": project.owner_username,
+            "shared_with": [json.loads(share.model_dump_json()) for share in project.shared_with],
+        }
+
+    def can_access(self, project: ProjectRecord, username: str, permission: str, role: str | None = None) -> bool:
+        normalized_username = username.strip().lower()
+        if not normalized_username:
+            return False
+        if (role or "").lower() == "admin":
+            return True
+        if project.owner_username and project.owner_username.lower() == normalized_username:
+            return True
+        for share in project.shared_with:
+            if share.username.lower() == normalized_username and self._permission_matches(share.permissions, permission):
+                return True
+        return False
+
+    def can_manage_shares(self, project: ProjectRecord, username: str, role: str | None = None) -> bool:
+        normalized_username = username.strip().lower()
+        if (role or "").lower() == "admin":
+            return True
+        return bool(project.owner_username and project.owner_username.lower() == normalized_username)
 
     def _create_project_directories(self, root_path: Path) -> dict[str, Path]:
         root_path.mkdir(parents=True, exist_ok=True)
@@ -275,3 +364,29 @@ class ProjectStore:
             slug = f"{base_slug}-{counter}"
             counter += 1
         return slug
+
+    def _normalize_permissions(self, permissions: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for permission in permissions:
+            value = permission.strip().lower()
+            if value in PROJECT_PERMISSIONS and value not in normalized:
+                normalized.append(value)
+        return normalized
+
+    def _permission_matches(self, granted: list[str], requested: str) -> bool:
+        requested_value = requested.strip().lower()
+        if requested_value == "read":
+            return bool(set(granted) & {"read", "write", "export", "validate"})
+        if requested_value == "write":
+            return bool(set(granted) & {"write"})
+        if requested_value == "export":
+            return bool(set(granted) & {"export", "write"})
+        if requested_value == "validate":
+            return bool(set(granted) & {"validate", "write"})
+        return requested_value in granted
+
+    def _deduplicate_shares(self, shares: list[ProjectShareEntry]) -> list[ProjectShareEntry]:
+        unique: dict[str, ProjectShareEntry] = {}
+        for share in shares:
+            unique[share.username.lower()] = share
+        return list(unique.values())
