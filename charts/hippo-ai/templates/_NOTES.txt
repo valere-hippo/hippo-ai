@@ -1,3 +1,0 @@
-NOTES:
-- Edit values.yaml with proper registry and credentials.
-- Ensure PVCs and storage classes exist before installing.
