@@ -1,0 +1,2 @@
+Alembic migrations for HIPPO-AI.
+Run from inside the API container with `alembic upgrade head`.

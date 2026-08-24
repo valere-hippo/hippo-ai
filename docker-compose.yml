@@ -1,0 +1,45 @@
+services:
+  api:
+    build:
+      context: ./backend
+    container_name: hippo-ai-api
+    env_file:
+      - .env
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+
+  postgres:
+    image: postgres:17
+    container_name: hippo-ai-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - hippo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    container_name: hippo-ai-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - hippo_redis_data:/data
+
+volumes:
+  hippo_postgres_data:
+  hippo_redis_data:
