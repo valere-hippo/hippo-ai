@@ -15,6 +15,11 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
     status_code=status.HTTP_201_CREATED,
 )
 async def register(payload: UserCreate, db: DbSession) -> User:
+    # public registration always creates USER role
+    payload_role = getattr(payload, 'role', None)
+    if payload_role is not None:
+        # ignore any role set by client
+        pass
     email = str(payload.email).lower().strip()
 
     existing = await db.execute(select(User).where(User.email == email))

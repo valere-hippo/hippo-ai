@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>HIPPO-AI Desktop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="renderer.css">
+  </head>
+  <body>
+    <div class="app">
+      <div class="sidebar">
+        <div class="header"><div class="logo">HIPPO‑AI</div><div class="small">Desktop</div></div>
+        <!-- Top ChatBar: New Chat like ChatGPT -->
+        <div class="sidebar-top">
+          <button id="sidebar-new-chat" class="button">＋ Neuer Chat</button>
+        </div>
+        <div class="section" id="auth">
+          <h3>Anmelden</h3>
+                    <div style="display:flex;flex-direction:column;gap:8px;align-items:stretch;justify-content:center;height:220px">
+                      <input id="email" class="input" placeholder="E-Mail" />
+                      <input id="password" class="input" type="password" placeholder="Passwort" />
+                      <button id="login" class="button" onclick="doLogin()">Anmelden</button>
+                      <div id="login-result" class="small"></div>
+                    </div>
+                </div>
+        <div class="section" id="projects" style="display:none">
+                  <h3>Projekte</h3>
+                  <div style="display:flex;gap:8px;margin-bottom:8px">
+                    <button id="refresh-projects" class="button">Aktualisieren</button>
+                    <button id="create-project" class="button">Projekt erstellen</button>
+                  </div>
+                  <ul id="project-list" class="project-list"></ul>
+                </div>
+              <div class="section" id="chats" style="display:none">
+                <h3>Chats</h3>
+                <ul id="chat-list" class="project-list"></ul>
+              </div>
+      </div>
+      <div class="main" style="display:none">
+        <div class="section">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h2 id="page-title">Willkommen</h2>
+            <div class="small" id="selected-info"></div>
+          </div>
+          <div class="chat-window">
+            <div id="conversations" class="small" style="margin-bottom:8px"></div>
+            <div id="chat-log" class="chat-log"></div>
+            <!-- floating input pill similar to ChatGPT -->
+            <div class="input-pill" id="input-pill">
+              <button id="new-chat-plus" class="small">＋</button>
+              <input id="chat-input" class="input" placeholder="Frag mich alles" />
+              <button id="upload-chat-file" class="small">📎</button>
+              <button id="mic-btn" class="small">🎤</button>
+              <button id="send-chat" class="button">Nachdenken</button>
+            </div>
+          </div>
+                </div>
+
+        <div class="section" id="files" style="display:none">
+          <h3>File Browser & Voice</h3>
+          <button id="select-folder" class="button">Select Local Folder</button>
+          <div id="selected-folder" class="small"></div>
+          <input type="file" id="file-upload" />
+          <button id="upload-file" class="button">Upload to selected project</button>
+          <div id="upload-result" class="small"></div>
+
+          <div style="margin-top:12px">
+            <button id="start-record" class="button">Start</button>
+            <button id="stop-record" class="button" disabled>Stop</button>
+            <div id="voice-status" class="small"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <link rel="stylesheet" href="toasts.css">
+    <div id="toast-root"></div>
+    <script src="renderer.js"></script>
+  </body>
+</html>

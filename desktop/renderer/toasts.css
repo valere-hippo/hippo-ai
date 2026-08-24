@@ -1,0 +1,4 @@
+.toast{position:fixed;right:24px;bottom:24px;background:rgba(0,0,0,0.6);color:white;padding:10px 14px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.5);opacity:0;transform:translateY(10px);transition:all .25s ease}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.success{background:#0b6efd}
+.toast.error{background:#ef4444}

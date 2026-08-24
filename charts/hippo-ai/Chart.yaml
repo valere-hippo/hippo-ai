@@ -1,0 +1,9 @@
+apiVersion: v2
+name: hippo-ai
+description: Helm chart for Hippo-AI components (api, workers)
+version: 0.1.0
+appVersion: "0.2.0"
+keywords:
+  - hippo-ai
+  - ai
+  - gpu

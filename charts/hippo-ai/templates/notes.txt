@@ -1,0 +1,6 @@
+Hippo-AI Helm chart
+
+To install:
+  helm upgrade --install hippo-ai charts/hippo-ai -f charts/hippo-ai/values.yaml
+
+Update values.yaml for registry, storage and ingress.

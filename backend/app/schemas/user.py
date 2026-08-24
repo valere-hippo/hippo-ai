@@ -9,6 +9,10 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class AdminUserCreate(UserCreate):
+    role: UserRole = UserRole.USER
+
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
