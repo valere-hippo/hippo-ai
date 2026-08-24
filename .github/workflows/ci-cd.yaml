@@ -48,17 +48,21 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
+      - name: Deploy to remote server via SSH
+        uses: appleboy/ssh-action@v0.1.8
         with:
-          version: '1.27.0'
-      - name: Install Helm
-        uses: azure/setup-helm@v3
-      - name: Deploy via Helm
-        env:
-          KUBECONFIG: ${{ secrets.KUBECONFIG }}
-        run: |
-          helm upgrade --install hippo-ai charts/hippo-ai -f charts/hippo-ai/values.yaml \
-            --set image.repository=ghcr.io/${{ github.repository_owner }}/hippo-ai-api \
-            --set image.tag=latest
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script: |
+            set -e
+            echo "Logging into ghcr..."
+            echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+            cd ${{ secrets.DEPLOY_PATH }} || exit 0
+            echo "Pulling images..."
+            docker-compose pull || true
+            echo "Bringing up services..."
+            docker-compose up -d --remove-orphans
+            echo "Cleanup unused images"
+            docker image prune -f || true

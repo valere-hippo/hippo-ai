@@ -1,0 +1,124 @@
+# Production-ready docker-compose for HIPPO-AI
+# - Replace ${OWNER} with your GHCR org/user
+# - Ensure host has Docker, docker-compose (v2), and nvidia-container-toolkit installed
+# - Use .env for secrets (POSTGRES_PASSWORD, etc.)
+
+version: '3.8'
+
+services:
+  api:
+    image: ghcr.io/${OWNER}/hippo-ai-api:latest
+    restart: always
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app:ro
+      - ./backend/uploads:/app/uploads
+    ports:
+      - "8000:8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+  worker:
+    image: ghcr.io/${OWNER}/hippo-ai-worker:latest
+    restart: always
+    env_file: .env
+    depends_on:
+      - redis
+      - api
+    command: ["python", "-u", "worker.py"]
+    deploy:
+      resources: {}
+
+  postgres:
+    image: postgres:17
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hippo_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-hippo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    volumes:
+      - hippo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8-alpine
+    restart: always
+    volumes:
+      - hippo_redis_data:/data
+    ports:
+      - "6379:6379"
+
+  nginx:
+    image: nginx:stable-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./backend/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certs:/etc/letsencrypt
+    depends_on:
+      - api
+
+  vllm:
+    image: ghcr.io/${OWNER}/vllm:latest
+    restart: unless-stopped
+    # NOTE: To run on GPU, host must enable NVIDIA runtime
+    deploy:
+      resources: {}
+    environment:
+      MODEL_NAME: "your-model"
+      PORT: 8001
+    volumes:
+      - /models/vllm:/models
+    ports:
+      - "8001:8001"
+
+  whisper:
+    image: ghcr.io/${OWNER}/whisper:latest
+    restart: unless-stopped
+    deploy:
+      resources: {}
+    environment:
+      PORT: 8002
+    volumes:
+      - /models/whisper:/models
+    ports:
+      - "8002:8002"
+
+  # optional metrics exporter for GPU monitoring (nvidia-smi exporter)
+  node-exporter-nvidia:
+    image: nvidia/smi-exporter:latest
+    restart: unless-stopped
+    devices:
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia0:/dev/nvidia0
+    ports:
+      - "9411:9411"
+
+volumes:
+  hippo_postgres_data:
+  hippo_redis_data:
+  certs:
+
+# Operational notes:
+# - For GPU containers, run docker compose with the nvidia runtime enabled (on modern Docker, use --gpus "device=0")
+#   Example: docker compose up -d --profile gpu
+# - Scaling workers:
+#   docker compose up -d --scale worker=3
+# - For high-availability and autoscaling across nodes, consider Kubernetes (recommended) or Docker Swarm.
+# - Keep secrets in .env or in deployment environment variables via your CI/secret manager.

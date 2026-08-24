@@ -1,0 +1,94 @@
+# DEPRECATED - cleaned up
+# Replace ${OWNER} with your GHCR org/user or full image names.
+# Requirements on host: Docker, docker-compose, nvidia-container-toolkit (for --gpus)
+
+version: '3.8'
+
+services:
+  api:
+    image: ghcr.io/${OWNER}/hippo-ai-api:latest
+    restart: always
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+
+  postgres:
+    image: postgres:17
+    restart: always
+    environment:
+      POSTGRES_DB: hippo_ai
+      POSTGRES_USER: hippo
+      POSTGRES_PASSWORD: change_me
+    volumes:
+      - hippo_postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:8-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - hippo_redis_data:/data
+
+  nginx:
+    image: nginx:stable-alpine
+    restart: always
+    ports:
+      - "8080:80"
+    volumes:
+      - ./backend/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+
+  # GPU model runtime (vLLM or your model server)
+  vllm:
+    image: ghcr.io/${OWNER}/vllm:latest
+    restart: always
+    # Use GPUs: requires nvidia-container-runtime / --gpus support on host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      MODEL_NAME: "your-model-name"
+      PORT: 8001
+    volumes:
+      - /models:/models
+    ports:
+      - "8001:8001"
+
+  # Whisper/transcription worker stub
+  whisper:
+    image: ghcr.io/${OWNER}/whisper:latest
+    restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      PORT: 8002
+    volumes:
+      - /models/whisper:/models
+    ports:
+      - "8002:8002"
+
+volumes:
+  hippo_postgres_data:
+  hippo_redis_data:
+
+# Notes:
+# - Replace image names with the actual images you push to GHCR.
+# - Ensure the host has NVIDIA drivers + nvidia-container-toolkit installed to allow GPU containers to run.
+# - For production, secure environment secrets and consider a reverse proxy with TLS (nginx + certbot) or use a cloud load balancer.
