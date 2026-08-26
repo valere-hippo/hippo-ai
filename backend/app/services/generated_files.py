@@ -146,9 +146,19 @@ def _pdf_escape(text: str) -> str:
     )
 
 
+def _pdf_text_bytes(text: str) -> bytes:
+    # PDF viewers generally expect text in a single-byte encoding for Base14 fonts.
+    # Windows-1252 preserves German umlauts and ß, which fixes mojibake in report PDFs.
+    return _pdf_escape(text).encode("cp1252", errors="replace")
+
+
 def build_simple_pdf_bytes(title: str, body: str) -> bytes:
-    def make_line(text: str, font: str, size: int, x: int, y: int) -> str:
-        return f"BT /{font} {size} Tf 1 0 0 1 {x} {y} Tm ({_pdf_escape(text)}) Tj ET"
+    def make_line(text: str, font: str, size: int, x: int, y: int) -> bytes:
+        return (
+            f"BT /{font} {size} Tf 1 0 0 1 {x} {y} Tm (".encode("ascii")
+            + _pdf_text_bytes(text)
+            + b") Tj ET"
+        )
 
     def wrap_text(text: str, max_chars: int) -> list[str]:
         wrapped: list[str] = []
@@ -175,7 +185,7 @@ def build_simple_pdf_bytes(title: str, body: str) -> bytes:
         blocks = blocks[1:]
 
     pages: list[list[str]] = []
-    current_page: list[str] = []
+    current_page: list[bytes] = []
     y = 740
 
     def new_page() -> None:
@@ -204,7 +214,7 @@ def build_simple_pdf_bytes(title: str, body: str) -> bytes:
     # Title page header
     add_line(title_text, font="Helvetica-Bold", size=22, indent=0, gap_after=6)
     add_line("Bericht", font="Helvetica", size=11, indent=0, gap_after=10)
-    current_page.append("BT 0.10 0.49 0.44 rg 72 708 445 2 re f ET")
+    current_page.append(b"BT 0.10 0.49 0.44 rg 72 708 445 2 re f ET")
     y -= 18
 
     for block in blocks:
@@ -221,7 +231,11 @@ def build_simple_pdf_bytes(title: str, body: str) -> bytes:
             cleaned = re.sub(r"\s*\|\s*", "   ", block.text)
             add_wrapped(cleaned, font="Helvetica", size=10, indent=10, max_chars=86, gap_after=2)
         elif block.kind == "rule":
-            current_page.append(f"BT /Helvetica 10 Tf 1 0 0 1 72 {y} Tm (____________________________________________) Tj ET")
+            current_page.append(
+                f"BT /Helvetica 10 Tf 1 0 0 1 72 {y} Tm (____________________________________________) Tj ET".encode(
+                    "ascii"
+                )
+            )
             y -= 16
         else:
             add_wrapped(block.text, font="Helvetica", size=12, indent=0, max_chars=88, gap_after=2)
@@ -245,14 +259,14 @@ def build_simple_pdf_bytes(title: str, body: str) -> bytes:
         page_lines = pages[index] if index < len(pages) else []
         page_obj_num = 6 + (index * 2)
         content_obj_num = page_obj_num + 1
-        content = "\n".join(page_lines).encode("utf-8")
+        content = b"\n".join(page_lines)
         page_obj = (
             f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
             f"/Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents {content_obj_num} 0 R >>"
-        ).encode("utf-8")
+        ).encode("ascii")
         objects.append(page_obj)
         objects.append(
-            f"<< /Length {len(content)} >>\nstream\n".encode("utf-8")
+            f"<< /Length {len(content)} >>\nstream\n".encode("ascii")
             + content
             + b"\nendstream"
         )
@@ -260,15 +274,15 @@ def build_simple_pdf_bytes(title: str, body: str) -> bytes:
     offsets = [0]
     for index, obj in enumerate(objects, start=1):
         offsets.append(buffer.tell())
-        buffer.write(f"{index} 0 obj\n".encode("utf-8"))
+        buffer.write(f"{index} 0 obj\n".encode("ascii"))
         buffer.write(obj)
         buffer.write(b"\nendobj\n")
 
     xref_offset = buffer.tell()
-    buffer.write(f"xref\n0 {len(objects) + 1}\n".encode("utf-8"))
+    buffer.write(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
     buffer.write(b"0000000000 65535 f \n")
     for offset in offsets[1:]:
-        buffer.write(f"{offset:010d} 00000 n \n".encode("utf-8"))
+        buffer.write(f"{offset:010d} 00000 n \n".encode("ascii"))
     buffer.write(
         (
             "trailer\n"
@@ -276,7 +290,7 @@ def build_simple_pdf_bytes(title: str, body: str) -> bytes:
             "startxref\n"
             f"{xref_offset}\n"
             "%%EOF\n"
-        ).encode("utf-8")
+        ).encode("ascii")
     )
     return buffer.getvalue()
 

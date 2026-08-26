@@ -17,6 +17,7 @@ def _sample_report() -> str:
         "| Name | Größe |\n"
         "| --- | --- |\n"
         "| a.txt | 12 B |\n"
+        "\nDer Ordner enthält außerdem die Datei Überblick und ist sorgfältig strukturiert.\n"
     )
 
 
@@ -39,3 +40,4 @@ def test_build_generated_pdf_contains_title_and_content():
     assert data.startswith(b"%PDF-1.4")
     assert b"Wegberg Ordneranalyse Bericht" in data
     assert b"Einleitung" in data
+    assert b"\xfc" in data or b"\xf6" in data or b"\xe4" in data
