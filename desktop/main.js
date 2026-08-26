@@ -3,6 +3,31 @@ const path = require('path')
 const fs = require('fs')
 const Tesseract = require('tesseract.js')
 
+function configurePermissions() {
+  try {
+    const permissions = new Set(['media', 'microphone', 'display-capture'])
+    const handler = (webContents, permission, callback) => {
+      if (permissions.has(permission)) {
+        callback(true)
+        return
+      }
+      callback(false)
+    }
+
+    if (app?.whenReady) {
+      const session = app ? require('electron').session : null
+      if (session?.defaultSession?.setPermissionRequestHandler) {
+        session.defaultSession.setPermissionRequestHandler(handler)
+      }
+      if (session?.defaultSession?.setPermissionCheckHandler) {
+        session.defaultSession.setPermissionCheckHandler((webContents, permission) => permissions.has(permission))
+      }
+    }
+  } catch (error) {
+    console.warn('Permission configuration failed', error)
+  }
+}
+
 function createWindow () {
   const win = new BrowserWindow({
     width: 1440,
@@ -26,6 +51,7 @@ function createWindow () {
 }
 
 app.whenReady().then(() => {
+  configurePermissions()
   createWindow()
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

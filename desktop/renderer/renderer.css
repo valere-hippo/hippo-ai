@@ -1164,6 +1164,43 @@ textarea {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.dashboard-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.dashboard-panel-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.dashboard-panel-subtitle {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dashboard-user-list {
+  display: grid;
+  gap: 10px;
+  max-height: min(42vh, 420px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.dashboard-user-item {
+  cursor: default;
+}
+
+.dashboard-inline-action {
+  width: auto;
+  min-width: 180px;
+  padding-inline: 18px;
+}
+
 .dashboard-panel-actions {
   display: flex;
   justify-content: flex-end;
@@ -1338,6 +1375,12 @@ select.text-input option {
 .modal-grid {
   display: grid;
   gap: 12px;
+}
+
+.modal-grid-scroll {
+  max-height: min(36vh, 360px);
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .modal-actions {

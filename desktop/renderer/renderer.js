@@ -759,6 +759,41 @@ function renderUsers() {
   })
 }
 
+function renderDashboardUsers(container) {
+  if (!container) return
+  container.innerHTML = ''
+
+  if (!Array.isArray(state.users) || !state.users.length) {
+    const empty = document.createElement('div')
+    empty.className = 'muted-copy'
+    empty.textContent = 'Noch keine Benutzer geladen.'
+    container.appendChild(empty)
+    return
+  }
+
+  state.users.forEach((user) => {
+    const row = document.createElement('div')
+    row.className = 'user-item dashboard-user-item'
+
+    const avatar = document.createElement('div')
+    avatar.className = 'item-avatar'
+    avatar.textContent = initialsFromUser(user)
+
+    const main = document.createElement('div')
+    main.className = 'item-main'
+    const title = document.createElement('div')
+    title.className = 'item-title'
+    title.textContent = user.full_name || user.email
+    const subtitle = document.createElement('div')
+    subtitle.className = 'item-subtitle'
+    subtitle.textContent = `${formatRole(user.role)} · ${user.email}`
+    main.append(title, subtitle)
+
+    row.append(avatar, main)
+    container.appendChild(row)
+  })
+}
+
 function renderAttachmentPreview() {
   els.attachmentPreview.innerHTML = ''
   state.draftAttachments.forEach((attachment, index) => {
@@ -1745,6 +1780,8 @@ async function createDashboardUser(container) {
       }),
     })
     await loadUsers()
+    const dashboardUsersList = document.querySelector('[data-dashboard-users]')
+    if (dashboardUsersList) renderDashboardUsers(dashboardUsersList)
     showToast('Benutzer erstellt')
   } catch (error) {
     showToast(error.message || 'Benutzer konnte nicht erstellt werden', 'error')
@@ -1838,6 +1875,9 @@ async function uploadDashboardFiles(container, projectId, fileList) {
 
 async function openUserDashboardModal(initialTab = 'profile') {
   if (!state.user) return
+  if (state.user.role === 'ADMIN') {
+    await loadUsers()
+  }
 
   const wrapper = document.createElement('div')
   wrapper.className = 'dashboard-modal'
@@ -2031,8 +2071,32 @@ async function openUserDashboardModal(initialTab = 'profile') {
   const usersPanel = document.createElement('section')
   usersPanel.className = 'dashboard-panel'
   if (state.user.role === 'ADMIN') {
+    const usersHeader = document.createElement('div')
+    usersHeader.className = 'dashboard-panel-header'
+    const usersHeaderCopy = document.createElement('div')
+    const usersTitle = document.createElement('div')
+    usersTitle.className = 'dashboard-panel-title'
+    usersTitle.textContent = 'Benutzerverwaltung'
+    const usersSubtitle = document.createElement('div')
+    usersSubtitle.className = 'dashboard-panel-subtitle'
+    usersSubtitle.textContent = 'Alle Benutzer sehen, neue Benutzer anlegen und Rollen prüfen.'
+    usersHeaderCopy.append(usersTitle, usersSubtitle)
+
+    const createAction = document.createElement('button')
+    createAction.type = 'button'
+    createAction.className = 'primary-button dashboard-inline-action'
+    createAction.textContent = 'Benutzer erstellen'
+    createAction.addEventListener('click', async () => {
+      await createDashboardUser(usersPanel)
+    })
+
     const createUserForm = buildDashboardCreateUserFields()
-    usersPanel.append(createUserForm)
+    const usersList = document.createElement('div')
+    usersList.className = 'dashboard-user-list'
+    usersList.dataset.dashboardUsers = 'true'
+    renderDashboardUsers(usersList)
+
+    usersPanel.append(usersHeader, createAction, createUserForm, usersList)
     panels.set('users', usersPanel)
   }
 
@@ -2493,7 +2557,22 @@ async function startRecording() {
   }
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [])
+    const audioInputs = devices.filter((device) => device.kind === 'audioinput')
+    const audioConstraints = audioInputs[0]?.deviceId
+      ? {
+          deviceId: { exact: audioInputs[0].deviceId },
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      : {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
     const audioContext = new (window.AudioContext || window.webkitAudioContext)()
     const analyser = audioContext.createAnalyser()
     analyser.fftSize = 1024
@@ -2577,13 +2656,13 @@ async function startRecording() {
   } catch (error) {
     const message = String(error?.message || error || '')
     if (/requested device not found|notfounderror/i.test(message)) {
-      showToast('Kein Mikrofon gefunden. Bitte ein Mikrofon anschließen.', 'error')
+      showToast('Kein Mikrofon gefunden oder das Standard-Mikrofon ist nicht erreichbar. Bitte ein anderes Eingabegerät wählen.', 'error')
     } else if (/notallowederror|permission denied|denied/i.test(message)) {
-      showToast('Mikrofonzugriff wurde verweigert.', 'error')
+      showToast('Mikrofonzugriff wurde verweigert. Bitte die Berechtigung in der App erlauben.', 'error')
     } else if (/no audio input|no microphone/i.test(message)) {
       showToast('Kein Mikrofon gefunden. Bitte ein anderes Eingabegerät wählen.', 'error')
     } else if (/not allowed|permission/i.test(message)) {
-      showToast('Mikrofonzugriff wurde verweigert.', 'error')
+      showToast('Mikrofonzugriff wurde verweigert. Bitte die Berechtigung in der App erlauben.', 'error')
     } else {
       showToast(message || 'Mikrofonzugriff verweigert', 'error')
     }
