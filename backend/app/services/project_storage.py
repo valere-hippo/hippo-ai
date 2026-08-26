@@ -8,8 +8,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import boto3
-from botocore.exceptions import ClientError
+try:
+    import boto3  # type: ignore
+    from botocore.exceptions import ClientError  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    boto3 = None
+
+    class ClientError(Exception):
+        pass
 
 from app.core.config import settings
 
@@ -60,7 +66,7 @@ def has_s3_storage() -> bool:
 
 
 def s3_client():
-    if not has_s3_storage():
+    if not has_s3_storage() or boto3 is None:
         return None
     kwargs: dict[str, Any] = {
         "region_name": settings.aws_region,
