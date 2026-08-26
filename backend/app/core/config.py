@@ -46,9 +46,11 @@ class Settings(BaseSettings):
     smtp_use_ssl: bool = False
     smtp_timeout_seconds: int = 10
 
-    # Optional Whisper/transcription endpoint (if you run a Whisper service)
-    whisper_api_url: str | None = None
-    whisper_api_key: str | None = None
+    # Local speech-to-text backend
+    stt_model: str = "base"
+    stt_device: str = "cpu"
+    stt_compute_type: str = "int8"
+    stt_language: str | None = "de"
 
     # Optional Hippo embedding endpoint
     hippo_embedding_url: str | None = None

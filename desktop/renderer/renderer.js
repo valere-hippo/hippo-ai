@@ -2615,18 +2615,13 @@ async function startRecording() {
 
     const chunks = []
     const mediaRecorder = new MediaRecorder(stream)
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    const recognition = SpeechRecognition ? new SpeechRecognition() : null
-    const transcriptState = { text: '', finalised: false, networkError: false }
 
     state.recording = {
       stream,
       audioContext,
       analyser,
       mediaRecorder,
-      recognition,
       chunks,
-      transcriptState,
       rafId: null,
     }
     state.isRecording = true
@@ -2639,20 +2634,12 @@ async function startRecording() {
     }
 
     mediaRecorder.onstop = async () => {
-      const transcript = transcriptState.text.trim()
       state.recording = null
       stopRecordingUI()
 
-      if (transcript) {
-        els.chatInput.value = transcript
-        resizeComposer()
-        els.chatInput.focus()
-        showToast('Spracherkennung wurde in das Eingabefeld übernommen')
-        return
-      }
-
       if (chunks.length) {
         try {
+          els.voiceStatus.textContent = 'Audio wird transkribiert...'
           const audioBlob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' })
           const serverTranscript = await transcribeAudioBlob(audioBlob)
           if (serverTranscript) {
@@ -2662,50 +2649,15 @@ async function startRecording() {
             showToast('Audio wurde transkribiert und ins Eingabefeld übernommen')
             return
           }
+          showToast('Während der Aufnahme wurde kein Text erkannt.', 'error')
+          return
         } catch (error) {
           console.warn('Server transcription failed', error)
-        }
-      }
-
-      if (!transcriptState.networkError) {
-        showToast('Während der Aufnahme wurde kein Text erkannt.', 'error')
-      }
-    }
-
-    if (recognition) {
-      recognition.lang = 'de-DE'
-      recognition.continuous = false
-      recognition.interimResults = true
-      recognition.onresult = (event) => {
-        const parts = []
-        for (let index = event.resultIndex; index < event.results.length; index += 1) {
-          parts.push(event.results[index][0].transcript)
-        }
-        transcriptState.text = parts.join(' ').trim()
-      }
-      recognition.onerror = (event) => {
-        const errorMap = {
-          'no-speech': 'Keine Sprache erkannt.',
-          'audio-capture': 'Das Mikrofon konnte nicht verwendet werden.',
-          'not-allowed': 'Mikrofonzugriff wurde verweigert.',
-          'service-not-allowed': 'Die Spracherkennung ist nicht erlaubt.',
-        }
-        if (event.error === 'network') {
-          transcriptState.networkError = true
+          showToast(String(error?.message || error || 'Transkription fehlgeschlagen'), 'error')
           return
         }
-        showToast(errorMap[event.error] || `Fehler bei der Spracherkennung: ${event.error}`, 'error')
       }
-      recognition.onend = () => {
-        transcriptState.finalised = true
-      }
-      try {
-        recognition.start()
-      } catch (error) {
-        console.warn(error)
-      }
-    } else {
-      showToast('Spracherkennung ist nicht verfügbar. Die Aufnahme läuft trotzdem.', 'error')
+      showToast('Während der Aufnahme wurde kein Text erkannt.', 'error')
     }
 
     mediaRecorder.start()
