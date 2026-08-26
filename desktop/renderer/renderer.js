@@ -877,6 +877,16 @@ async function openProfileModal() {
     copy: 'Bearbeite deine persönlichen Daten. Das Passwort ist optional.',
     content: form,
     submitLabel: 'Speichern',
+    extraActions: [
+      {
+        label: 'Abmelden',
+        className: 'ghost-action',
+        onClick: ({ close }) => {
+          close()
+          logout()
+        },
+      },
+    ],
   })
 
   if (!result) return
@@ -988,7 +998,7 @@ async function openEmbeddingModal() {
   }
 }
 
-function openModal({ title, copy, content, submitLabel }) {
+function openModal({ title, copy, content, submitLabel, extraActions = [] }) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div')
     overlay.className = 'modal-overlay'
@@ -1038,6 +1048,17 @@ function openModal({ title, copy, content, submitLabel }) {
       }
     })
 
+    extraActions.forEach((actionConfig) => {
+      const action = document.createElement('button')
+      action.type = 'button'
+      action.className = actionConfig.className || 'ghost-action'
+      action.textContent = actionConfig.label
+      action.addEventListener('click', () => actionConfig.onClick({ close: () => {
+        overlay.remove()
+        resolve(null)
+      } }))
+      actions.appendChild(action)
+    })
     actions.append(cancel, confirm)
     card.append(heading, copyNode, content, actions)
     overlay.appendChild(card)
