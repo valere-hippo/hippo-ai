@@ -2,9 +2,16 @@ from pydantic import BaseModel, ConfigDict
 from typing import List
 
 
+class ChatAttachment(BaseModel):
+    filename: str
+    mime_type: str | None = None
+    data_url: str | None = None
+
+
 class ChatMessageCreate(BaseModel):
     conversation_id: int | None = None
     message: str
+    attachments: List[ChatAttachment] | None = None
 
 
 class ChatMessageResponse(BaseModel):

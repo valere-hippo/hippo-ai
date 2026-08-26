@@ -8,6 +8,8 @@ from app.models.permission import PermissionLevel
 from app.core.config import settings
 from sqlalchemy import select, insert
 import httpx
+from app.schemas.chat import ChatAttachment
+from app.services.chat_payloads import build_message_content, storage_text
 
 router = APIRouter(prefix="/chat-enhanced", tags=["chat-enhanced"]) 
 
@@ -15,6 +17,7 @@ class ChatRequest(BaseModel):
     conversation_id: int | None = None
     project_id: int | None = None
     message: str
+    attachments: list[ChatAttachment] | None = None
 
 class ChatResponse(BaseModel):
     reply: str
@@ -50,7 +53,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             conversation_id=conv_id,
             user_id=current_user.id,
             role='user',
-            content=payload.message,
+            content=storage_text(payload.message, payload.attachments),
         )
     )
     await db.commit()
@@ -64,6 +67,10 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     for m in messages:
         role = 'user' if m.role == 'user' else 'assistant' if m.role == 'assistant' else 'system'
         hippo_messages.append({"role": role, "content": m.content})
+
+    if payload.attachments:
+        user_content = build_message_content(payload.message, payload.attachments)
+        hippo_messages[-1]["content"] = user_content
 
     # global system prompt
     global_sys = (

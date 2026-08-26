@@ -1,4 +1,28 @@
-.toast{position:fixed;right:24px;bottom:24px;background:rgba(0,0,0,0.6);color:white;padding:10px 14px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.5);opacity:0;transform:translateY(10px);transition:all .25s ease}
-.toast.show{opacity:1;transform:translateY(0)}
-.toast.success{background:#0b6efd}
-.toast.error{background:#ef4444}
+.toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 40;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(16, 24, 33, 0.96);
+  color: #edf4fb;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 60px rgba(2, 7, 13, 0.45);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.success {
+  border-color: rgba(99, 215, 191, 0.26);
+}
+
+.toast.error {
+  border-color: rgba(255, 107, 122, 0.28);
+}

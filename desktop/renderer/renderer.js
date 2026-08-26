@@ -1,468 +1,1150 @@
-﻿// Minimal robust renderer for login/chat
 const API = 'http://localhost:8000/api/v1'
-let token = null
-let currentConversation = null
 
-function authHeaders(){
-  if (token) return { 'Authorization': 'Bearer ' + token }
-  return {}
+const state = {
+  token: localStorage.getItem('hippo.token') || '',
+  user: null,
+  projects: [],
+  conversations: [],
+  users: [],
+  selectedProjectId: null,
+  currentConversationId: null,
+  draftAttachments: [],
+  recording: null,
+  isRecording: false,
+  projectConversationMemory: new Map(),
 }
 
-async function postJson(url, body){
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: Object.assign(
-        {'Content-Type': 'application/json'},
-        authHeaders()
-    ),
-    body: JSON.stringify(body)
+const els = {
+  appShell: document.getElementById('app-shell'),
+  loginScreen: document.getElementById('login-screen'),
+  workspaceShell: document.getElementById('workspace-shell'),
+  loginButton: document.getElementById('login'),
+  email: document.getElementById('email'),
+  password: document.getElementById('password'),
+  loginResult: document.getElementById('login-result'),
+  sidebarNewChat: document.getElementById('sidebar-new-chat'),
+  projectList: document.getElementById('project-list'),
+  conversationList: document.getElementById('conversation-list'),
+  adminSection: document.getElementById('admin-section'),
+  adminCreateUser: document.getElementById('admin-create-user'),
+  adminUserList: document.getElementById('admin-user-list'),
+  accountAvatar: document.getElementById('account-avatar'),
+  accountName: document.getElementById('account-name'),
+  accountMeta: document.getElementById('account-meta'),
+  logoutBtn: document.getElementById('logout-btn'),
+  pageTitle: document.getElementById('page-title'),
+  selectedInfo: document.getElementById('selected-info'),
+  projectPill: document.getElementById('project-pill'),
+  rolePill: document.getElementById('role-pill'),
+  chatLog: document.getElementById('chat-log'),
+  emptyState: document.getElementById('empty-state'),
+  attachmentPreview: document.getElementById('attachment-preview'),
+  chatInput: document.getElementById('chat-input'),
+  attachImageBtn: document.getElementById('attach-image-btn'),
+  imageInput: document.getElementById('image-input'),
+  micBtn: document.getElementById('mic-btn'),
+  sendChat: document.getElementById('send-chat'),
+  voiceStatus: document.getElementById('voice-status'),
+  voiceCanvas: document.getElementById('voice-canvas'),
+}
+
+function q(id) {
+  return document.getElementById(id)
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function initialsFromUser(user) {
+  const source = (user?.full_name || user?.email || 'H').trim()
+  const parts = source.split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return source.slice(0, 2).toUpperCase()
+}
+
+function getContextProject() {
+  return state.projects.find((project) => project.id === state.selectedProjectId) || null
+}
+
+function getConversationTitle(conversation) {
+  if (!conversation) return 'New chat'
+  return conversation.title || `Chat #${conversation.id}`
+}
+
+function authHeaders(extra = {}) {
+  const headers = { ...extra }
+  if (state.token) {
+    headers.Authorization = `Bearer ${state.token}`
+  }
+  return headers
+}
+
+async function apiJson(path, options = {}) {
+  const response = await fetch(`${API}${path}`, {
+    ...options,
+    headers: authHeaders({
+      ...(options.headers || {}),
+      ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
+    }),
   })
 
-  let data = {}
-
+  let data = null
   try {
-    data = await res.json()
-  } catch (e) {
-    data = {}
+    data = await response.json()
+  } catch (error) {
+    data = null
   }
 
-  if (!res.ok) {
-    const message =
-        data?.detail ||
-        data?.error ||
-        `HTTP ${res.status}`
-
+  if (!response.ok) {
+    const message = data?.detail || data?.error || `HTTP ${response.status}`
     throw new Error(message)
   }
 
   return data
 }
-async function getJson(url){
-  const res = await fetch(url, { headers: authHeaders() })
-  try{ return await res.json() } catch(e){ return {} }
-}
 
-function appLog(msg){
-  // Prefer electron logging to persist messages, fallback to debug div + console
-  try{ if(window && window.electron && window.electron.logError){ window.electron.logError(msg); return } }catch(e){}
-  try{ console.log(msg) }catch(e){}
-  const d = document.getElementById('debug-log'); if(!d) return; d.style.display='block'; const el = document.createElement('div'); el.innerText = msg; d.appendChild(el); if(d.childNodes.length>200) d.removeChild(d.firstChild)
-}
-
-function showToast(msg, type='success'){
-  const root = document.getElementById('toast-root'); if(!root) return
-  const el = document.createElement('div'); el.className='toast ' + type; el.innerText = msg; root.appendChild(el); setTimeout(()=>el.classList.add('show'),10); setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>root.removeChild(el),300) },4000)
-  appLog(msg)
-}
-
-function showLoader(text='Bitte warten...'){
-  let o = document.getElementById('loader-overlay')
-  if(!o){ o = document.createElement('div'); o.id='loader-overlay'; o.style.position='fixed'; o.style.left=0; o.style.top=0; o.style.right=0; o.style.bottom=0; o.style.display='flex'; o.style.alignItems='center'; o.style.justifyContent='center'; o.style.background='rgba(0,0,0,0.4)'; o.style.zIndex=9999; const b=document.createElement('div'); b.style.padding='16px'; b.style.background='rgba(11,14,28,0.9)'; b.style.borderRadius='8px'; b.style.color='white'; b.innerText=text; o.appendChild(b); document.body.appendChild(o) }
-}
-function hideLoader(){ const o = document.getElementById('loader-overlay'); if(o) o.remove() }
-
-async function doLogin(){
-  showLoader('Anmeldung...')
-  try{
-    const email = document.getElementById('email').value
-    const password = document.getElementById('password').value
-    if(!email || !password){ showToast('Bitte E-Mail und Passwort ausfüllen','error'); return }
-    try{
-      const res = await postJson(API + '/auth/login', { email, password })
-      if(res && res.access_token){ token = res.access_token; showToast('Angemeldet'); document.getElementById('auth').style.display='none'; document.getElementById('projects').style.display='block'; const m = document.querySelector('.main'); if(m) m.style.display='block'; await refreshProjects(); await refreshConversations(); } else { showToast('Login fehlgeschlagen','error') }
-    }catch(apiErr){
-      // If backend returned a structured error, show it
-      const msg = apiErr && apiErr.message ? apiErr.message : 'Login fehlgeschlagen'
-      showToast(msg,'error')
-      appLog('login error: '+msg)
-    }
-  }catch(e){ showToast('Fehler: ' + (e && e.message),'error'); appLog('login error: '+(e && e.message)) }
-  finally{ hideLoader() }
-}
-
-// Expose doLogin on window so inline onclick attributes work in all contexts (Electron/preload)
-window.doLogin = doLogin
-
-// attach listener as well (defensive)
-document.getElementById('login')?.addEventListener('click', doLogin)
-console.log('renderer: login handler attached')
-appLog('renderer: script loaded')
-
-const pwd = document.getElementById('password')
-if(pwd) pwd.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); doLogin() } })
-
-const projectConversations = new Map() // projectId -> conversationId
-let selectedProjectId = null
-
-async function refreshProjects(){
-  try{
-    const projects = await getJson(API + '/projects/');
-    const ul = document.getElementById('project-list'); if(!ul) return; ul.innerHTML='';
-    projects.forEach(p=>{
-      const li = document.createElement('li');
-      const icon = document.createElement('span'); icon.className='project-item-icon'; icon.innerHTML = '📁';
-      const title = document.createElement('span'); title.innerText = p.name; title.style.flex='1';
-      li.style.display='flex'; li.style.alignItems='center'; li.style.justifyContent='space-between'; li.dataset.projectId = p.id;
-      li.appendChild(icon);
-      li.appendChild(title);
-
-      // ellipsis menu button
-      const ell = document.createElement('button'); ell.className='ellipsis-button'; ell.innerText='⋯';
-      const controls = document.createElement('div'); controls.className='project-controls'; controls.appendChild(ell); li.appendChild(controls);
-
-      li.onclick = async (e)=>{ if(e.target === ell) return; selectProject(p.id, p.name, li) };
-
-      ell.addEventListener('click', (e)=>{ e.stopPropagation(); // show dropdown
-        // remove existing dropdowns
-        document.querySelectorAll('.dropdown-menu').forEach(d=>d.remove())
-        const menu = document.createElement('div'); menu.className='dropdown-menu';
-        const renameBtn = document.createElement('button'); renameBtn.innerText='Umbenennen';
-        const deleteBtn = document.createElement('button'); deleteBtn.innerText='Löschen';
-        renameBtn.addEventListener('click', async ()=>{ const newName = await createPromptModal('Neuer Projektname:'); if(!newName) return; showLoader('Umbenennen...'); const res = await postJson(API + '/projects/' + p.id, { name: newName, description: p.description || '', watched_folder: p.watched_folder || null }); hideLoader(); if(res && res.id){ showToast('Umbenannt'); await refreshProjects() } else showToast('Fehler beim Umbenennen','error'); menu.remove(); });
-        deleteBtn.addEventListener('click', async ()=>{ if(!confirm('Projekt löschen?')) return; showLoader('Löschen...'); const r = await fetch(API + '/projects/' + p.id, { method: 'DELETE', headers: authHeaders() }); hideLoader(); if(r.ok){ showToast('Gelöscht'); await refreshProjects(); document.getElementById('chat-log').innerHTML=''; } else { showToast('Löschen fehlgeschlagen','error') } menu.remove(); });
-        menu.appendChild(renameBtn); menu.appendChild(deleteBtn);
-        document.body.appendChild(menu);
-        // position menu near button
-        const rect = ell.getBoundingClientRect(); menu.style.top = (rect.bottom + window.scrollY + 6) + 'px'; menu.style.left = (rect.left + window.scrollX - 80) + 'px';
-      });
-
-      ul.appendChild(li)
-    })
-  }catch(e){ showToast('Projects error','error') }
-}
-
-async function selectProject(id, name, liEl){
-  // clear previous selection
-  document.querySelectorAll('.project-list li').forEach(el=>el.classList.remove('project-selected'))
-  if(liEl) liEl.classList.add('project-selected')
-  selectedProjectId = id
-  document.getElementById('selected-info').innerText = name
-  document.getElementById('selected-info').dataset.projectId = id
-  // fetch project details to get watched_folder
-  try{
-    const proj = await getJson(API + '/projects/' + id)
-    if(proj) document.getElementById('selected-info').dataset.watchedFolder = proj.watched_folder || ''
-  }catch{}
-  // load project-scoped conversations if any
-  currentConversation = projectConversations.get(id) || null
-  await refreshConversations()
-}
-
-
-// Project creation flow: open modal to enter name and select local folder
-// modal prompt helper
-function createPromptModal(label){
-  return new Promise((resolve)=>{
-    const overlay = document.createElement('div'); overlay.className='modal-overlay';
-    const box = document.createElement('div'); box.className='modal-box';
-    const lbl = document.createElement('div'); lbl.innerText = label; lbl.style.fontWeight='600';
-    const input = document.createElement('input'); input.type='text'; input.className='input'; input.style.width='100%';
-    const buttons = document.createElement('div'); buttons.style.display='flex'; buttons.style.justifyContent='flex-end'; buttons.style.gap='8px';
-    const cancel = document.createElement('button'); cancel.className='button'; cancel.innerText='Abbrechen';
-    const ok = document.createElement('button'); ok.className='button'; ok.innerText='Erstellen';
-    buttons.appendChild(cancel); buttons.appendChild(ok);
-    box.appendChild(lbl); box.appendChild(input); box.appendChild(buttons); overlay.appendChild(box); document.body.appendChild(overlay);
-    input.focus();
-    function cleanup(){ overlay.remove(); }
-    cancel.addEventListener('click', ()=>{ cleanup(); resolve(null) })
-    ok.addEventListener('click', ()=>{ const v=input.value.trim(); cleanup(); resolve(v || null) })
-    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); ok.click() } if(e.key==='Escape'){ cancel.click() } })
+async function apiBlob(path, options = {}) {
+  const response = await fetch(`${API}${path}`, {
+    ...options,
+    headers: authHeaders(options.headers || {}),
   })
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(text || `HTTP ${response.status}`)
+  }
+  return response
 }
 
-// mic recording -> record, upload to /api/v1/audio/transcribe, then send transcript to chat
-let mediaRecorder = null
-let recordingChunks = []
-let isRecording = false
-let currentStream = null
-
-async function startRecording(){
-  if(isRecording) return
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    currentStream = stream
-    mediaRecorder = new MediaRecorder(stream)
-    recordingChunks = []
-    mediaRecorder.ondataavailable = (ev)=>{ if(ev.data && ev.data.size) recordingChunks.push(ev.data) }
-    mediaRecorder.onstop = async ()=>{
-      const blob = new Blob(recordingChunks, { type: 'audio/webm' })
-      // upload to backend for transcription
-      const fd = new FormData()
-      fd.append('file', blob, `recording-${Date.now()}.webm`)
-      showToast('Transcription started...', 'success')
-      showLoader('Transkribiere...')
-      try{
-        const res = await fetch(API + '/audio/transcribe', { method: 'POST', headers: Object.assign({}, authHeaders()), body: fd })
-        const data = await res.json()
-        hideLoader()
-        if(res.ok && data && data.text){
-          showToast('Transcription completed', 'success')
-          appendMessage('You (audio)', data.text)
-          // send transcript to chat
-          document.getElementById('chat-input').value = data.text
-          sendChat()
-        } else {
-          showToast('Transcription failed','error')
-        }
-      }catch(e){ hideLoader(); showToast('Transcription error','error') }
-      if(currentStream){ currentStream.getTracks().forEach(t=>t.stop()); currentStream = null }
-      isRecording = false
-      document.getElementById('mic-btn')?.classList.remove('mic-recording')
-    }
-    mediaRecorder.start()
-    isRecording = true
-    document.getElementById('mic-btn')?.classList.add('mic-recording')
-  }catch(e){ showToast('Microphone access denied or unavailable','error') }
+function showToast(message, type = 'success') {
+  const root = document.getElementById('toast-root')
+  if (!root) return
+  const toast = document.createElement('div')
+  toast.className = `toast ${type}`
+  toast.textContent = message
+  root.appendChild(toast)
+  requestAnimationFrame(() => toast.classList.add('show'))
+  setTimeout(() => {
+    toast.classList.remove('show')
+    setTimeout(() => toast.remove(), 220)
+  }, 3200)
 }
 
-function stopRecording(){ if(!isRecording || !mediaRecorder) return; mediaRecorder.stop() }
-
-const micBtn = document.getElementById('mic-btn')
-if(micBtn) micBtn.addEventListener('click', ()=>{ if(isRecording) stopRecording(); else startRecording() })
-
-
-async function openCreateProjectDialog(){
-  const name = await createPromptModal('Projektname eingeben:')
-  if(!name) return
-  showLoader('Wähle geteilten Ordner...')
-  try{
-    const folder = await window.electron.selectFolder()
-    if(!folder){ showToast('Kein Ordner ausgewählt','error'); return }
-    showLoader('Projekt wird erstellt...')
-    const res = await postJson(API + '/projects/', { name: name, description: '', watched_folder: folder })
-    if(res && res.id){ showToast('Projekt erstellt'); await refreshProjects() } else { showToast('Projekt konnte nicht erstellt werden','error') }
-  }catch(e){ showToast('Fehler: '+(e && e.message),'error') }
-  finally{ hideLoader() }
+function showLoader(text = 'Working...') {
+  let overlay = document.getElementById('loader-overlay')
+  if (!overlay) {
+    overlay = document.createElement('div')
+    overlay.id = 'loader-overlay'
+    overlay.className = 'loader-overlay'
+    const card = document.createElement('div')
+    card.className = 'loader-card'
+    const label = document.createElement('div')
+    label.id = 'loader-text'
+    card.appendChild(label)
+    overlay.appendChild(card)
+    document.body.appendChild(overlay)
+  }
+  const label = document.getElementById('loader-text')
+  if (label) label.textContent = text
+  overlay.classList.remove('hidden')
 }
 
-document.getElementById('create-project')?.addEventListener('click', openCreateProjectDialog)
-document.getElementById('refresh-projects')?.addEventListener('click', refreshProjects)
-
-document.getElementById('search-btn')?.addEventListener('click', async ()=>{
-  const q = document.getElementById('search-input').value
-  if(!q) return
-  const projectId = selectedProjectId || null
-  showLoader('Suche...')
-  try{
-    const res = await postJson(API + '/search/', { query: q, project_id: projectId, top_k: 6 })
-    hideLoader()
-    if(res && res.results){
-      // render results in chat-log as clickable items with preview modal
-      const log = document.getElementById('chat-log'); log.innerHTML=''
-      res.results.forEach(r=>{
-        const el = document.createElement('div'); el.className='chat-message assistant';
-        const bubble = document.createElement('div'); bubble.className='bubble';
-        bubble.innerHTML = `<b>Result:</b> ${r.text.slice(0,200)}... <div class="small">score: ${r.score.toFixed(3)}</div>`;
-        el.appendChild(bubble);
-        el.addEventListener('click', ()=>{ openPreviewModal(r) })
-        log.appendChild(el)
-      })
-      // pagination: show load more if present
-      if(res.next_offset !== null){
-        const more = document.createElement('button'); more.className='button'; more.innerText='More';
-        more.addEventListener('click', async ()=>{
-          showLoader('Loading...')
-          try{
-            const resp = await postJson(API + '/search/', { query: document.getElementById('search-input').value, project_id: selectedProjectId, top_k:6, offset: res.next_offset })
-            hideLoader()
-            if(resp && resp.results){
-              resp.results.forEach(r=>{
-                const el = document.createElement('div'); el.className='chat-message assistant';
-                const bubble = document.createElement('div'); bubble.className='bubble';
-                bubble.innerHTML = `<b>Result:</b> ${r.text.slice(0,200)}... <div class="small">score: ${r.score.toFixed(3)}</div>`;
-                el.appendChild(bubble);
-                el.addEventListener('click', ()=>{ openPreviewModal(r) });
-                log.appendChild(el)
-              })
-            }
-          }catch(err){ hideLoader(); showToast('Search error','error'); appLog('search paging error: '+ (err && err.message)) }
-        })
-        document.getElementById('chat-log').appendChild(more)
-      }
-    }
-  }catch(e){ hideLoader(); showToast('Search error','error'); appLog('search error: '+ (e && e.message)) }
-})
-
-function openPreviewModal(item){
-  // simple modal with full text and insert/send options
-  const overlay = document.createElement('div'); overlay.className='modal-overlay';
-  const box = document.createElement('div'); box.className='modal-box';
-  const title = document.createElement('div'); title.innerText = 'Preview'; title.style.fontWeight='600';
-  const content = document.createElement('div'); content.style.whiteSpace='pre-wrap'; content.style.maxHeight='60vh'; content.style.overflow='auto'; content.innerText = item.text
-  const actions = document.createElement('div'); actions.style.display='flex'; actions.style.justifyContent='flex-end'; actions.style.gap='8px';
-  const insertBtn = document.createElement('button'); insertBtn.className='button'; insertBtn.innerText='Insert into chat';
-  const sendBtn = document.createElement('button'); sendBtn.className='button'; sendBtn.innerText='Insert and Send';
-  const closeBtn = document.createElement('button'); closeBtn.className='button'; closeBtn.innerText='Close';
-  actions.appendChild(closeBtn); actions.appendChild(insertBtn); actions.appendChild(sendBtn);
-  box.appendChild(title); box.appendChild(content); box.appendChild(actions); overlay.appendChild(box); document.body.appendChild(overlay);
-  insertBtn.onclick = ()=>{ document.getElementById('chat-input').value = item.text; overlay.remove() }
-  sendBtn.onclick = ()=>{ document.getElementById('chat-input').value = item.text; overlay.remove(); sendChat() }
-  closeBtn.onclick = ()=> overlay.remove()
+function hideLoader() {
+  const overlay = document.getElementById('loader-overlay')
+  if (overlay) overlay.remove()
 }
 
+function setScreen(loggedIn) {
+  els.appShell.classList.toggle('hidden', !loggedIn)
+  els.loginScreen.classList.toggle('hidden', loggedIn)
+  els.workspaceShell.classList.toggle('hidden', !loggedIn)
+}
 
-document.getElementById('sidebar-new-chat')?.addEventListener('click', ()=>{ currentConversation = null; selectedProjectId = null; document.getElementById('selected-info').innerText=''; document.getElementById('chat-log').innerHTML=''; refreshConversations() })
+function updatePresence() {
+  if (!state.user) {
+    els.accountAvatar.textContent = 'H'
+    els.accountName.textContent = 'Not connected'
+    els.accountMeta.textContent = 'Sign in to continue'
+    els.rolePill.textContent = 'User'
+    return
+  }
 
+  els.accountAvatar.textContent = initialsFromUser(state.user)
+  els.accountName.textContent = state.user.full_name || state.user.email
+  els.accountMeta.textContent = state.user.email
+  els.rolePill.textContent = state.user.role
+  els.adminSection.classList.toggle('hidden', state.user.role !== 'ADMIN')
+}
 
-async function sendChat(){
-  try{
-    const inputEl = document.getElementById('chat-input')
-    const msg = inputEl.value; if(!msg) return; inputEl.value = '';
-    // show user's message immediately
-    appendMessage('You', msg)
-
-    const projectId = selectedProjectId || null;
-    // show thinking loader while waiting
-    showLoader('Nachdenken...')
-    // call enhanced chat (consult embeddings first)
-    const res = await postJson(API + '/chat-enhanced/', { message: msg, conversation_id: currentConversation, project_id: projectId });
-    hideLoader()
-
-    if(res && res.conversation_id){ currentConversation = res.conversation_id; if(projectId) projectConversations.set(projectId, currentConversation) }
-    if(res && res.reply) appendMessage('Hippo', res.reply)
-
-    // detect generation intent (better heuristic) — only generate if user asked
-    const lower = msg.toLowerCase();
-    const genKeywords = ['génère','générer','génere','generate','erzeuge','erstellen','crée','créer','create','word','docx','worddatei','word file']
-    const wantsGen = genKeywords.some(k => lower.includes(k))
-
-    if(wantsGen && res && res.reply){
-      // If assistant returned explicit file markers, prefer them
-      const fileMatch = res.reply.match(/<<<FILE:([^>]+)>>>\s*([\s\S]*?)\s*<<<END_FILE>>>/m)
-      const folder = document.getElementById('selected-info').dataset.watchedFolder
-      if(!folder){ showToast('Bitte ein Projekt mit Ordner auswählen, um Datei zu generieren','error'); return }
-      if(fileMatch){
-        const filename = fileMatch[1].trim()
-        const content = fileMatch[2]
-        showLoader('Speichere Datei...')
-        const saved = await window.electron.saveFile({ folder, filename, data: content })
-        hideLoader()
-        if(saved && saved.ok){ showToast('Datei erstellt: ' + saved.path); appendMessage('System', 'Datei erstellt in: ' + saved.path) } else { showToast('Fehler beim Erstellen der Datei','error') }
-      } else {
-        // build simple RTF from assistant reply
-        const rtf = buildRtfFromText(res.reply)
-        const filename = `generated-${Date.now()}.rtf`
-        showLoader('Erzeuge Datei...')
-        const saved = await window.electron.saveFile({ folder, filename, data: rtf })
-        hideLoader()
-        if(saved && saved.ok){ showToast('Datei erstellt: ' + saved.path); appendMessage('System', 'Datei erstellt in: ' + saved.path) } else { showToast('Fehler beim Erstellen der Datei','error') }
-      }
-    }
-
-  }catch(e){
-    hideLoader()
-
-    console.error('Chat error:', e)
-
-    showToast(
-        'Chat error: ' + (e?.message || 'Unknown error'),
-        'error'
-    )
+function renderContext() {
+  const project = getContextProject()
+  els.projectPill.textContent = project ? project.name : 'Global'
+  if (state.currentConversationId) {
+    const conversation = state.conversations.find((item) => item.id === state.currentConversationId)
+    els.pageTitle.textContent = getConversationTitle(conversation)
+    els.selectedInfo.textContent = project ? `Project: ${project.name}` : 'Global conversation'
+  } else {
+    els.pageTitle.textContent = project ? `New chat in ${project.name}` : 'New chat'
+    els.selectedInfo.textContent = project ? `Project: ${project.name}` : 'No project selected'
   }
 }
 
-function buildRtfFromText(text){
-  // very small RTF wrapper
-  const header = '{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\n'
-  const body = text.replace(/\\/g,'\\\\').replace(/\n/g,'\\par \n')
-  const footer = '\n}'
-  return header + body + footer
+function renderProjects() {
+  els.projectList.innerHTML = ''
+  els.projectList.appendChild(createProjectCreateCard())
+
+  state.projects.forEach((project) => {
+    const active = state.selectedProjectId === project.id
+    const row = document.createElement('button')
+    row.type = 'button'
+    row.className = `project-item${active ? ' active' : ''}`
+    row.addEventListener('click', () => selectProject(project.id))
+
+    const icon = document.createElement('div')
+    icon.className = 'item-icon'
+    icon.textContent = '◌'
+
+    const main = document.createElement('div')
+    main.className = 'item-main'
+    const title = document.createElement('div')
+    title.className = 'item-title'
+    title.textContent = project.name
+    const subtitle = document.createElement('div')
+    subtitle.className = 'item-subtitle'
+    subtitle.textContent = project.watched_folder ? project.watched_folder : 'No folder attached'
+    main.append(title, subtitle)
+
+    const chip = document.createElement('div')
+    chip.className = 'item-chip'
+    const count = state.conversations.filter((conversation) => conversation.project_id === project.id).length
+    chip.textContent = `${count} chats`
+
+    row.append(icon, main, chip)
+    els.projectList.appendChild(row)
+  })
+
+  q('project-count').textContent = String(state.projects.length)
 }
 
-// refresh conversations list (project-scoped if selected)
-async function refreshConversations(){
-  try{
-    const convs = await getJson(API + '/chat/conversations')
-    const container = document.getElementById('conversations'); if(!container) return; container.innerHTML='';
+function createProjectCreateCard() {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'ghost-action'
+  button.textContent = '+ Create project'
+  button.addEventListener('click', openCreateProjectModal)
+  return button
+}
 
-    // split into global (no project) and project-scoped
-    const globalConvs = convs.filter(c => !c.project_id)
-    const projectConvs = selectedProjectId ? convs.filter(c => c.project_id === selectedProjectId) : []
+function renderConversations() {
+  els.conversationList.innerHTML = ''
+  const conversations = [...state.conversations].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
-    // populate sidebar chat list with global conversations (sorted recent first)
-    const chatList = document.getElementById('chat-list'); if(chatList) chatList.innerHTML='';
-    globalConvs.sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).forEach(c=>{
-      const item = document.createElement('li'); item.style.display='flex'; item.style.alignItems='center'; item.style.justifyContent='space-between';
-      const txt = document.createElement('span'); txt.innerText = c.title || ('Chat ' + c.id);
-      const ts = document.createElement('span'); ts.className='list-timestamp'; ts.innerText = c.created_at ? new Date(c.created_at).toLocaleString() : '';
-      const del = document.createElement('button'); del.className='small'; del.innerText='🗑'; del.title='Löschen';
-      const left = document.createElement('div'); left.style.display='flex'; left.style.alignItems='center'; left.style.gap='8px'; left.appendChild(txt); left.appendChild(ts);
-      item.appendChild(left); item.appendChild(del);
-      item.onclick = async ()=>{ currentConversation = c.id; const resp = await getJson(API + '/chat/conversations/' + c.id); document.getElementById('chat-log').innerHTML=''; resp.messages.forEach(m=>appendMessage(m.role, m.content)); }
-      del.addEventListener('click', async (e)=>{ e.stopPropagation(); if(!confirm('Chat löschen?')) return; showLoader('Löschen...'); const r = await fetch(API + '/chat/conversations/' + c.id, { method: 'DELETE', headers: authHeaders() }); hideLoader(); if(r.ok){ showToast('Chat gelöscht'); await refreshConversations(); } else showToast('Löschen fehlgeschlagen','error') })
-      chatList.appendChild(item)
+  const allLabel = document.createElement('div')
+  allLabel.className = 'section-badge'
+  allLabel.style.margin = '0 6px 2px'
+  allLabel.textContent = state.selectedProjectId ? 'Chats and project context' : 'All chats'
+  els.conversationList.appendChild(allLabel)
+
+  if (conversations.length === 0) {
+    const empty = document.createElement('div')
+    empty.className = 'muted-copy'
+    empty.style.padding = '8px 6px'
+    empty.textContent = 'No chats yet.'
+    els.conversationList.appendChild(empty)
+  } else {
+    conversations.forEach((conversation) => {
+      const active = state.currentConversationId === conversation.id
+      const row = document.createElement('button')
+      row.type = 'button'
+      row.className = `conversation-item${active ? ' active' : ''}`
+      row.addEventListener('click', () => openConversation(conversation))
+
+      const icon = document.createElement('div')
+      icon.className = 'item-icon'
+      icon.textContent = '◉'
+
+      const main = document.createElement('div')
+      main.className = 'item-main'
+      const title = document.createElement('div')
+      title.className = 'item-title'
+      title.textContent = getConversationTitle(conversation)
+      const subtitle = document.createElement('div')
+      subtitle.className = 'item-subtitle'
+      subtitle.textContent = conversation.created_at ? new Date(conversation.created_at).toLocaleString() : ''
+      main.append(title, subtitle)
+
+      const chip = document.createElement('div')
+      chip.className = 'item-chip'
+      if (conversation.project_id) {
+        const project = state.projects.find((item) => item.id === conversation.project_id)
+        chip.textContent = project ? project.name : 'project'
+      } else {
+        chip.textContent = 'global'
+      }
+
+      row.append(icon, main, chip)
+      els.conversationList.appendChild(row)
     })
+  }
 
-    // show project conversations in main conversations area if a project is selected
-    if(selectedProjectId){
-      const header = document.createElement('div'); header.style.display='flex'; header.style.justifyContent='space-between'; header.style.alignItems='center'; header.style.marginBottom='8px';
-      const h = document.createElement('div'); h.innerText = 'Projekt‑Chats'; h.style.fontWeight='600';
-      const newBtn = document.createElement('button'); newBtn.className='button'; newBtn.innerText='Neuer Chat'; newBtn.onclick = ()=>{ currentConversation = null; document.getElementById('chat-log').innerHTML=''; }
-      header.appendChild(h); header.appendChild(newBtn); container.appendChild(header)
+  q('chat-count').textContent = String(conversations.length)
+}
 
-      projectConvs.sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).forEach(c=>{
-        const b = document.createElement('button'); b.className='small'; b.style.marginRight='8px';
-        const txt = document.createElement('span'); txt.innerText = c.title || ('Chat ' + c.id);
-        const ts = document.createElement('span'); ts.className='list-timestamp'; ts.innerText = c.created_at ? new Date(c.created_at).toLocaleString() : '';
-        b.appendChild(txt); b.appendChild(ts);
-        b.onclick = async ()=>{ currentConversation = c.id; projectConversations.set(selectedProjectId, c.id); const resp = await getJson(API + '/chat/conversations/' + c.id); document.getElementById('chat-log').innerHTML=''; resp.messages.forEach(m=>appendMessage(m.role, m.content)); }
-        container.appendChild(b)
+function renderUsers() {
+  els.adminUserList.innerHTML = ''
+  if (state.user?.role !== 'ADMIN') return
+
+  state.users.slice(0, 8).forEach((user) => {
+    const row = document.createElement('div')
+    row.className = 'user-item'
+
+    const avatar = document.createElement('div')
+    avatar.className = 'item-avatar'
+    avatar.textContent = initialsFromUser(user)
+
+    const main = document.createElement('div')
+    main.className = 'item-main'
+    const title = document.createElement('div')
+    title.className = 'item-title'
+    title.textContent = user.full_name || user.email
+    const subtitle = document.createElement('div')
+    subtitle.className = 'item-subtitle'
+    subtitle.textContent = user.role
+    main.append(title, subtitle)
+
+    const chip = document.createElement('div')
+    chip.className = 'item-chip'
+    chip.textContent = user.is_active ? 'active' : 'disabled'
+
+    row.append(avatar, main, chip)
+    els.adminUserList.appendChild(row)
+  })
+}
+
+function renderAttachmentPreview() {
+  els.attachmentPreview.innerHTML = ''
+  state.draftAttachments.forEach((attachment, index) => {
+    const pill = document.createElement('div')
+    pill.className = 'attachment-pill'
+
+    if (attachment.previewUrl) {
+      const thumb = document.createElement('img')
+      thumb.className = 'attachment-thumb'
+      thumb.src = attachment.previewUrl
+      thumb.alt = attachment.filename
+      pill.appendChild(thumb)
+    } else {
+      const icon = document.createElement('div')
+      icon.className = 'item-avatar'
+      icon.textContent = 'IMG'
+      pill.appendChild(icon)
+    }
+
+    const label = document.createElement('div')
+    label.className = 'attachment-label'
+    label.textContent = attachment.filename
+    pill.appendChild(label)
+
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.className = 'attachment-remove'
+    remove.textContent = '×'
+    remove.addEventListener('click', () => {
+      state.draftAttachments.splice(index, 1)
+      renderAttachmentPreview()
+    })
+    pill.appendChild(remove)
+
+    els.attachmentPreview.appendChild(pill)
+  })
+}
+
+function setVoiceIdle() {
+  els.voiceStatus.textContent = state.isRecording ? 'Recording...' : 'Mic idle'
+  els.voiceCanvas.classList.toggle('active', state.isRecording)
+}
+
+function clearChatLog() {
+  els.chatLog.innerHTML = ''
+  els.emptyState.classList.remove('hidden')
+}
+
+function renderMessage(role, content, extras = {}) {
+  els.emptyState.classList.add('hidden')
+
+  const message = document.createElement('article')
+  message.className = `message ${role}${extras.attachments?.length ? ' attachments' : ''}`
+
+  const bubble = document.createElement('div')
+  bubble.className = 'message-bubble'
+
+  const roleTag = document.createElement('div')
+  roleTag.className = 'message-role'
+  roleTag.textContent =
+    role === 'user' ? 'You' : role === 'assistant' ? 'Hippo' : role === 'system' ? 'System' : role
+  bubble.appendChild(roleTag)
+
+  if (content) {
+    const text = document.createElement('div')
+    text.className = 'message-text'
+    text.textContent = content
+    bubble.appendChild(text)
+  }
+
+  if (extras.attachments?.length) {
+    const wrapper = document.createElement('div')
+    wrapper.className = 'message-attachments'
+    extras.attachments.forEach((attachment) => {
+      if (attachment.previewUrl) {
+        const chip = document.createElement('div')
+        chip.className = 'image-chip'
+        const image = document.createElement('img')
+        image.src = attachment.previewUrl
+        image.alt = attachment.filename
+        const caption = document.createElement('div')
+        caption.className = 'caption'
+        caption.textContent = attachment.filename
+        chip.append(image, caption)
+        wrapper.appendChild(chip)
+      }
+    })
+    bubble.appendChild(wrapper)
+  }
+
+  message.appendChild(bubble)
+  els.chatLog.appendChild(message)
+  els.chatLog.scrollTop = els.chatLog.scrollHeight
+}
+
+function renderConversationMessages(messages) {
+  els.chatLog.innerHTML = ''
+  if (!messages.length) {
+    els.emptyState.classList.remove('hidden')
+    return
+  }
+
+  els.emptyState.classList.add('hidden')
+  messages.forEach((message) => renderMessage(message.role, message.content))
+}
+
+function resetComposer() {
+  state.draftAttachments = []
+  els.chatInput.value = ''
+  els.chatInput.style.height = 'auto'
+  renderAttachmentPreview()
+}
+
+function syncSelectedProjectConversation() {
+  if (state.selectedProjectId && state.projectConversationMemory.has(state.selectedProjectId)) {
+    state.currentConversationId = state.projectConversationMemory.get(state.selectedProjectId)
+  }
+}
+
+async function loadCurrentUser() {
+  const user = await apiJson('/users/me')
+  state.user = user
+  updatePresence()
+  return user
+}
+
+async function loadProjects() {
+  state.projects = await apiJson('/projects/')
+  renderProjects()
+  renderContext()
+}
+
+async function loadConversations() {
+  const conversations = await apiJson('/chat/conversations')
+  state.conversations = Array.isArray(conversations) ? conversations : []
+  renderConversations()
+  renderContext()
+}
+
+async function loadUsers() {
+  if (state.user?.role !== 'ADMIN') {
+    state.users = []
+    renderUsers()
+    return
+  }
+  state.users = await apiJson('/admin/users/')
+  renderUsers()
+}
+
+async function loadWorkspace() {
+  await Promise.all([loadProjects(), loadConversations(), loadUsers()])
+  renderContext()
+}
+
+async function login() {
+  const email = els.email.value.trim()
+  const password = els.password.value
+  if (!email || !password) {
+    showToast('Please fill email and password.', 'error')
+    return
+  }
+
+  showLoader('Signing in...')
+  try {
+    const result = await apiJson('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    })
+    state.token = result.access_token
+    localStorage.setItem('hippo.token', state.token)
+    state.user = await loadCurrentUser()
+    setScreen(true)
+    updatePresence()
+    await loadWorkspace()
+    showToast('Signed in')
+  } catch (error) {
+    showToast(error.message || 'Login failed', 'error')
+    els.loginResult.textContent = error.message || 'Login failed'
+  } finally {
+    hideLoader()
+  }
+}
+
+function logout() {
+  state.token = ''
+  state.user = null
+  state.projects = []
+  state.conversations = []
+  state.users = []
+  state.selectedProjectId = null
+  state.currentConversationId = null
+  state.draftAttachments = []
+  localStorage.removeItem('hippo.token')
+  setScreen(false)
+  updatePresence()
+  clearChatLog()
+  renderProjects()
+  renderConversations()
+  renderUsers()
+  renderAttachmentPreview()
+  renderContext()
+}
+
+async function selectProject(projectId) {
+  state.selectedProjectId = projectId
+  state.currentConversationId = state.projectConversationMemory.get(projectId) || null
+  renderProjects()
+  renderConversations()
+  renderContext()
+
+  if (state.currentConversationId) {
+    await openConversationById(state.currentConversationId)
+  } else {
+    clearChatLog()
+  }
+}
+
+async function startNewChat() {
+  state.currentConversationId = null
+  renderConversations()
+  renderContext()
+  clearChatLog()
+  resetComposer()
+  els.chatInput.focus()
+}
+
+async function openConversation(conversation) {
+  state.currentConversationId = conversation.id
+  if (conversation.project_id) {
+    state.selectedProjectId = conversation.project_id
+    state.projectConversationMemory.set(conversation.project_id, conversation.id)
+  }
+  renderProjects()
+  renderConversations()
+  renderContext()
+  await openConversationById(conversation.id)
+}
+
+async function openConversationById(conversationId) {
+  showLoader('Loading conversation...')
+  try {
+    const payload = await apiJson(`/chat/conversations/${conversationId}`)
+    renderConversationMessages(payload.messages || [])
+  } catch (error) {
+    showToast(error.message || 'Failed to load conversation', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
+function resizeComposer() {
+  els.chatInput.style.height = 'auto'
+  els.chatInput.style.height = `${Math.min(els.chatInput.scrollHeight, 180)}px`
+}
+
+function buildImageAttachment(file, dataUrl) {
+  return {
+    file,
+    filename: file.name,
+    mime_type: file.type || 'image/*',
+    data_url: dataUrl,
+    previewUrl: dataUrl,
+  }
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error || new Error('Unable to read file'))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function attachImages(files) {
+  const imageFiles = [...files].filter((file) => file && file.type && file.type.startsWith('image/'))
+  if (!imageFiles.length) {
+    showToast('Only image files are supported here.', 'error')
+    return
+  }
+
+  for (const file of imageFiles) {
+    const dataUrl = await readFileAsDataUrl(file)
+    state.draftAttachments.push(buildImageAttachment(file, dataUrl))
+  }
+  renderAttachmentPreview()
+}
+
+async function persistImageAttachment(projectId, attachment) {
+  if (!projectId || !attachment?.file) return
+  const formData = new FormData()
+  formData.append('file', attachment.file, attachment.filename)
+  try {
+    await apiBlob(`/files/projects/${projectId}/upload`, {
+      method: 'POST',
+      body: formData,
+    })
+  } catch (error) {
+    showToast(`Image upload skipped: ${error.message || 'unknown error'}`, 'error')
+  }
+}
+
+async function openCreateProjectModal() {
+  const form = createForm([
+    { id: 'name', label: 'Project name', type: 'text', placeholder: 'Project Apollo' },
+    { id: 'folder', label: 'Watched folder', type: 'text', placeholder: '/path/to/shared/folder' },
+  ])
+
+  const result = await openModal({
+    title: 'Create project',
+    copy: 'Create a project and link a shared folder if you want file generation to save output there.',
+    content: form,
+    submitLabel: 'Create',
+  })
+
+  if (!result) return
+
+  showLoader('Creating project...')
+  try {
+    await apiJson('/projects/', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: result.name,
+        description: '',
+        watched_folder: result.folder || null,
+      }),
+    })
+    await loadWorkspace()
+    showToast('Project created')
+  } catch (error) {
+    showToast(error.message || 'Project creation failed', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
+async function openCreateUserModal() {
+  const form = createForm([
+    { id: 'full_name', label: 'Full name', type: 'text', placeholder: 'Jane Doe' },
+    { id: 'email', label: 'Email', type: 'email', placeholder: 'jane@example.com' },
+    { id: 'password', label: 'Password', type: 'password', placeholder: 'At least 8 characters' },
+    {
+      id: 'role',
+      label: 'Role',
+      type: 'select',
+      options: ['USER', 'MANAGER', 'READ_ONLY', 'ADMIN'],
+    },
+  ])
+
+  const result = await openModal({
+    title: 'Create user',
+    copy: 'Admin only. Create a new account directly from the workspace.',
+    content: form,
+    submitLabel: 'Create user',
+  })
+
+  if (!result) return
+
+  showLoader('Creating user...')
+  try {
+    await apiJson('/admin/users/', {
+      method: 'POST',
+      body: JSON.stringify({
+        full_name: result.full_name,
+        email: result.email,
+        password: result.password,
+        role: result.role,
+      }),
+    })
+    await loadUsers()
+    showToast('User created')
+  } catch (error) {
+    showToast(error.message || 'User creation failed', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
+function createForm(fields) {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'modal-grid'
+
+  fields.forEach((field) => {
+    const row = document.createElement('label')
+    row.className = 'field'
+    const label = document.createElement('span')
+    label.textContent = field.label
+    row.appendChild(label)
+
+    let input
+    if (field.type === 'select') {
+      input = document.createElement('select')
+      input.className = 'text-input'
+      field.options.forEach((option) => {
+        const optionNode = document.createElement('option')
+        optionNode.value = option
+        optionNode.textContent = option
+        input.appendChild(optionNode)
       })
     } else {
-      // if no project selected, show recent global convs in main area as optional
-      const info = document.createElement('div'); info.className='small'; info.innerText = 'Wähle ein Projekt, oder starte einen neuen Chat mit "＋ Neuer Chat"'; container.appendChild(info)
+      input = document.createElement('input')
+      input.type = field.type
+      input.placeholder = field.placeholder || ''
+      input.className = 'text-input'
     }
-  }catch(e){ /* ignore */ }
+    input.id = field.id
+    row.appendChild(input)
+    wrapper.appendChild(row)
+  })
+
+  return wrapper
 }
 
+function openModal({ title, copy, content, submitLabel }) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div')
+    overlay.className = 'modal-overlay'
 
-document.getElementById('send-chat')?.addEventListener('click', sendChat)
+    const card = document.createElement('div')
+    card.className = 'modal-card'
 
-document.getElementById('chat-input')?.addEventListener('keydown', (e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChat() } })
+    const heading = document.createElement('h3')
+    heading.textContent = title
+    const copyNode = document.createElement('div')
+    copyNode.className = 'modal-copy'
+    copyNode.textContent = copy
 
-function appendMessage(role, text){ const log = document.getElementById('chat-log'); if(!log) return; const msg = document.createElement('div'); msg.className = 'chat-message ' + (role === 'You' || role === 'user' ? 'user' : role === 'System' || role === 'System' ? 'system' : 'assistant'); const bubble = document.createElement('div'); bubble.className='bubble'; bubble.innerHTML = `<strong>${role}:</strong> ${text}`; msg.appendChild(bubble); log.appendChild(msg); log.scrollTop = log.scrollHeight }
+    const actions = document.createElement('div')
+    actions.className = 'modal-actions'
 
- // Ensure event listeners are attached after DOM is ready
- document.addEventListener('DOMContentLoaded', ()=>{
-   console.log('renderer: DOMContentLoaded')
-   appLog('renderer: DOMContentLoaded')
+    const cancel = document.createElement('button')
+    cancel.type = 'button'
+    cancel.className = 'ghost-action'
+    cancel.textContent = 'Cancel'
 
-   // Attach auth/login handlers
-   document.getElementById('login')?.addEventListener('click', doLogin)
-   const pwd = document.getElementById('password')
-   if(pwd) pwd.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); doLogin() } })
+    const confirm = document.createElement('button')
+    confirm.type = 'button'
+    confirm.className = 'primary-button'
+    confirm.style.width = 'auto'
+    confirm.textContent = submitLabel
 
-   // Attach UI handlers (defensive re-attach)
-   document.getElementById('create-project')?.addEventListener('click', openCreateProjectDialog)
-   document.getElementById('refresh-projects')?.addEventListener('click', refreshProjects)
-   document.getElementById('search-btn')?.addEventListener('click', async ()=>{ const q = document.getElementById('search-input').value; if(!q) return; const projectId = selectedProjectId || null; showLoader('Suche...'); try{ const res = await postJson(API + '/search/', { query: q, project_id: projectId, top_k: 6 }); hideLoader(); if(res && res.results){ const logEl = document.getElementById('chat-log'); logEl.innerHTML=''; res.results.forEach(r=>{ const el = document.createElement('div'); el.className='chat-message assistant'; const bubble = document.createElement('div'); bubble.className='bubble'; bubble.innerHTML = `<b>Result:</b> ${r.text.slice(0,200)}... <div class="small">score: ${r.score.toFixed(3)}</div>`; el.appendChild(bubble); el.addEventListener('click', ()=>{ openPreviewModal(r) }); logEl.appendChild(el) }) } }catch(e){ hideLoader(); showToast('Search error','error') } })
+    cancel.addEventListener('click', () => {
+      overlay.remove()
+      resolve(null)
+    })
 
-   document.getElementById('sidebar-new-chat')?.addEventListener('click', ()=>{ currentConversation = null; selectedProjectId = null; document.getElementById('selected-info').innerText=''; document.getElementById('chat-log').innerHTML=''; refreshConversations() })
-   document.getElementById('send-chat')?.addEventListener('click', sendChat)
-   document.getElementById('chat-input')?.addEventListener('keydown', (e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChat() } })
+    confirm.addEventListener('click', () => {
+      const values = {}
+      const inputs = content.querySelectorAll('input, select, textarea')
+      inputs.forEach((input) => {
+        values[input.id] = input.value.trim()
+      })
+      overlay.remove()
+      resolve(values)
+    })
 
-   const micBtn = document.getElementById('mic-btn')
-   if(micBtn) micBtn.addEventListener('click', ()=>{ if(isRecording) stopRecording(); else startRecording() })
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        overlay.remove()
+        resolve(null)
+      }
+    })
 
-   // initial log to verify renderer loaded
-   console.log('renderer: handlers attached')
-   appLog('renderer: handlers attached')
+    actions.append(cancel, confirm)
+    card.append(heading, copyNode, content, actions)
+    overlay.appendChild(card)
+    document.body.appendChild(overlay)
 
-   // attach index embedding button
-   document.getElementById('index-embedding')?.addEventListener('click', async ()=>{
-     const fileInput = document.getElementById('file-upload')
-     const file = fileInput && fileInput.files && fileInput.files[0]
-     if(!file){ showToast('No file selected','error'); return }
-     if(!selectedProjectId){ showToast('Select a project first','error'); return }
-     showLoader('Indexing...')
-     try{
-       const text = await file.text()
-       const body = { project_id: selectedProjectId, items: [{ text: text.slice(0,20000), metadata: { source: 'desktop-upload', filename: file.name, type: file.type } }] }
-       const res = await postJson(API + '/embeddings-proxy/store', body)
-       hideLoader()
-       showToast('Indexed in embedding')
-       document.getElementById('upload-result').innerText = 'Indexed'
-     }catch(e){ hideLoader(); showToast('Indexing error','error'); appLog('indexing error: '+(e && e.message)) }
-   })
- })
+    const firstInput = content.querySelector('input, select, textarea')
+    if (firstInput) {
+      firstInput.focus()
+    }
+  })
+}
 
+function showGeneratedFile(message, projectFolder) {
+  const fileMatch = message.match(/<<<FILE:([^>]+)>>>\s*([\s\S]*?)\s*<<<END_FILE>>>/m)
+  if (!fileMatch) return false
+
+  if (!projectFolder) {
+    showToast('Select a project with a watched folder first.', 'error')
+    return true
+  }
+
+  const filename = fileMatch[1].trim()
+  const content = fileMatch[2]
+  showLoader('Saving file...')
+  window.electron.saveFile({ folder: projectFolder, filename, data: content })
+    .then((result) => {
+      hideLoader()
+      if (result?.ok) {
+        showToast(`File created: ${result.path}`)
+        renderMessage('system', `File created: ${result.path}`)
+      } else {
+        showToast(result?.error || 'File save failed', 'error')
+      }
+    })
+    .catch((error) => {
+      hideLoader()
+      showToast(error.message || 'File save failed', 'error')
+    })
+
+  return true
+}
+
+async function sendChat() {
+  const message = els.chatInput.value.trim()
+  if (!message && state.draftAttachments.length === 0) return
+
+  const project = getContextProject()
+  const attachments = state.draftAttachments.map((attachment) => ({
+    filename: attachment.filename,
+    mime_type: attachment.mime_type,
+    data_url: attachment.data_url,
+  }))
+
+  if (project && state.draftAttachments.length) {
+    await Promise.all(state.draftAttachments.map((attachment) => persistImageAttachment(project.id, attachment)))
+  }
+
+  renderMessage('user', message || 'Attachment', { attachments: state.draftAttachments })
+  resetComposer()
+
+  showLoader('Thinking...')
+  try {
+    const response = await apiJson('/chat-enhanced/', {
+      method: 'POST',
+      body: JSON.stringify({
+        conversation_id: state.currentConversationId,
+        project_id: state.selectedProjectId,
+        message,
+        attachments,
+      }),
+    })
+
+    if (response?.conversation_id) {
+      state.currentConversationId = response.conversation_id
+      if (state.selectedProjectId) {
+        state.projectConversationMemory.set(state.selectedProjectId, response.conversation_id)
+      }
+    }
+
+    await loadConversations()
+    renderContext()
+
+    const saved = showGeneratedFile(response.reply || '', project?.watched_folder || null)
+    if (!saved) {
+      renderMessage('assistant', response.reply || '')
+    }
+  } catch (error) {
+    showToast(error.message || 'Chat failed', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
+function drawVoiceFrame() {
+  if (!state.isRecording || !state.recording?.analyser || !els.voiceCanvas) return
+
+  const canvas = els.voiceCanvas
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  const { analyser } = state.recording
+  const buffer = new Uint8Array(analyser.frequencyBinCount)
+  analyser.getByteFrequencyData(buffer)
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  const barCount = 44
+  const step = Math.max(1, Math.floor(buffer.length / barCount))
+  const barWidth = canvas.width / barCount
+
+  for (let index = 0; index < barCount; index += 1) {
+    const value = buffer[index * step] || 0
+    const height = Math.max(8, (value / 255) * canvas.height * 0.82)
+    const x = index * barWidth + 4
+    const y = (canvas.height - height) / 2
+    const radius = 8
+
+    ctx.fillStyle = index % 2 === 0 ? 'rgba(99, 215, 191, 0.92)' : 'rgba(154, 178, 255, 0.82)'
+    roundRect(ctx, x, y, Math.max(4, barWidth - 8), height, radius)
+    ctx.fill()
+  }
+
+  state.recording.rafId = requestAnimationFrame(drawVoiceFrame)
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + width - r, y)
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r)
+  ctx.lineTo(x + width, y + height - r)
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height)
+  ctx.lineTo(x + r, y + height)
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r)
+  ctx.lineTo(x, y + r)
+  ctx.quadraticCurveTo(x, y, x + r, y)
+  ctx.closePath()
+}
+
+function stopRecordingUI() {
+  state.isRecording = false
+  els.micBtn.textContent = '🎙'
+  setVoiceIdle()
+  if (state.recording?.rafId) {
+    cancelAnimationFrame(state.recording.rafId)
+  }
+  const ctx = els.voiceCanvas.getContext('2d')
+  if (ctx) {
+    ctx.clearRect(0, 0, els.voiceCanvas.width, els.voiceCanvas.height)
+  }
+}
+
+async function stopRecording() {
+  if (!state.isRecording || !state.recording) return
+
+  const { mediaRecorder, recognition, stream, audioContext } = state.recording
+  state.recording.stopping = true
+
+  try {
+    if (recognition) recognition.stop()
+  } catch (error) {
+    console.warn(error)
+  }
+
+  try {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop()
+  } catch (error) {
+    console.warn(error)
+  }
+
+  try {
+    stream.getTracks().forEach((track) => track.stop())
+  } catch (error) {
+    console.warn(error)
+  }
+
+  try {
+    if (audioContext?.state !== 'closed') await audioContext.close()
+  } catch (error) {
+    console.warn(error)
+  }
+
+  stopRecordingUI()
+}
+
+async function startRecording() {
+  if (state.isRecording) return
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showToast('Microphone access is not available in this app shell.', 'error')
+    return
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    const analyser = audioContext.createAnalyser()
+    analyser.fftSize = 1024
+    const source = audioContext.createMediaStreamSource(stream)
+    source.connect(analyser)
+
+    const chunks = []
+    const mediaRecorder = new MediaRecorder(stream)
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    const recognition = SpeechRecognition ? new SpeechRecognition() : null
+    const transcriptState = { text: '', finalised: false }
+
+    state.recording = {
+      stream,
+      audioContext,
+      analyser,
+      mediaRecorder,
+      recognition,
+      chunks,
+      transcriptState,
+      rafId: null,
+    }
+    state.isRecording = true
+    els.micBtn.textContent = '⏹'
+    els.voiceStatus.textContent = 'Recording...'
+    els.voiceCanvas.classList.add('active')
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) chunks.push(event.data)
+    }
+
+    mediaRecorder.onstop = async () => {
+      const transcript = transcriptState.text.trim()
+      state.recording = null
+      stopRecordingUI()
+
+      if (transcript) {
+        els.chatInput.value = transcript
+        resizeComposer()
+        els.chatInput.focus()
+        showToast('Voice text inserted into the composer')
+      } else {
+        showToast('No transcript was produced.', 'error')
+      }
+    }
+
+    if (recognition) {
+      recognition.lang = navigator.language || 'fr-FR'
+      recognition.continuous = false
+      recognition.interimResults = true
+      recognition.onresult = (event) => {
+        const parts = []
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          parts.push(event.results[index][0].transcript)
+        }
+        transcriptState.text = parts.join(' ').trim()
+      }
+      recognition.onerror = (event) => {
+        showToast(`Speech recognition error: ${event.error}`, 'error')
+      }
+      recognition.onend = () => {
+        transcriptState.finalised = true
+      }
+      try {
+        recognition.start()
+      } catch (error) {
+        console.warn(error)
+      }
+    } else {
+      showToast('Speech recognition is unavailable. The recorder will still capture audio.', 'error')
+    }
+
+    mediaRecorder.start()
+    drawVoiceFrame()
+  } catch (error) {
+    showToast(error.message || 'Microphone permission denied', 'error')
+    stopRecordingUI()
+  }
+}
+
+function bindComposerEvents() {
+  els.chatInput.addEventListener('input', resizeComposer)
+  els.chatInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      sendChat()
+    }
+  })
+
+  els.attachImageBtn.addEventListener('click', () => {
+    els.imageInput.click()
+  })
+
+  els.imageInput.addEventListener('change', async () => {
+    const files = els.imageInput.files || []
+    if (!files.length) return
+    try {
+      await attachImages(files)
+    } finally {
+      els.imageInput.value = ''
+    }
+  })
+
+  els.micBtn.addEventListener('click', async () => {
+    if (state.isRecording) {
+      await stopRecording()
+    } else {
+      await startRecording()
+    }
+  })
+
+  els.sendChat.addEventListener('click', sendChat)
+}
+
+function bindSidebarEvents() {
+  els.sidebarNewChat.addEventListener('click', startNewChat)
+  els.adminCreateUser.addEventListener('click', openCreateUserModal)
+  els.logoutBtn.addEventListener('click', logout)
+}
+
+function bindAuthEvents() {
+  els.loginButton.addEventListener('click', login)
+  [els.email, els.password].forEach((input) => {
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        login()
+      }
+    })
+  })
+}
+
+async function bootstrap() {
+  bindAuthEvents()
+  bindSidebarEvents()
+  bindComposerEvents()
+  renderProjects()
+  renderConversations()
+  renderUsers()
+  renderAttachmentPreview()
+  setVoiceIdle()
+
+  if (!state.token) {
+    setScreen(false)
+    updatePresence()
+    renderContext()
+    return
+  }
+
+  try {
+    state.user = await loadCurrentUser()
+    setScreen(true)
+    updatePresence()
+    await loadWorkspace()
+    if (!state.currentConversationId) {
+      clearChatLog()
+    }
+  } catch (error) {
+    console.warn(error)
+    logout()
+  }
+}
+
+bootstrap()

@@ -1,11 +1,16 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
 function createWindow () {
   const win = new BrowserWindow({
-    width: 1000,
-    height: 800,
+    width: 1440,
+    height: 960,
+    minWidth: 1180,
+    minHeight: 760,
+    backgroundColor: '#0a1016',
+    autoHideMenuBar: true,
+    icon: path.join(__dirname, 'renderer', 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -13,9 +18,10 @@ function createWindow () {
     }
   })
 
-  win.loadFile('renderer/index.html')
-  // Open DevTools for debugging
-  win.webContents.openDevTools({ mode: 'detach' })
+  Menu.setApplicationMenu(null)
+  win.removeMenu()
+  win.setMenuBarVisibility(false)
+  win.loadFile(path.join(__dirname, 'renderer/index.html'))
 }
 
 app.whenReady().then(() => {
