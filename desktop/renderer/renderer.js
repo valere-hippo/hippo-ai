@@ -19,6 +19,8 @@ const els = {
   appShell: document.getElementById('app-shell'),
   loginScreen: document.getElementById('login-screen'),
   workspaceShell: document.getElementById('workspace-shell'),
+  sidebarToggle: document.getElementById('sidebar-toggle'),
+  sidebarBackdrop: document.getElementById('sidebar-backdrop'),
   loginButton: document.getElementById('login'),
   email: document.getElementById('email'),
   password: document.getElementById('password'),
@@ -538,6 +540,37 @@ function showThinkingIndicator(text = 'Hippo denkt nach…') {
 function setScreen(loggedIn) {
   els.loginScreen.classList.toggle('hidden', loggedIn)
   els.workspaceShell.classList.toggle('hidden', !loggedIn)
+  if (!loggedIn) {
+    closeSidebarDrawer()
+  }
+}
+
+function isMobileViewport() {
+  return window.matchMedia('(max-width: 860px)').matches
+}
+
+function setSidebarDrawer(open) {
+  els.appShell.classList.toggle('sidebar-open', open)
+  if (els.sidebarBackdrop) {
+    els.sidebarBackdrop.classList.toggle('visible', open)
+  }
+  if (els.sidebarToggle) {
+    els.sidebarToggle.setAttribute('aria-expanded', String(open))
+  }
+}
+
+function openSidebarDrawer() {
+  if (!isMobileViewport()) return
+  setSidebarDrawer(true)
+}
+
+function closeSidebarDrawer() {
+  setSidebarDrawer(false)
+}
+
+function toggleSidebarDrawer() {
+  if (!isMobileViewport()) return
+  setSidebarDrawer(!els.appShell.classList.contains('sidebar-open'))
 }
 
 function updatePresence() {
@@ -1109,6 +1142,7 @@ async function selectProject(projectId) {
   renderProjects()
   renderConversations()
   renderContext()
+  closeSidebarDrawer()
 
   if (state.currentConversationId) {
     await openConversationById(state.currentConversationId)
@@ -1123,6 +1157,7 @@ async function startNewChat() {
   renderContext()
   clearChatLog()
   resetComposer()
+  closeSidebarDrawer()
   els.chatInput.focus()
 }
 
@@ -1135,6 +1170,7 @@ async function openConversation(conversation) {
   renderProjects()
   renderConversations()
   renderContext()
+  closeSidebarDrawer()
   await openConversationById(conversation.id)
 }
 
@@ -2728,6 +2764,8 @@ function bindComposerEvents() {
 
 function bindSidebarEvents() {
   els.sidebarNewChat.addEventListener('click', startNewChat)
+  els.sidebarToggle?.addEventListener('click', toggleSidebarDrawer)
+  els.sidebarBackdrop?.addEventListener('click', closeSidebarDrawer)
   if (els.adminCreateUser) {
     els.adminCreateUser.addEventListener('click', openCreateUserModal)
   }
@@ -2748,6 +2786,11 @@ async function bootstrap() {
   bindAuthEvents()
   bindSidebarEvents()
   bindComposerEvents()
+  window.addEventListener('resize', () => {
+    if (!isMobileViewport()) {
+      closeSidebarDrawer()
+    }
+  })
   renderProjects()
   renderConversations()
   renderUsers()

@@ -3,6 +3,7 @@ from __future__ import annotations
 from io import BytesIO
 from zipfile import ZipFile
 
+import app.services.generated_files as generated_files
 from app.services.generated_files import build_generated_file_bytes
 from app.services.generated_files import extract_generated_files
 
@@ -54,3 +55,15 @@ def test_extract_generated_files_accepts_missing_end_marker():
     assert "16:9" in files[0].content
     assert "Avant." in cleaned
     assert "Nachher." in cleaned
+
+
+def test_build_generated_png_falls_back_without_pillow(monkeypatch):
+    monkeypatch.setattr(generated_files, "Image", None)
+    monkeypatch.setattr(generated_files, "ImageDraw", None)
+    monkeypatch.setattr(generated_files, "ImageFont", None)
+
+    data, mime_type, filename = generated_files.build_generated_file_bytes_with_fallback("jesus.png", "Licht und Kraft")
+
+    assert mime_type == "image/png"
+    assert filename.endswith(".png")
+    assert data.startswith(b"\x89PNG\r\n\x1a\n")

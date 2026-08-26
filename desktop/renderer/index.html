@@ -48,7 +48,6 @@
           <div id="admin-section" class="sidebar-section hidden">
             <div class="section-heading">
               <span>Admin</span>
-              <span class="section-badge">Team</span>
             </div>
             <div id="admin-user-list" class="stack-list compact"></div>
           </div>
@@ -91,6 +90,9 @@
 
         <section id="workspace-shell" class="workspace-shell hidden">
           <header class="workspace-topbar">
+            <button id="sidebar-toggle" class="mobile-sidebar-toggle" type="button" aria-label="Sidebar öffnen">
+              ☰
+            </button>
             <div>
               <div id="page-title" class="page-title">Neuer Chat</div>
               <div id="selected-info" class="page-subtitle">Kein Projekt gewählt</div>
@@ -129,6 +131,7 @@
           </footer>
         </section>
       </main>
+      <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
     </div>
 
     <input id="image-input" type="file" accept="image/*" class="hidden" />

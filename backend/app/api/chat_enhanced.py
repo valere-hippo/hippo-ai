@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 import re
+from pathlib import Path
 from app.api.dependencies import get_current_user, DbSession
 from app.models.user import User
 from app.models.chat import Conversation, ChatMessage
@@ -205,8 +206,22 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         pass
 
     generated_files, cleaned_reply = extract_generated_files(reply_text)
+    image_request = looks_like_image_generation_request(payload.message, payload.attachments)
+    if image_request and generated_files:
+        normalized_files: list[GeneratedFile] = []
+        for file in generated_files:
+            suffix = Path(file.filename).suffix.lower()
+            if suffix in {".svg", ".png", ".jpg", ".jpeg"}:
+                safe_stem = re.sub(r"[^A-Za-z0-9]+", "_", Path(file.filename).stem).strip("_").lower() or "hippo_image"
+                content = file.content
+                if suffix == ".svg" and file.content.lstrip().startswith("<svg"):
+                    content = cleaned_reply or reply_text or payload.message
+                normalized_files.append(GeneratedFile(filename=f"{safe_stem}.png", content=content))
+            else:
+                normalized_files.append(file)
+        generated_files = normalized_files
     used_image_fallback = False
-    if not generated_files and looks_like_image_generation_request(payload.message, payload.attachments):
+    if not generated_files and image_request:
         fallback_title = derive_conversation_title(payload.message, payload.attachments)
         fallback_name = re.sub(r"[^A-Za-z0-9]+", "_", fallback_title).strip("_").lower() or "hippo_image"
         generated_files = [

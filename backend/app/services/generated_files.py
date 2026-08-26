@@ -4,10 +4,13 @@ from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
+import struct
 import re
 import html
 import mimetypes
 import textwrap
+import unicodedata
+import zlib
 from xml.sax.saxutils import escape as xml_escape
 
 try:
@@ -544,6 +547,197 @@ def build_svg_bytes(title: str, body: str) -> bytes:
     return _render_svg_text(title, body).encode("utf-8")
 
 
+def _png_chunk(name: bytes, payload: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(payload))
+        + name
+        + payload
+        + struct.pack(">I", zlib.crc32(name + payload) & 0xFFFFFFFF)
+    )
+
+
+def _encode_png_rgba(width: int, height: int, pixels: bytearray) -> bytes:
+    raw = bytearray()
+    row_width = width * 4
+    for row in range(height):
+        raw.append(0)
+        start = row * row_width
+        raw.extend(pixels[start : start + row_width])
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return b"".join(
+        [
+            b"\x89PNG\r\n\x1a\n",
+            _png_chunk(b"IHDR", ihdr),
+            _png_chunk(b"IDAT", zlib.compress(bytes(raw), level=9)),
+            _png_chunk(b"IEND", b""),
+        ]
+    )
+
+
+def _blend_pixel(pixels: bytearray, width: int, x: int, y: int, color: tuple[int, int, int], alpha: int = 255) -> None:
+    if x < 0 or y < 0:
+        return
+    height = len(pixels) // (width * 4)
+    if x >= width or y >= height:
+        return
+    idx = (y * width + x) * 4
+    src_alpha = max(0, min(255, alpha)) / 255.0
+    inv_alpha = 1.0 - src_alpha
+    pixels[idx] = int(color[0] * src_alpha + pixels[idx] * inv_alpha)
+    pixels[idx + 1] = int(color[1] * src_alpha + pixels[idx + 1] * inv_alpha)
+    pixels[idx + 2] = int(color[2] * src_alpha + pixels[idx + 2] * inv_alpha)
+    pixels[idx + 3] = 255
+
+
+def _fill_rect(
+    pixels: bytearray,
+    width: int,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    color: tuple[int, int, int],
+    alpha: int = 255,
+) -> None:
+    if w <= 0 or h <= 0:
+        return
+    for yy in range(max(0, y), min(y + h, len(pixels) // (width * 4))):
+        for xx in range(max(0, x), min(x + w, width)):
+            _blend_pixel(pixels, width, xx, yy, color, alpha)
+
+
+def _draw_line(
+    pixels: bytearray,
+    width: int,
+    x0: int,
+    y0: int,
+    x1: int,
+    y1: int,
+    color: tuple[int, int, int],
+    alpha: int = 255,
+    thickness: int = 1,
+) -> None:
+    dx = abs(x1 - x0)
+    dy = -abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx + dy
+    while True:
+        half = max(0, thickness // 2)
+        for off_y in range(-half, half + 1):
+            for off_x in range(-half, half + 1):
+                _blend_pixel(pixels, width, x0 + off_x, y0 + off_y, color, alpha)
+        if x0 == x1 and y0 == y1:
+            break
+        e2 = 2 * err
+        if e2 >= dy:
+            err += dy
+            x0 += sx
+        if e2 <= dx:
+            err += dx
+            y0 += sy
+
+
+def _draw_radial_glow(
+    pixels: bytearray,
+    width: int,
+    cx: int,
+    cy: int,
+    radius: int,
+    color: tuple[int, int, int],
+    max_alpha: int,
+) -> None:
+    height = len(pixels) // (width * 4)
+    x0 = max(0, cx - radius)
+    y0 = max(0, cy - radius)
+    x1 = min(width - 1, cx + radius)
+    y1 = min(height - 1, cy + radius)
+    radius_sq = radius * radius
+    for yy in range(y0, y1 + 1):
+        dy_sq = (yy - cy) * (yy - cy)
+        for xx in range(x0, x1 + 1):
+            dist_sq = (xx - cx) * (xx - cx) + dy_sq
+            if dist_sq > radius_sq:
+                continue
+            ratio = 1.0 - (dist_sq / radius_sq)
+            alpha = int(max_alpha * ratio * ratio)
+            if alpha > 0:
+                _blend_pixel(pixels, width, xx, yy, color, alpha)
+
+
+def _normalize_ascii(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text or "")
+    normalized = normalized.replace("ß", "ss")
+    normalized = normalized.encode("ascii", "ignore").decode("ascii", errors="ignore")
+    return normalized
+
+
+def _build_fallback_png_bytes(title: str, body: str) -> bytes:
+    width, height = 1280, 720
+    pixels = bytearray(width * height * 4)
+
+    top = (10, 18, 30)
+    middle = (17, 28, 42)
+    bottom = (6, 10, 16)
+    for yy in range(height):
+        ratio = yy / max(1, height - 1)
+        if ratio < 0.52:
+            span = ratio / 0.52
+            r = int(top[0] + (middle[0] - top[0]) * span)
+            g = int(top[1] + (middle[1] - top[1]) * span)
+            b = int(top[2] + (middle[2] - top[2]) * span)
+        else:
+            span = (ratio - 0.52) / 0.48
+            r = int(middle[0] + (bottom[0] - middle[0]) * span)
+            g = int(middle[1] + (bottom[1] - middle[1]) * span)
+            b = int(middle[2] + (bottom[2] - middle[2]) * span)
+        row = bytes((r, g, b, 255)) * width
+        start = yy * width * 4
+        pixels[start : start + width * 4] = row
+
+    # Subtle atmospheric glow.
+    _draw_radial_glow(pixels, width, 260, 150, 280, (91, 157, 255), 70)
+    _draw_radial_glow(pixels, width, 980, 110, 260, (99, 215, 191), 55)
+    _draw_radial_glow(pixels, width, 640, 340, 240, (255, 214, 120), 120)
+    _draw_radial_glow(pixels, width, 640, 340, 120, (255, 245, 222), 170)
+
+    # Light rays from the center.
+    ray_color = (255, 232, 170)
+    for target in ((120, 80), (1110, 80), (40, 330), (1240, 320), (220, 620), (1040, 620)):
+        _draw_line(pixels, width, 640, 340, target[0], target[1], ray_color, alpha=30, thickness=3)
+
+    # Dark cloud bands near the top and bottom for contrast.
+    _fill_rect(pixels, width, 0, 0, width, 130, (6, 10, 16), 110)
+    _fill_rect(pixels, width, 0, 630, width, 90, (5, 8, 13), 150)
+
+    # Halo and cross theme, with a gentle highlight.
+    _draw_radial_glow(pixels, width, 640, 340, 210, (255, 214, 120), 140)
+    _fill_rect(pixels, width, 609, 170, 62, 340, (255, 223, 129), 235)
+    _fill_rect(pixels, width, 500, 286, 280, 52, (255, 223, 129), 235)
+    _fill_rect(pixels, width, 623, 182, 36, 316, (255, 250, 234), 90)
+    _fill_rect(pixels, width, 509, 295, 262, 34, (255, 250, 234), 90)
+    _draw_radial_glow(pixels, width, 640, 332, 68, (255, 255, 255), 100)
+
+    # Ground silhouette.
+    _fill_rect(pixels, width, 0, 610, width, 110, (4, 7, 12), 210)
+    _draw_radial_glow(pixels, width, 280, 660, 240, (13, 19, 27), 170)
+    _draw_radial_glow(pixels, width, 980, 662, 260, (13, 19, 27), 170)
+
+    # Framing accent.
+    _fill_rect(pixels, width, 42, 42, width - 84, height - 84, (255, 255, 255), 18)
+    _fill_rect(pixels, width, 54, 54, width - 108, height - 108, (18, 27, 39), 180)
+    _fill_rect(pixels, width, 70, 70, 220, 42, (99, 215, 191), 150)
+
+    # Use the text to subtly influence the warmth of the scene.
+    normalized = _normalize_ascii(f"{title}\n{body}").upper()
+    if any(keyword in normalized for keyword in ("JESUS", "CHRIST", "CROSS", "PUISSANT", "POWER", "DIVINE")):
+        _draw_radial_glow(pixels, width, 640, 340, 320, (255, 199, 92), 65)
+    else:
+        _draw_radial_glow(pixels, width, 640, 340, 320, (154, 178, 255), 50)
+
+    return _encode_png_rgba(width, height, pixels)
+
+
 def _wrap_text(draw: "ImageDraw.ImageDraw", text: str, font, max_width: int) -> list[str]:
     lines: list[str] = []
     for paragraph in (text or "").split("\n"):
@@ -565,7 +759,7 @@ def _wrap_text(draw: "ImageDraw.ImageDraw", text: str, font, max_width: int) -> 
 
 def build_raster_image_bytes(title: str, body: str, format_name: str) -> bytes:
     if Image is None or ImageDraw is None or ImageFont is None:
-        raise RuntimeError("Pillow is required to generate raster images.")
+        return _build_fallback_png_bytes(title, body)
 
     width, height = 1400, 900
     img = Image.new("RGB", (width, height), "#0a1016")
@@ -637,6 +831,8 @@ def build_generated_file_bytes(filename: str, content: str) -> tuple[bytes, str]
     if ext == ".png":
         return build_raster_image_bytes(base_title, body, "png"), "image/png"
     if ext in {".jpg", ".jpeg"}:
+        if Image is None or ImageDraw is None or ImageFont is None:
+            return _build_fallback_png_bytes(base_title, body), "image/png"
         return build_raster_image_bytes(base_title, body, "jpeg"), "image/jpeg"
     guessed_type, _ = mimetypes.guess_type(safe_name)
     return body.encode("utf-8"), guessed_type or "text/plain; charset=utf-8"
@@ -647,13 +843,15 @@ def build_generated_file_bytes_with_fallback(filename: str, content: str) -> tup
     ext = Path(safe_name).suffix.lower()
     try:
         data, mime_type = build_generated_file_bytes(safe_name, content)
+        if ext in {".jpg", ".jpeg"} and mime_type == "image/png":
+            return data, mime_type, f"{Path(safe_name).stem}.png"
         return data, mime_type, safe_name
     except RuntimeError as exc:
-        if "Pillow is required" not in str(exc) or ext not in {".png", ".jpg", ".jpeg"}:
+        if ext not in {".png", ".jpg", ".jpeg"}:
             raise
         base_title = Path(safe_name).stem.replace("_", " ").strip() or "Hippo AI"
-        fallback_name = f"{Path(safe_name).stem}.svg"
-        return build_svg_bytes(base_title, content or ""), "image/svg+xml", fallback_name
+        fallback_name = f"{Path(safe_name).stem}.png"
+        return _build_fallback_png_bytes(base_title, content or ""), "image/png", fallback_name
 
 
 def save_generated_file(folder: str, filename: str, content: str) -> str:
