@@ -6,6 +6,7 @@ from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 import re
 import html
+import mimetypes
 from xml.sax.saxutils import escape as xml_escape
 
 try:
@@ -338,26 +339,33 @@ def build_raster_image_bytes(title: str, body: str, format_name: str) -> bytes:
     return buffer.getvalue()
 
 
-def save_generated_file(folder: str, filename: str, content: str) -> str:
+def build_generated_file_bytes(filename: str, content: str) -> tuple[bytes, str]:
     safe_name = Path(filename).name
     ext = Path(safe_name).suffix.lower()
     base_title = Path(safe_name).stem.replace("_", " ").strip() or "Hippo AI"
     body = content.strip()
 
+    if ext == ".docx":
+        return build_docx_bytes(base_title, body), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if ext == ".pdf":
+        return build_simple_pdf_bytes(base_title, body), "application/pdf"
+    if ext == ".rtf":
+        return build_rtf_bytes(base_title, body), "application/rtf"
+    if ext == ".svg":
+        return build_svg_bytes(base_title, body), "image/svg+xml"
+    if ext == ".png":
+        return build_raster_image_bytes(base_title, body, "png"), "image/png"
+    if ext in {".jpg", ".jpeg"}:
+        return build_raster_image_bytes(base_title, body, "jpeg"), "image/jpeg"
+    guessed_type, _ = mimetypes.guess_type(safe_name)
+    return body.encode("utf-8"), guessed_type or "text/plain; charset=utf-8"
+
+
+def save_generated_file(folder: str, filename: str, content: str) -> str:
+    safe_name = Path(filename).name
+    data, _ = build_generated_file_bytes(safe_name, content)
     target = Path(folder) / safe_name
     target.parent.mkdir(parents=True, exist_ok=True)
-
-    if ext == ".docx":
-        target.write_bytes(build_docx_bytes(base_title, body))
-    elif ext == ".pdf":
-        target.write_bytes(build_simple_pdf_bytes(base_title, body))
-    elif ext == ".rtf":
-        target.write_bytes(build_rtf_bytes(base_title, body))
-    elif ext == ".svg":
-        target.write_bytes(build_svg_bytes(base_title, body))
-    elif ext in {".png", ".jpg", ".jpeg"}:
-        target.write_bytes(build_raster_image_bytes(base_title, body, ext.lstrip(".")))
-    else:
-        target.write_text(body, encoding="utf-8")
+    target.write_bytes(data)
 
     return str(target)

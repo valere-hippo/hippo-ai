@@ -1135,6 +1135,38 @@ function showGeneratedFile(message, projectFolder) {
   return true
 }
 
+async function saveGeneratedArtifacts(artifacts, projectFolder) {
+  if (!Array.isArray(artifacts) || !artifacts.length) return []
+  if (!projectFolder) {
+    showToast('Wähle zuerst ein Projekt mit zugeordnetem Ordner aus.', 'error')
+    return []
+  }
+
+  const saved = []
+  for (const artifact of artifacts) {
+    if (!artifact?.filename || !artifact?.data_base64) continue
+    // Save the binary payload that the backend prepared for this file.
+    // The shared folder lives on the desktop machine, so Electron writes it locally.
+    // eslint-disable-next-line no-await-in-loop
+    const result = await window.electron.saveFile({
+      folder: projectFolder,
+      filename: artifact.filename,
+      data: { base64: artifact.data_base64 },
+    })
+    if (result?.ok) {
+      saved.push(result.path)
+    } else {
+      showToast(result?.error || `Datei konnte nicht gespeichert werden: ${artifact.filename}`, 'error')
+    }
+  }
+
+  if (saved.length) {
+    showToast(`Dateien erstellt: ${saved.join(', ')}`)
+  }
+
+  return saved
+}
+
 async function sendChat() {
   const message = els.chatInput.value.trim()
   if (!message && state.draftAttachments.length === 0) return
@@ -1181,9 +1213,14 @@ async function sendChat() {
     await loadConversations()
     renderContext()
 
-    const saved = showGeneratedFile(response.reply || '', project?.watched_folder || null)
+    const savedArtifacts = await saveGeneratedArtifacts(response.generated_files, project?.watched_folder || null)
+    const saved = savedArtifacts.length > 0
     if (!saved) {
-      renderMessage('assistant', response.reply || '')
+      const legacySaved = showGeneratedFile(response.reply || '', project?.watched_folder || null)
+      if (legacySaved) return
+    }
+    if (response.reply) {
+      renderMessage('assistant', response.reply)
     }
   } catch (error) {
     showToast(error.message || 'Chat fehlgeschlagen', 'error')

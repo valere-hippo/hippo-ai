@@ -45,7 +45,15 @@ ipcMain.handle('save-file', async (event, { folder, filename, data }) => {
   try{
     if(!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true })
     const filePath = path.join(folder, filename)
-    fs.writeFileSync(filePath, data, 'utf8')
+    if (typeof data === 'object' && data !== null && data.base64) {
+      fs.writeFileSync(filePath, Buffer.from(data.base64, 'base64'))
+    } else if (typeof data === 'object' && data !== null && data.bytes) {
+      fs.writeFileSync(filePath, Buffer.from(data.bytes))
+    } else if (typeof data === 'string' && data.startsWith('base64:')) {
+      fs.writeFileSync(filePath, Buffer.from(data.slice(7), 'base64'))
+    } else {
+      fs.writeFileSync(filePath, data, 'utf8')
+    }
     return { ok: true, path: filePath }
   }catch(e){ return { ok: false, error: e.message } }
 })

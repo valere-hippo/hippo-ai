@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.api.dependencies import get_current_user, DbSession
 from app.models.user import User
 from app.models.chat import Conversation, ChatMessage
@@ -10,7 +10,8 @@ from sqlalchemy import select, insert
 import httpx
 from app.schemas.chat import ChatAttachment
 from app.services.chat_payloads import build_message_content, derive_conversation_title, storage_text
-from app.services.generated_files import extract_generated_files, save_generated_file
+from app.services.generated_files import build_generated_file_bytes, extract_generated_files
+import base64
 
 router = APIRouter(prefix="/chat-enhanced", tags=["chat-enhanced"]) 
 
@@ -23,6 +24,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     conversation_id: int | None = None
+    generated_files: list[dict[str, str]] = Field(default_factory=list)
 
 
 @router.post('/', response_model=ChatResponse)
@@ -177,24 +179,22 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         pass
 
     generated_files, cleaned_reply = extract_generated_files(reply_text)
-    project_folder = conv_project.watched_folder if conv_project else None
-    saved_paths: list[str] = []
-    if generated_files and project_folder:
-        for file in generated_files:
-            saved_paths.append(save_generated_file(project_folder, file.filename, file.content))
-        if saved_paths:
-            save_note = "Datei gespeichert: " + ", ".join(saved_paths)
-            reply_text = f"{cleaned_reply}\n\n{save_note}".strip() if cleaned_reply else save_note
-    elif generated_files:
-        reply_text = (
-            f"{cleaned_reply}\n\nIch habe den Entwurf erstellt, aber diesem Chat ist kein gemeinsamer Ordner zugeordnet."
-            if cleaned_reply
-            else "Ich habe den Entwurf erstellt, aber diesem Chat ist kein gemeinsamer Ordner zugeordnet."
+    serialized_files: list[dict[str, str]] = []
+    for file in generated_files:
+        data, mime_type = build_generated_file_bytes(file.filename, file.content)
+        serialized_files.append(
+            {
+                "filename": file.filename,
+                "mime_type": mime_type,
+                "data_base64": base64.b64encode(data).decode("ascii"),
+            }
         )
-    elif cleaned_reply:
+    if cleaned_reply:
         reply_text = cleaned_reply
+    elif generated_files:
+        reply_text = "Datei wurde erstellt."
 
     await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user.id, role='assistant', content=reply_text))
     await db.commit()
 
-    return ChatResponse(reply=reply_text, conversation_id=conv_id)
+    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files)
