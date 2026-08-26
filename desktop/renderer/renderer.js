@@ -87,7 +87,16 @@ function getContextProject() {
 
 function getConversationTitle(conversation) {
   if (!conversation) return 'Neuer Chat'
-  return conversation.title || `Chat #${conversation.id}`
+  return conversation.title || conversation.preview_title || conversation.first_message || `Chat #${conversation.id}`
+}
+
+function deriveConversationTitle(message, attachments = []) {
+  const base = (message || '').trim().replace(/\s+/g, ' ')
+  if (base) {
+    return base.length > 64 ? `${base.slice(0, 63).trim()}…` : base
+  }
+  const firstAttachment = attachments.find((attachment) => attachment?.filename)
+  return firstAttachment?.filename || 'Neuer Chat'
 }
 
 function authHeaders(extra = {}) {
@@ -1135,6 +1144,12 @@ async function sendChat() {
       if (state.selectedProjectId) {
         state.projectConversationMemory.set(state.selectedProjectId, response.conversation_id)
       }
+      const title = deriveConversationTitle(message, state.draftAttachments)
+      state.conversations = state.conversations.map((conversation) => (
+        conversation.id === response.conversation_id
+          ? { ...conversation, title: conversation.title || title }
+          : conversation
+      ))
     }
 
     await loadConversations()
@@ -1252,6 +1267,15 @@ async function startRecording() {
   }
 
   try {
+    if (navigator.mediaDevices.enumerateDevices) {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const hasAudioInput = devices.some((device) => device.kind === 'audioinput')
+      if (!hasAudioInput) {
+        showToast('Kein Mikrofon gefunden. Bitte ein Mikrofon anschließen oder ein anderes Eingabegerät wählen.', 'error')
+        return
+      }
+    }
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     const audioContext = new (window.AudioContext || window.webkitAudioContext)()
     const analyser = audioContext.createAnalyser()
@@ -1311,7 +1335,13 @@ async function startRecording() {
         transcriptState.text = parts.join(' ').trim()
       }
       recognition.onerror = (event) => {
-        showToast(`Fehler bei der Spracherkennung: ${event.error}`, 'error')
+        const errorMap = {
+          'no-speech': 'Keine Sprache erkannt.',
+          'audio-capture': 'Das Mikrofon konnte nicht verwendet werden.',
+          'not-allowed': 'Mikrofonzugriff wurde verweigert.',
+          'service-not-allowed': 'Die Spracherkennung ist nicht erlaubt.',
+        }
+        showToast(errorMap[event.error] || `Fehler bei der Spracherkennung: ${event.error}`, 'error')
       }
       recognition.onend = () => {
         transcriptState.finalised = true
@@ -1328,7 +1358,14 @@ async function startRecording() {
     mediaRecorder.start()
     drawVoiceFrame()
   } catch (error) {
-    showToast(error.message || 'Mikrofonzugriff verweigert', 'error')
+    const message = String(error?.message || error || '')
+    if (/requested device not found|notfounderror/i.test(message)) {
+      showToast('Kein Mikrofon gefunden. Bitte ein Mikrofon anschließen.', 'error')
+    } else if (/not allowed|permission/i.test(message)) {
+      showToast('Mikrofonzugriff wurde verweigert.', 'error')
+    } else {
+      showToast(message || 'Mikrofonzugriff verweigert', 'error')
+    }
     stopRecordingUI()
   }
 }

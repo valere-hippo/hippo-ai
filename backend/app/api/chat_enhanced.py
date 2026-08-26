@@ -9,7 +9,7 @@ from app.core.config import settings
 from sqlalchemy import select, insert
 import httpx
 from app.schemas.chat import ChatAttachment
-from app.services.chat_payloads import build_message_content, storage_text
+from app.services.chat_payloads import build_message_content, derive_conversation_title, storage_text
 
 router = APIRouter(prefix="/chat-enhanced", tags=["chat-enhanced"]) 
 
@@ -58,6 +58,15 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     )
     await db.commit()
 
+    conv_title = derive_conversation_title(payload.message, payload.attachments)
+    await db.execute(
+        Conversation.__table__.update()
+        .where(Conversation.id == conv_id)
+        .where(Conversation.title.is_(None))
+        .values(title=conv_title)
+    )
+    await db.commit()
+
     # fetch messages for context
     q = select(ChatMessage).where(ChatMessage.conversation_id == conv_id).order_by(ChatMessage.created_at)
     res = await db.execute(q)
@@ -69,8 +78,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         hippo_messages.append({"role": role, "content": m.content})
 
     if payload.attachments:
-        user_content = build_message_content(payload.message, payload.attachments)
-        hippo_messages[-1]["content"] = user_content
+        hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=True)
 
     # global system prompt
     global_sys = (
@@ -106,6 +114,10 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             pass
 
+    fallback_messages = [dict(item) for item in hippo_messages]
+    if payload.attachments:
+        fallback_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=False)
+
     # call Hippo chat completions
     if not (settings.hippo_api_url and settings.hippo_api_key):
         raise HTTPException(status_code=503, detail='Die Hippo-API ist nicht konfiguriert.')
@@ -121,6 +133,18 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 reply_text = data['choices'][0]['message']['content']
             else:
                 reply_text = str(data)
+        except httpx.HTTPStatusError as e:
+            if payload.attachments and e.response is not None and e.response.status_code == 400:
+                retry_payload = {"model": settings.hippo_model, "messages": fallback_messages, "temperature": 0.7, "max_tokens": 512}
+                retry = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=retry_payload, headers=headers)
+                retry.raise_for_status()
+                data = retry.json()
+                if isinstance(data, dict) and data.get('choices'):
+                    reply_text = data['choices'][0]['message']['content']
+                else:
+                    reply_text = str(data)
+            else:
+                raise
         except Exception as e:
             raise HTTPException(status_code=502, detail=f'Fehler der Hippo-API: {e}')
 

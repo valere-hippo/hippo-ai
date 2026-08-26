@@ -3,7 +3,17 @@ from __future__ import annotations
 from typing import Any
 
 
-def build_message_content(message: str, attachments: list[Any] | None = None) -> list[dict[str, Any]] | str:
+def _attachment_text(attachment: Any) -> str:
+    filename = getattr(attachment, "filename", "attachment")
+    mime_type = getattr(attachment, "mime_type", None) or "unknown"
+    return f"[Attachment: {filename} | {mime_type}]"
+
+
+def build_message_content(
+    message: str,
+    attachments: list[Any] | None = None,
+    include_images: bool = True,
+) -> list[dict[str, Any]] | str:
     attachments = attachments or []
     image_parts: list[dict[str, Any]] = []
     text_parts: list[str] = []
@@ -16,15 +26,18 @@ def build_message_content(message: str, attachments: list[Any] | None = None) ->
         filename = getattr(attachment, "filename", "attachment")
         mime_type = (getattr(attachment, "mime_type", None) or "").lower()
         data_url = getattr(attachment, "data_url", None)
-        if data_url and mime_type.startswith("image/"):
+        if include_images and data_url and mime_type.startswith("image/"):
             image_parts.append(
                 {
                     "type": "image_url",
-                    "image_url": {"url": data_url},
+                    "image_url": {
+                        "url": data_url,
+                        "detail": "auto",
+                    },
                 }
             )
         else:
-            text_parts.append(f"[Attachment: {filename}]")
+            text_parts.append(_attachment_text(attachment))
 
     if not text_parts and not image_parts:
         return ""
@@ -40,7 +53,21 @@ def storage_text(message: str, attachments: list[Any] | None = None) -> str:
     attachments = attachments or []
     lines = [message.strip()] if message and message.strip() else []
     for attachment in attachments:
-        filename = getattr(attachment, "filename", "attachment")
-        mime_type = getattr(attachment, "mime_type", None) or "unknown"
-        lines.append(f"[Attachment: {filename} | {mime_type}]")
+        lines.append(_attachment_text(attachment))
     return "\n".join(lines).strip()
+
+
+def derive_conversation_title(message: str, attachments: list[Any] | None = None, max_length: int = 64) -> str:
+    attachments = attachments or []
+    base_text = (message or "").strip().replace("\n", " ")
+    if not base_text:
+        for attachment in attachments:
+            filename = getattr(attachment, "filename", None)
+            if filename:
+                base_text = filename.strip()
+                break
+    if not base_text:
+        return "Neuer Chat"
+    if len(base_text) > max_length:
+        return base_text[: max_length - 1].rstrip() + "…"
+    return base_text

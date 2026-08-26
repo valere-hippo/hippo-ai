@@ -417,16 +417,18 @@ textarea {
   position: relative;
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   overflow: hidden;
 }
 
 .chat-log {
-  flex: 1;
+  grid-row: 1;
   min-height: 0;
   overflow: auto;
-  padding: 26px 22px 240px;
+  padding: 26px 22px 18px;
+  position: relative;
+  z-index: 1;
 }
 
 .message {
@@ -516,6 +518,7 @@ textarea {
   padding: 28px;
   pointer-events: none;
   transition: opacity 0.2s ease;
+  z-index: 0;
 }
 
 .empty-state.hidden {
@@ -541,13 +544,15 @@ textarea {
 }
 
 .composer-shell {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 10px;
-  padding: 0 16px;
+  grid-row: 2;
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  padding: 0 16px 12px;
   background: transparent;
   pointer-events: none;
+  z-index: 2;
 }
 
 .composer-shell > * {
@@ -881,7 +886,7 @@ select.text-input option {
   }
 
   .chat-log {
-    padding-bottom: 240px;
+    padding-bottom: 14px;
   }
 
   .composer-shell {

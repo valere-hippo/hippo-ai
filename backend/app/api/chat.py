@@ -9,7 +9,7 @@ from app.models.permission import PermissionLevel
 from app.core.config import settings
 from sqlalchemy import select, insert
 from app.schemas.chat import ChatAttachment
-from app.services.chat_payloads import build_message_content, storage_text
+from app.services.chat_payloads import build_message_content, derive_conversation_title, storage_text
 
 router = APIRouter(prefix="/chat", tags=["chat"]) 
 
@@ -58,6 +58,15 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     )
     await db.commit()
 
+    conv_title = derive_conversation_title(payload.message, payload.attachments)
+    await db.execute(
+        Conversation.__table__.update()
+        .where(Conversation.id == conv_id)
+        .where(Conversation.title.is_(None))
+        .values(title=conv_title)
+    )
+    await db.commit()
+
     # fetch messages for context
     q = select(ChatMessage).where(ChatMessage.conversation_id == conv_id).order_by(ChatMessage.created_at)
     res = await db.execute(q)
@@ -94,9 +103,10 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 
+    fallback_messages = [dict(item) for item in hippo_messages]
     if payload.attachments:
-        user_content = build_message_content(payload.message, payload.attachments)
-        hippo_messages[-1]["content"] = user_content
+        hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=True)
+        fallback_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=False)
 
     # Call Hippo model endpoint if configured (preferred)
     import asyncio, httpx
@@ -104,20 +114,37 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     if settings.hippo_api_url and settings.hippo_api_key:
         async with httpx.AsyncClient(timeout=60.0) as client:
             headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
-            payload = {
+            model_payload = {
                 "model": settings.hippo_model,
                 "messages": hippo_messages,
                 "temperature": 0.7,
                 "max_tokens": 512,
             }
             try:
-                r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=payload, headers=headers)
+                r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=model_payload, headers=headers)
                 r.raise_for_status()
                 data = r.json()
                 if isinstance(data, dict) and data.get('choices'):
                     reply_text = data['choices'][0]['message']['content']
                 else:
                     reply_text = str(data)
+            except httpx.HTTPStatusError as e:
+                if payload.attachments and e.response is not None and e.response.status_code == 400:
+                    retry_payload = {
+                        "model": settings.hippo_model,
+                        "messages": fallback_messages,
+                        "temperature": 0.7,
+                        "max_tokens": 512,
+                    }
+                    retry = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=retry_payload, headers=headers)
+                    retry.raise_for_status()
+                    data = retry.json()
+                    if isinstance(data, dict) and data.get('choices'):
+                        reply_text = data['choices'][0]['message']['content']
+                    else:
+                        reply_text = str(data)
+                else:
+                    raise
             except Exception as e:
                 raise HTTPException(status_code=502, detail=f"Hippo API error: {e}")
     else:
@@ -160,7 +187,26 @@ async def list_conversations(db: DbSession, current_user: User = Depends(get_cur
     )
     res = await db.execute(q)
     convs = res.scalars().all()
-    return convs
+    result = []
+    for conv in convs:
+        title = conv.title
+        if not title:
+            first_msg = await db.execute(
+                select(ChatMessage.content)
+                .where(ChatMessage.conversation_id == conv.id)
+                .order_by(ChatMessage.created_at.asc())
+                .limit(1)
+            )
+            title = derive_conversation_title(first_msg.scalar_one_or_none() or "", None)
+        result.append(
+            {
+                "id": conv.id,
+                "title": title,
+                "project_id": conv.project_id,
+                "created_at": conv.created_at,
+            }
+        )
+    return result
 
 
 @router.get('/conversations/{conv_id}')
