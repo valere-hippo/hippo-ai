@@ -1578,6 +1578,13 @@ async function openUserDashboardModal(initialTab = 'profile') {
   uploadButton.textContent = 'Dateien hochladen'
   uploadButton.dataset.uploadBtn = 'true'
 
+  const clearStorageButton = document.createElement('button')
+  clearStorageButton.type = 'button'
+  clearStorageButton.className = 'ghost-action'
+  clearStorageButton.textContent = 'Speicher leeren'
+  clearStorageButton.title = 'Alle Projektdateien löschen'
+  clearStorageButton.dataset.clearStorageBtn = 'true'
+
   const uploadInput = document.createElement('input')
   uploadInput.type = 'file'
   uploadInput.multiple = true
@@ -1587,9 +1594,10 @@ async function openUserDashboardModal(initialTab = 'profile') {
   if (!projectOptions.length) {
     projectSelect.disabled = true
     uploadButton.disabled = true
+    clearStorageButton.disabled = true
   }
 
-  projectRow.append(projectLabel, uploadButton)
+  projectRow.append(projectLabel, uploadButton, clearStorageButton)
   const storageSummary = document.createElement('div')
   storageSummary.className = 'storage-summary'
   storageSummary.dataset.storageSummary = 'true'
@@ -1607,6 +1615,33 @@ async function openUserDashboardModal(initialTab = 'profile') {
       return
     }
     uploadInput.click()
+  })
+
+  clearStorageButton.addEventListener('click', async () => {
+    const projectId = Number(projectSelect.value)
+    if (!projectId) {
+      showToast('Wähle zuerst ein Projekt aus.', 'error')
+      return
+    }
+    const project = state.projects.find((item) => item.id === projectId)
+    const projectName = project?.name || `Projekt ${projectId}`
+    const firstOk = window.confirm(`Alle Dateien von "${projectName}" wirklich löschen?`)
+    if (!firstOk) return
+    const secondOk = window.confirm(`Letzte Bestätigung: Der gesamte Projekt-Speicher von "${projectName}" wird gelöscht. Fortfahren?`)
+    if (!secondOk) return
+
+    showLoader('Projekt-Speicher wird geleert...')
+    try {
+      const result = await apiJson(`/files/projects/${projectId}/storage`, {
+        method: 'DELETE',
+      })
+      showToast(`Speicher geleert: ${result.deleted_remote || 0} S3-Dateien, ${result.deleted_local || 0} lokale Dateien`)
+      await refreshDashboardStorage(storagePanel, projectId)
+    } catch (error) {
+      showToast(error.message || 'Speicher konnte nicht geleert werden', 'error')
+    } finally {
+      hideLoader()
+    }
   })
 
   uploadInput.addEventListener('change', async () => {

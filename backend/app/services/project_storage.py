@@ -4,6 +4,7 @@ import mimetypes
 import os
 import re
 import sqlite3
+import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -138,6 +139,44 @@ def delete_project_bucket(project: Any) -> None:
     except ClientError:
         # Best effort cleanup only.
         return
+
+
+def clear_project_storage(project: Any) -> dict[str, int]:
+    deleted_remote = 0
+    deleted_local = 0
+
+    client = s3_client()
+    if client is not None:
+        bucket = project_bucket_name(project)
+        prefix = project_object_prefix(project)
+        try:
+            paginator = client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+                objects = [{"Key": item["Key"]} for item in page.get("Contents", []) if item.get("Key")]
+                if not objects:
+                    continue
+                client.delete_objects(Bucket=bucket, Delete={"Objects": objects, "Quiet": True})
+                deleted_remote += len(objects)
+        except ClientError:
+            pass
+
+    local_dir = LOCAL_STORAGE_ROOT / str(getattr(project, "id", ""))
+    if local_dir.exists() and local_dir.is_dir():
+        try:
+            for entry in local_dir.iterdir():
+                if entry.is_file():
+                    entry.unlink(missing_ok=True)
+                    deleted_local += 1
+                elif entry.is_dir():
+                    shutil.rmtree(entry, ignore_errors=True)
+            try:
+                local_dir.rmdir()
+            except OSError:
+                pass
+        except Exception:
+            pass
+
+    return {"deleted_remote": deleted_remote, "deleted_local": deleted_local}
 
 
 def _local_project_dir(project: Any) -> Path:

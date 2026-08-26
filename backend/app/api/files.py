@@ -10,6 +10,7 @@ from app.models.project import Project
 from app.models.permission import PermissionLevel
 from app.services.project_storage import (
     can_use_s3_storage,
+    clear_project_storage,
     has_s3_storage,
     list_project_files,
     project_bucket_name,
@@ -141,3 +142,25 @@ async def download_project_file(project_id: int, filename: str, db: DbSession, c
         raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
     headers = {"Content-Disposition": f'attachment; filename="{filename}"', "X-Storage-Backend": storage}
     return StreamingResponse(iter([content]), media_type=content_type, headers=headers)
+
+
+@router.delete("/projects/{project_id}/storage")
+async def clear_project_storage_endpoint(project_id: int, db: DbSession, current_user=Depends(get_current_user)):
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
+
+    from app.services.permissions import has_project_permission
+    allowed = await has_project_permission(db, current_user, project, PermissionLevel.ADMIN)
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert.")
+
+    deleted = clear_project_storage(project)
+    return {
+        "ok": True,
+        "project_id": project.id,
+        "deleted_remote": deleted["deleted_remote"],
+        "deleted_local": deleted["deleted_local"],
+        "provider": "s3" if can_use_s3_storage() else "local",
+    }

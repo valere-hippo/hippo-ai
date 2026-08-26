@@ -181,7 +181,11 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     generated_files, cleaned_reply = extract_generated_files(reply_text)
     serialized_files: list[dict[str, str]] = []
     for file in generated_files:
-        data, mime_type = build_generated_file_bytes(file.filename, file.content)
+        try:
+            data, mime_type = build_generated_file_bytes(file.filename, file.content)
+        except Exception:
+            # Never fail the whole chat because a generated artifact could not be rendered.
+            continue
         serialized_files.append(
             {
                 "filename": file.filename,

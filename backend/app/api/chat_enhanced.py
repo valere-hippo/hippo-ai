@@ -197,7 +197,11 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     generated_files, cleaned_reply = extract_generated_files(reply_text)
     serialized_files: list[dict[str, str]] = []
     for file in generated_files:
-        data, mime_type = build_generated_file_bytes(file.filename, file.content)
+        try:
+            data, mime_type = build_generated_file_bytes(file.filename, file.content)
+        except Exception:
+            # Skip unsupported render targets instead of crashing the chat route.
+            continue
         serialized_files.append(
             {
                 "filename": file.filename,
