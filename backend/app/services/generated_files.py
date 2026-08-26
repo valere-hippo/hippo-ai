@@ -16,10 +16,8 @@ except Exception:  # pragma: no cover - optional runtime dependency
     Image = ImageDraw = ImageFont = None
 
 
-FILE_MARKER_RE = re.compile(
-    r"<<<FILE:(?P<filename>[^>]+)>>>\s*(?P<content>[\s\S]*?)\s*<<<END_FILE>>>",
-    re.IGNORECASE,
-)
+FILE_START_RE = re.compile(r"<<<FILE:(?P<filename>[^>]+)>>>", re.IGNORECASE)
+FILE_END_RE = re.compile(r"<<<END_FILE>>>", re.IGNORECASE)
 
 
 @dataclass
@@ -123,17 +121,41 @@ def _parse_report_blocks(text: str) -> list[ReportLine]:
 
 def extract_generated_files(text: str) -> tuple[list[GeneratedFile], str]:
     files: list[GeneratedFile] = []
+    source = text or ""
+    cleaned_parts: list[str] = []
+    cursor = 0
 
-    def _replace(match: re.Match[str]) -> str:
+    while True:
+        start_match = FILE_START_RE.search(source, cursor)
+        if not start_match:
+            cleaned_parts.append(source[cursor:])
+            break
+
+        cleaned_parts.append(source[cursor:start_match.start()])
+        filename = start_match.group("filename").strip()
+        content_start = start_match.end()
+
+        end_match = FILE_END_RE.search(source, content_start)
+        next_start = FILE_START_RE.search(source, content_start)
+
+        if end_match and (not next_start or end_match.start() <= next_start.start()):
+            content = source[content_start:end_match.start()]
+            cursor = end_match.end()
+        elif next_start:
+            content = source[content_start:next_start.start()]
+            cursor = next_start.start()
+        else:
+            content = source[content_start:]
+            cursor = len(source)
+
         files.append(
             GeneratedFile(
-                filename=match.group("filename").strip(),
-                content=match.group("content").strip(),
+                filename=filename,
+                content=content.strip(),
             )
         )
-        return ""
 
-    cleaned = FILE_MARKER_RE.sub(_replace, text or "").strip()
+    cleaned = "".join(cleaned_parts).strip()
     return files, cleaned
 
 

@@ -2296,10 +2296,7 @@ function showGeneratedFile(message, projectFolder) {
 
 async function saveGeneratedArtifacts(artifacts, projectFolder) {
   if (!Array.isArray(artifacts) || !artifacts.length) return []
-  if (!projectFolder) {
-    showToast('Wähle zuerst ein Projekt mit zugeordnetem Ordner aus.', 'error')
-    return []
-  }
+  if (!projectFolder) return []
 
   const saved = []
   for (const artifact of artifacts) {

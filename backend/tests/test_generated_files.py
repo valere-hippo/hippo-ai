@@ -4,6 +4,7 @@ from io import BytesIO
 from zipfile import ZipFile
 
 from app.services.generated_files import build_generated_file_bytes
+from app.services.generated_files import extract_generated_files
 
 
 def _sample_report() -> str:
@@ -41,3 +42,15 @@ def test_build_generated_pdf_contains_title_and_content():
     assert b"Wegberg Ordneranalyse Bericht" in data
     assert b"Einleitung" in data
     assert b"\xfc" in data or b"\xf6" in data or b"\xe4" in data
+
+
+def test_extract_generated_files_accepts_missing_end_marker():
+    files, cleaned = extract_generated_files(
+        "Avant.\n<<<FILE:jesus.png>>>\nEine 16:9 Bildbeschreibung mit Licht und Kraft.\nNoch mehr Details.\nNachher."
+    )
+
+    assert len(files) == 1
+    assert files[0].filename == "jesus.png"
+    assert "16:9" in files[0].content
+    assert "Avant." in cleaned
+    assert "Nachher." in cleaned
