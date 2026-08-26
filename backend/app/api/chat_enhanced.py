@@ -1,0 +1,129 @@
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from app.api.dependencies import get_current_user, DbSession
+from app.models.user import User
+from app.models.chat import Conversation, ChatMessage
+from app.models.project import Project
+from app.models.permission import PermissionLevel
+from app.core.config import settings
+from sqlalchemy import select, insert
+import httpx
+
+router = APIRouter(prefix="/chat-enhanced", tags=["chat-enhanced"]) 
+
+class ChatRequest(BaseModel):
+    conversation_id: int | None = None
+    project_id: int | None = None
+    message: str
+
+class ChatResponse(BaseModel):
+    reply: str
+    conversation_id: int | None = None
+
+
+@router.post('/', response_model=ChatResponse)
+async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User = Depends(get_current_user)) -> ChatResponse:
+    # basic project permission checks
+    conv_project = None
+    if payload.project_id is not None:
+        result = await db.execute(select(Project).where(Project.id == payload.project_id))
+        proj = result.scalar_one_or_none()
+        if proj is None:
+            raise HTTPException(status_code=404, detail='Project not found')
+        from app.services.permissions import has_project_permission
+        allowed = await has_project_permission(db, current_user, proj, PermissionLevel.READ)
+        if not allowed:
+            raise HTTPException(status_code=403, detail='Forbidden')
+        conv_project = proj
+
+    # ensure conversation
+    conv_id = payload.conversation_id
+    if conv_id is None:
+        stmt = insert(Conversation).values(title=None, project_id=conv_project.id if conv_project else None).returning(Conversation)
+        result = await db.execute(stmt)
+        conv = result.scalar_one()
+        conv_id = conv.id
+
+    # store user message
+    await db.execute(
+        insert(ChatMessage).values(
+            conversation_id=conv_id,
+            user_id=current_user.id,
+            role='user',
+            content=payload.message,
+        )
+    )
+    await db.commit()
+
+    # fetch messages for context
+    q = select(ChatMessage).where(ChatMessage.conversation_id == conv_id).order_by(ChatMessage.created_at)
+    res = await db.execute(q)
+    messages = res.scalars().all()
+
+    hippo_messages = []
+    for m in messages:
+        role = 'user' if m.role == 'user' else 'assistant' if m.role == 'assistant' else 'system'
+        hippo_messages.append({"role": role, "content": m.content})
+
+    # global system prompt
+    global_sys = (
+        "Du bist Hippo, ein freundlicher und professioneller KI-Assistent.\n"
+        "Dieses System wurde erstellt und entwickelt von Valère Youbi, CEO der Firma MERVAL DIGITALE, für das Unternehmen Hipposideros mit Sitz in Deutschland.\n"
+        "Antworte in der Sprache des Benutzers und nutze projektspezifisches Wissen, falls vorhanden."
+    )
+    hippo_messages.insert(0, {"role": "system", "content": global_sys})
+
+    # if project provided, call embedding search service and inject context
+    if payload.project_id is not None and settings.hippo_embedding_url:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as emb_client:
+                emb_body = {"project_id": payload.project_id, "query": payload.message, "limit": 5, "min_score": 0.0}
+                emb_resp = await emb_client.post(settings.hippo_embedding_url.rstrip('/') + '/embeddings/search', json=emb_body)
+                emb_resp.raise_for_status()
+                emb_data = emb_resp.json()
+                results = emb_data.get('results') or emb_data.get('items') or emb_data.get('data') or emb_data.get('hits') or emb_data
+                top_texts = []
+                if isinstance(results, list):
+                    for it in results[:5]:
+                        t = it.get('text') if isinstance(it, dict) else (it if isinstance(it, str) else None)
+                        if t:
+                            top_texts.append(t)
+                if top_texts:
+                    context_block = '\n\n'.join(top_texts)
+                    emb_sys = (
+                        "Wichtige projektspezifische Informationen (aus Embeddings):\n" + context_block + "\n\n"
+                        "Wenn nötig, übersetze diese Informationen in die Sprache des Benutzers und nutze sie zur Formulierung der Antwort."
+                    )
+                    hippo_messages.insert(1, {"role": "system", "content": emb_sys})
+        except Exception:
+            pass
+
+    # call Hippo chat completions
+    if not (settings.hippo_api_url and settings.hippo_api_key):
+        raise HTTPException(status_code=503, detail='Hippo API not configured')
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
+        payload_h = {"model": settings.hippo_model, "messages": hippo_messages, "temperature": 0.7, "max_tokens": 512}
+        try:
+            r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=payload_h, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            if isinstance(data, dict) and data.get('choices'):
+                reply_text = data['choices'][0]['message']['content']
+            else:
+                reply_text = str(data)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f'Hippo API error: {e}')
+
+    # sanitize & store
+    import re
+    try:
+        reply_text = re.sub(r"<think>[\s\S]*?<\/think>", "", reply_text, flags=re.IGNORECASE)
+    except Exception:
+        pass
+
+    await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user.id, role='assistant', content=reply_text))
+    await db.commit()
+
+    return ChatResponse(reply=reply_text, conversation_id=conv_id)

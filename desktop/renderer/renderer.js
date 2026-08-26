@@ -9,18 +9,50 @@ function authHeaders(){
 }
 
 async function postJson(url, body){
-  const res = await fetch(url, { method: 'POST', headers: Object.assign({'Content-Type':'application/json'}, authHeaders()), body: JSON.stringify(body) })
-  try{ return await res.json() } catch(e){ return {} }
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: Object.assign(
+        {'Content-Type': 'application/json'},
+        authHeaders()
+    ),
+    body: JSON.stringify(body)
+  })
+
+  let data = {}
+
+  try {
+    data = await res.json()
+  } catch (e) {
+    data = {}
+  }
+
+  if (!res.ok) {
+    const message =
+        data?.detail ||
+        data?.error ||
+        `HTTP ${res.status}`
+
+    throw new Error(message)
+  }
+
+  return data
 }
 async function getJson(url){
   const res = await fetch(url, { headers: authHeaders() })
   try{ return await res.json() } catch(e){ return {} }
 }
 
+function appLog(msg){
+  // Prefer electron logging to persist messages, fallback to debug div + console
+  try{ if(window && window.electron && window.electron.logError){ window.electron.logError(msg); return } }catch(e){}
+  try{ console.log(msg) }catch(e){}
+  const d = document.getElementById('debug-log'); if(!d) return; d.style.display='block'; const el = document.createElement('div'); el.innerText = msg; d.appendChild(el); if(d.childNodes.length>200) d.removeChild(d.firstChild)
+}
+
 function showToast(msg, type='success'){
   const root = document.getElementById('toast-root'); if(!root) return
   const el = document.createElement('div'); el.className='toast ' + type; el.innerText = msg; root.appendChild(el); setTimeout(()=>el.classList.add('show'),10); setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>root.removeChild(el),300) },4000)
-  try{ window.electron.logError(msg) }catch{}
+  appLog(msg)
 }
 
 function showLoader(text='Bitte warten...'){
@@ -35,13 +67,26 @@ async function doLogin(){
     const email = document.getElementById('email').value
     const password = document.getElementById('password').value
     if(!email || !password){ showToast('Bitte E-Mail und Passwort ausfüllen','error'); return }
-    const res = await postJson(API + '/auth/login', { email, password })
-    if(res && res.access_token){ token = res.access_token; showToast('Angemeldet'); document.getElementById('auth').style.display='none'; document.getElementById('projects').style.display='block'; const m = document.querySelector('.main'); if(m) m.style.display='block'; await refreshProjects(); await refreshConversations(); } else { showToast('Login fehlgeschlagen','error') }
-  }catch(e){ showToast('Fehler: ' + (e && e.message),'error'); try{ window.electron.logError('login error: '+(e && e.message)) }catch{} }
+    try{
+      const res = await postJson(API + '/auth/login', { email, password })
+      if(res && res.access_token){ token = res.access_token; showToast('Angemeldet'); document.getElementById('auth').style.display='none'; document.getElementById('projects').style.display='block'; const m = document.querySelector('.main'); if(m) m.style.display='block'; await refreshProjects(); await refreshConversations(); } else { showToast('Login fehlgeschlagen','error') }
+    }catch(apiErr){
+      // If backend returned a structured error, show it
+      const msg = apiErr && apiErr.message ? apiErr.message : 'Login fehlgeschlagen'
+      showToast(msg,'error')
+      appLog('login error: '+msg)
+    }
+  }catch(e){ showToast('Fehler: ' + (e && e.message),'error'); appLog('login error: '+(e && e.message)) }
   finally{ hideLoader() }
 }
 
+// Expose doLogin on window so inline onclick attributes work in all contexts (Electron/preload)
+window.doLogin = doLogin
+
+// attach listener as well (defensive)
 document.getElementById('login')?.addEventListener('click', doLogin)
+console.log('renderer: login handler attached')
+appLog('renderer: script loaded')
 
 const pwd = document.getElementById('password')
 if(pwd) pwd.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); doLogin() } })
@@ -125,7 +170,7 @@ function createPromptModal(label){
   })
 }
 
-// mic recording
+// mic recording -> record, upload to /api/v1/audio/transcribe, then send transcript to chat
 let mediaRecorder = null
 let recordingChunks = []
 let isRecording = false
@@ -141,7 +186,25 @@ async function startRecording(){
     mediaRecorder.ondataavailable = (ev)=>{ if(ev.data && ev.data.size) recordingChunks.push(ev.data) }
     mediaRecorder.onstop = async ()=>{
       const blob = new Blob(recordingChunks, { type: 'audio/webm' })
-      appendMessage('You (audio)', 'Recorded audio — size ' + Math.round(blob.size/1000) + ' KB')
+      // upload to backend for transcription
+      const fd = new FormData()
+      fd.append('file', blob, `recording-${Date.now()}.webm`)
+      showToast('Transcription started...', 'success')
+      showLoader('Transkribiere...')
+      try{
+        const res = await fetch(API + '/audio/transcribe', { method: 'POST', headers: Object.assign({}, authHeaders()), body: fd })
+        const data = await res.json()
+        hideLoader()
+        if(res.ok && data && data.text){
+          showToast('Transcription completed', 'success')
+          appendMessage('You (audio)', data.text)
+          // send transcript to chat
+          document.getElementById('chat-input').value = data.text
+          sendChat()
+        } else {
+          showToast('Transcription failed','error')
+        }
+      }catch(e){ hideLoader(); showToast('Transcription error','error') }
       if(currentStream){ currentStream.getTracks().forEach(t=>t.stop()); currentStream = null }
       isRecording = false
       document.getElementById('mic-btn')?.classList.remove('mic-recording')
@@ -175,6 +238,69 @@ async function openCreateProjectDialog(){
 document.getElementById('create-project')?.addEventListener('click', openCreateProjectDialog)
 document.getElementById('refresh-projects')?.addEventListener('click', refreshProjects)
 
+document.getElementById('search-btn')?.addEventListener('click', async ()=>{
+  const q = document.getElementById('search-input').value
+  if(!q) return
+  const projectId = selectedProjectId || null
+  showLoader('Suche...')
+  try{
+    const res = await postJson(API + '/search/', { query: q, project_id: projectId, top_k: 6 })
+    hideLoader()
+    if(res && res.results){
+      // render results in chat-log as clickable items with preview modal
+      const log = document.getElementById('chat-log'); log.innerHTML=''
+      res.results.forEach(r=>{
+        const el = document.createElement('div'); el.className='chat-message assistant';
+        const bubble = document.createElement('div'); bubble.className='bubble';
+        bubble.innerHTML = `<b>Result:</b> ${r.text.slice(0,200)}... <div class="small">score: ${r.score.toFixed(3)}</div>`;
+        el.appendChild(bubble);
+        el.addEventListener('click', ()=>{ openPreviewModal(r) })
+        log.appendChild(el)
+      })
+      // pagination: show load more if present
+      if(res.next_offset !== null){
+        const more = document.createElement('button'); more.className='button'; more.innerText='More';
+        more.addEventListener('click', async ()=>{
+          showLoader('Loading...')
+          try{
+            const resp = await postJson(API + '/search/', { query: document.getElementById('search-input').value, project_id: selectedProjectId, top_k:6, offset: res.next_offset })
+            hideLoader()
+            if(resp && resp.results){
+              resp.results.forEach(r=>{
+                const el = document.createElement('div'); el.className='chat-message assistant';
+                const bubble = document.createElement('div'); bubble.className='bubble';
+                bubble.innerHTML = `<b>Result:</b> ${r.text.slice(0,200)}... <div class="small">score: ${r.score.toFixed(3)}</div>`;
+                el.appendChild(bubble);
+                el.addEventListener('click', ()=>{ openPreviewModal(r) });
+                log.appendChild(el)
+              })
+            }
+          }catch(err){ hideLoader(); showToast('Search error','error'); appLog('search paging error: '+ (err && err.message)) }
+        })
+        document.getElementById('chat-log').appendChild(more)
+      }
+    }
+  }catch(e){ hideLoader(); showToast('Search error','error'); appLog('search error: '+ (e && e.message)) }
+})
+
+function openPreviewModal(item){
+  // simple modal with full text and insert/send options
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  const box = document.createElement('div'); box.className='modal-box';
+  const title = document.createElement('div'); title.innerText = 'Preview'; title.style.fontWeight='600';
+  const content = document.createElement('div'); content.style.whiteSpace='pre-wrap'; content.style.maxHeight='60vh'; content.style.overflow='auto'; content.innerText = item.text
+  const actions = document.createElement('div'); actions.style.display='flex'; actions.style.justifyContent='flex-end'; actions.style.gap='8px';
+  const insertBtn = document.createElement('button'); insertBtn.className='button'; insertBtn.innerText='Insert into chat';
+  const sendBtn = document.createElement('button'); sendBtn.className='button'; sendBtn.innerText='Insert and Send';
+  const closeBtn = document.createElement('button'); closeBtn.className='button'; closeBtn.innerText='Close';
+  actions.appendChild(closeBtn); actions.appendChild(insertBtn); actions.appendChild(sendBtn);
+  box.appendChild(title); box.appendChild(content); box.appendChild(actions); overlay.appendChild(box); document.body.appendChild(overlay);
+  insertBtn.onclick = ()=>{ document.getElementById('chat-input').value = item.text; overlay.remove() }
+  sendBtn.onclick = ()=>{ document.getElementById('chat-input').value = item.text; overlay.remove(); sendChat() }
+  closeBtn.onclick = ()=> overlay.remove()
+}
+
+
 document.getElementById('sidebar-new-chat')?.addEventListener('click', ()=>{ currentConversation = null; selectedProjectId = null; document.getElementById('selected-info').innerText=''; document.getElementById('chat-log').innerHTML=''; refreshConversations() })
 
 
@@ -188,7 +314,8 @@ async function sendChat(){
     const projectId = selectedProjectId || null;
     // show thinking loader while waiting
     showLoader('Nachdenken...')
-    const res = await postJson(API + '/chat/', { message: msg, conversation_id: currentConversation, project_id: projectId });
+    // call enhanced chat (consult embeddings first)
+    const res = await postJson(API + '/chat-enhanced/', { message: msg, conversation_id: currentConversation, project_id: projectId });
     hideLoader()
 
     if(res && res.conversation_id){ currentConversation = res.conversation_id; if(projectId) projectConversations.set(projectId, currentConversation) }
@@ -222,7 +349,16 @@ async function sendChat(){
       }
     }
 
-  }catch(e){ hideLoader(); showToast('Chat error','error') }
+  }catch(e){
+    hideLoader()
+
+    console.error('Chat error:', e)
+
+    showToast(
+        'Chat error: ' + (e?.message || 'Unknown error'),
+        'error'
+    )
+  }
 }
 
 function buildRtfFromText(text){
@@ -285,4 +421,48 @@ document.getElementById('send-chat')?.addEventListener('click', sendChat)
 document.getElementById('chat-input')?.addEventListener('keydown', (e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChat() } })
 
 function appendMessage(role, text){ const log = document.getElementById('chat-log'); if(!log) return; const msg = document.createElement('div'); msg.className = 'chat-message ' + (role === 'You' || role === 'user' ? 'user' : role === 'System' || role === 'System' ? 'system' : 'assistant'); const bubble = document.createElement('div'); bubble.className='bubble'; bubble.innerHTML = `<strong>${role}:</strong> ${text}`; msg.appendChild(bubble); log.appendChild(msg); log.scrollTop = log.scrollHeight }
+
+ // Ensure event listeners are attached after DOM is ready
+ document.addEventListener('DOMContentLoaded', ()=>{
+   console.log('renderer: DOMContentLoaded')
+   appLog('renderer: DOMContentLoaded')
+
+   // Attach auth/login handlers
+   document.getElementById('login')?.addEventListener('click', doLogin)
+   const pwd = document.getElementById('password')
+   if(pwd) pwd.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); doLogin() } })
+
+   // Attach UI handlers (defensive re-attach)
+   document.getElementById('create-project')?.addEventListener('click', openCreateProjectDialog)
+   document.getElementById('refresh-projects')?.addEventListener('click', refreshProjects)
+   document.getElementById('search-btn')?.addEventListener('click', async ()=>{ const q = document.getElementById('search-input').value; if(!q) return; const projectId = selectedProjectId || null; showLoader('Suche...'); try{ const res = await postJson(API + '/search/', { query: q, project_id: projectId, top_k: 6 }); hideLoader(); if(res && res.results){ const logEl = document.getElementById('chat-log'); logEl.innerHTML=''; res.results.forEach(r=>{ const el = document.createElement('div'); el.className='chat-message assistant'; const bubble = document.createElement('div'); bubble.className='bubble'; bubble.innerHTML = `<b>Result:</b> ${r.text.slice(0,200)}... <div class="small">score: ${r.score.toFixed(3)}</div>`; el.appendChild(bubble); el.addEventListener('click', ()=>{ openPreviewModal(r) }); logEl.appendChild(el) }) } }catch(e){ hideLoader(); showToast('Search error','error') } })
+
+   document.getElementById('sidebar-new-chat')?.addEventListener('click', ()=>{ currentConversation = null; selectedProjectId = null; document.getElementById('selected-info').innerText=''; document.getElementById('chat-log').innerHTML=''; refreshConversations() })
+   document.getElementById('send-chat')?.addEventListener('click', sendChat)
+   document.getElementById('chat-input')?.addEventListener('keydown', (e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChat() } })
+
+   const micBtn = document.getElementById('mic-btn')
+   if(micBtn) micBtn.addEventListener('click', ()=>{ if(isRecording) stopRecording(); else startRecording() })
+
+   // initial log to verify renderer loaded
+   console.log('renderer: handlers attached')
+   appLog('renderer: handlers attached')
+
+   // attach index embedding button
+   document.getElementById('index-embedding')?.addEventListener('click', async ()=>{
+     const fileInput = document.getElementById('file-upload')
+     const file = fileInput && fileInput.files && fileInput.files[0]
+     if(!file){ showToast('No file selected','error'); return }
+     if(!selectedProjectId){ showToast('Select a project first','error'); return }
+     showLoader('Indexing...')
+     try{
+       const text = await file.text()
+       const body = { project_id: selectedProjectId, items: [{ text: text.slice(0,20000), metadata: { source: 'desktop-upload', filename: file.name, type: file.type } }] }
+       const res = await postJson(API + '/embeddings-proxy/store', body)
+       hideLoader()
+       showToast('Indexed in embedding')
+       document.getElementById('upload-result').innerText = 'Indexed'
+     }catch(e){ hideLoader(); showToast('Indexing error','error'); appLog('indexing error: '+(e && e.message)) }
+   })
+ })
 

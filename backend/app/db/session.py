@@ -10,7 +10,7 @@ from app.core.config import settings
 
 DATABASE_URL = (
     f"postgresql+asyncpg://{settings.postgres_user}:{settings.postgres_password}"
-    f"@postgres:{settings.postgres_port}/{settings.postgres_db}"
+    f"@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
 )
 
 engine = create_async_engine(

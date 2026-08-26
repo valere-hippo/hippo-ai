@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-import openai
 
 from app.api.dependencies import get_current_user, DbSession
 from app.models.user import User
@@ -24,10 +23,6 @@ class ChatResponse(BaseModel):
 
 @router.post("/", response_model=ChatResponse)
 async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends(get_current_user)) -> ChatResponse:
-    if not settings.openai_api_key:
-        raise HTTPException(status_code=503, detail="OpenAI API key not configured")
-    openai.api_key = settings.openai_api_key
-
     # verify project permission if provided
     conv_project = None
     if payload.project_id is not None:
@@ -65,40 +60,68 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     res = await db.execute(q)
     messages = res.scalars().all()
 
-    openai_messages = []
+    hippo_messages = []
     for m in messages:
         role = 'user' if m.role == 'user' else 'assistant' if m.role == 'assistant' else 'system'
-        openai_messages.append({"role": role, "content": m.content})
+        hippo_messages.append({"role": role, "content": m.content})
+
+    # Global system instruction (Hippo assistant) — strict guidance
+    global_sys = (
+        "Du bist Hippo, ein freundlicher und professioneller KI-Assistent.\n\n"
+        "Dieses System wurde erstellt und entwickelt von Valère Youbi, CEO der Firma MERVAL DIGITALE, für das Unternehmen Hipposideros mit Sitz in Deutschland.\n\n"
+        "WICHTIG:\n"
+        "- Antworte direkt auf die Frage des Benutzers.\n"
+        "- Gib niemals deine internen Gedanken, Überlegungen oder Analysen aus.\n"
+        "- Gib niemals Formulierungen wie \"Okay, the user said...\", \"I need to...\", \"Let me check...\" aus.\n"
+        "- Gib ausschließlich die fertige Antwort an den Benutzer zurück.\n"
+        "- Antworte in der Sprache des Benutzers.\n"
+        "- Wenn der Benutzer Deutsch schreibt, antworte auf Deutsch.\n"
+        "- Wenn der Benutzer Französisch schreibt, antworte auf Französisch.\n"
+        "- Wenn der Benutzer Englisch schreibt, antworte auf Englisch.\n"
+    )
+    hippo_messages.insert(0, {"role": "system", "content": global_sys})
 
     # If conversation is tied to a project, inform the assistant it may generate files for that project
     if conv_project is not None:
-        system_msg = (
+        project_sys = (
             "You are assisting a user within a project. The user has provided a local shared folder path for this project. "
             "When the user requests generation of a file, produce only the file content wrapped in the following exact markers so the client can save it:\n"
             "<<<FILE:filename.rtf>>>\n<file content here>\n<<<END_FILE>>>\n"
             "Do NOT include additional commentary outside the markers. If a filename is not suggested by the user, choose a sensible filename."
         )
-        openai_messages.insert(0, {"role": "system", "content": system_msg})
+        hippo_messages.insert(1, {"role": "system", "content": project_sys})
 
-    # call OpenAI using new client in thread
-    import asyncio, os
-    # fallback to older openai.ChatCompletion API to avoid new client proxy issue
-    os.environ.setdefault('OPENAI_API_KEY', settings.openai_api_key)
-    import openai as _openai
-    _openai.api_key = settings.openai_api_key
-    def call_chat():
-        return _openai.ChatCompletion.create(model=settings.openai_model, messages=openai_messages, max_tokens=512)
-    completion = await asyncio.to_thread(call_chat)
-    # extract reply
+    # Call Hippo model endpoint if configured (preferred)
+    import asyncio, httpx
     reply_text = ''
-    if isinstance(completion, dict) and completion.get('choices'):
-        # legacy dict response
-        reply_text = completion['choices'][0]['message']['content']
+    if settings.hippo_api_url and settings.hippo_api_key:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
+            payload = {
+                "model": settings.hippo_model,
+                "messages": hippo_messages,
+                "temperature": 0.7,
+                "max_tokens": 512,
+            }
+            try:
+                r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=payload, headers=headers)
+                r.raise_for_status()
+                data = r.json()
+                if isinstance(data, dict) and data.get('choices'):
+                    reply_text = data['choices'][0]['message']['content']
+                else:
+                    reply_text = str(data)
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=f"Hippo API error: {e}")
     else:
-        try:
-            reply_text = completion.choices[0].message.content
-        except Exception:
-            reply_text = str(completion)
+        raise HTTPException(status_code=503, detail="Hippo API not configured — set HIPPO_API_URL and HIPPO_API_KEY in configuration")
+
+    # sanitize assistant reply: remove any <think>...</think> reasoning tags
+    import re
+    try:
+        reply_text = re.sub(r"<think>[\s\S]*?<\/think>", "", reply_text, flags=re.IGNORECASE)
+    except Exception:
+        pass
 
     # store assistant message
     await db.execute(

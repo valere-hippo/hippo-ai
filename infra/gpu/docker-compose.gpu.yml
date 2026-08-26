@@ -1,0 +1,59 @@
+services:
+  vllm:
+    image: ${VLLM_IMAGE}
+    container_name: hippo-ai-vllm
+    restart: unless-stopped
+    gpus: all
+    ipc: host
+    environment:
+      HF_HOME: /models/huggingface
+      VLLM_CACHE_ROOT: /models/vllm-cache
+      VLLM_ENABLE_CUDA_COMPATIBILITY: "1"
+    command:
+      - --model
+      - ${VLLM_MODEL}
+      - --served-model-name
+      - ${VLLM_SERVED_MODEL}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --api-key
+      - ${VLLM_API_KEY}
+      - --gpu-memory-utilization
+      - "${VLLM_GPU_MEMORY_UTILIZATION}"
+      - --max-model-len
+      - "${VLLM_MAX_MODEL_LEN}"
+      - --enable-prefix-caching
+    volumes:
+      - ${HIPPO_GPU_DATA_DIR}/huggingface:/models/huggingface
+      - ${HIPPO_GPU_DATA_DIR}/vllm-cache:/models/vllm-cache
+    ports:
+      - "127.0.0.1:${VLLM_PORT}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  whisper:
+    image: ${WHISPER_IMAGE}
+    container_name: hippo-ai-whisper
+    restart: unless-stopped
+    gpus: all
+    environment:
+      WHISPER__MODEL: ${WHISPER_MODEL}
+      WHISPER__DEVICE: cuda
+      WHISPER__COMPUTE_TYPE: float16
+    volumes:
+      - ${HIPPO_GPU_DATA_DIR}/huggingface:/root/.cache/huggingface
+    ports:
+      - "127.0.0.1:${WHISPER_PORT}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+

@@ -38,6 +38,39 @@ async def upload_file(project_id: int, db: DbSession, current_user=Depends(get_c
     with open(dest_path, "wb") as f:
         content = await file.read()
         f.write(content)
+
+    # attempt to auto-index text files (txt, md)
+    try:
+        _, ext = os.path.splitext(file.filename.lower())
+        if ext in ['.txt', '.md', '.markdown'] and getattr(settings, 'hippo_embedding_url', None):
+            text_content = content.decode('utf-8', errors='ignore')
+            # call embedding API
+            import httpx, json
+            r = httpx.post(settings.hippo_embedding_url.rstrip('/') + '/embeddings', json={'texts':[text_content]}, timeout=20.0)
+            if r.status_code == 200:
+                data = r.json()
+                emb = None
+                if isinstance(data, dict) and 'embeddings' in data:
+                    emb = data['embeddings'][0]
+                elif isinstance(data, list):
+                    emb = data[0]
+                if emb is not None:
+                    # insert into embeddings table (assumes pgvector column 'embedding')
+                    try:
+                        async def _insert_embedding():
+                            async with DbSession() as session:
+                                await session.execute(
+                                    text("INSERT INTO embeddings (project_id, text, embedding, metadata) VALUES (:project_id, :text, :embedding, :metadata)"),
+                                    {"project_id": project_id, "text": text_content, "embedding": emb, "metadata": json.dumps({"filename": file.filename})}
+                                )
+                                await session.commit()
+                        import asyncio
+                        asyncio.create_task(_insert_embedding())
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
     return {"filename": file.filename, "path": dest_path}
 
 

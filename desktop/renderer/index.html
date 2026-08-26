@@ -21,7 +21,7 @@
                     <div style="display:flex;flex-direction:column;gap:8px;align-items:stretch;justify-content:center;height:220px">
                       <input id="email" class="input" placeholder="E-Mail" />
                       <input id="password" class="input" type="password" placeholder="Passwort" />
-                      <button id="login" class="button" onclick="doLogin()">Anmelden</button>
+                      <button id="login" class="button">Anmelden</button>
                       <div id="login-result" class="small"></div>
                     </div>
                 </div>
@@ -30,6 +30,11 @@
                   <div style="display:flex;gap:8px;margin-bottom:8px">
                     <button id="refresh-projects" class="button">Aktualisieren</button>
                     <button id="create-project" class="button">Projekt erstellen</button>
+                  </div>
+                  <div style="margin-top:8px">
+                    <input id="search-input" class="input" placeholder="Suche im Projekt..." />
+                    <button id="search-btn" class="button" style="margin-left:8px">Suchen</button>
+                    <button id="search-all" class="button" style="margin-left:8px">Search in all projects</button>
                   </div>
                   <ul id="project-list" class="project-list"></ul>
                 </div>
@@ -64,6 +69,7 @@
           <div id="selected-folder" class="small"></div>
           <input type="file" id="file-upload" />
           <button id="upload-file" class="button">Upload to selected project</button>
+          <button id="index-embedding" class="button">Index in Embedding</button>
           <div id="upload-result" class="small"></div>
 
           <div style="margin-top:12px">
@@ -77,6 +83,7 @@
 
     <link rel="stylesheet" href="toasts.css">
     <div id="toast-root"></div>
+    <div id="debug-log" style="position:fixed;bottom:8px;left:8px;max-width:320px;max-height:200px;overflow:auto;font-size:12px;opacity:0.9;display:none;background:rgba(0,0,0,0.6);color:white;padding:8px;border-radius:6px;z-index:99999"></div>
     <script src="renderer.js"></script>
   </body>
 </html>
