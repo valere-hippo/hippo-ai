@@ -86,8 +86,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     # global system prompt
     global_sys = (
         "Du bist Hippo, ein freundlicher und professioneller KI-Assistent.\n"
-        "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, für HIPPOSIDEROS entwickelt.\n"
-        "Hippo AI gehört zu HIPPOSIDEROS.\n"
+        "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, entwickelt.\n"
+        "Hippo AI ist ein Produkt der Firma HIPPOSIDEROS.\n"
         "Antworte in der Sprache des Benutzers.\n"
         "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort.\n"
         "Wenn Bilder oder Screenshots angehängt sind, nutze die OCR-/Bildkontextdaten im Prompt und sage nicht, dass du Bilder nicht sehen kannst."
@@ -149,7 +149,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
-        payload_h = {"model": settings.hippo_model, "messages": hippo_messages, "temperature": 0.7, "max_tokens": 512}
+        model_name = settings.hippo_vision_model or settings.hippo_model
+        payload_h = {"model": model_name, "messages": hippo_messages, "temperature": 0.7, "max_tokens": 512}
         try:
             r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=payload_h, headers=headers)
             r.raise_for_status()

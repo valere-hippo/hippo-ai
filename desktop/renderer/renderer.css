@@ -495,6 +495,7 @@ textarea {
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--line);
+  position: relative;
 }
 
 .image-chip img {
@@ -502,6 +503,36 @@ textarea {
   width: 100%;
   height: 110px;
   object-fit: cover;
+}
+
+.image-chip-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  color: #effef8;
+  background: rgba(73, 81, 88, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+.image-chip-badge.ready {
+  background: rgba(17, 98, 80, 0.9);
+}
+
+.image-chip-badge.error {
+  background: rgba(169, 68, 68, 0.92);
+}
+
+.image-chip-badge.empty {
+  background: rgba(158, 124, 36, 0.92);
 }
 
 .image-chip .caption {
@@ -576,11 +607,49 @@ textarea {
   border: 1px solid var(--line);
 }
 
+.attachment-thumb-wrap {
+  position: relative;
+}
+
 .attachment-thumb {
   width: 32px;
   height: 32px;
   border-radius: 10px;
   object-fit: cover;
+}
+
+.attachment-badge {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+  color: #effef8;
+  background: rgba(73, 81, 88, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+.attachment-badge.ready {
+  background: rgba(17, 98, 80, 0.9);
+}
+
+.attachment-badge.error {
+  background: rgba(169, 68, 68, 0.92);
+}
+
+.attachment-badge.empty {
+  background: rgba(158, 124, 36, 0.92);
+}
+
+.attachment-badge.pending {
+  background: rgba(73, 81, 88, 0.88);
 }
 
 .attachment-label {

@@ -83,8 +83,8 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     # Global system instruction (Hippo assistant) — strict guidance
     global_sys = (
         "Du bist Hippo, ein freundlicher und professioneller KI-Assistent.\n\n"
-        "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, für HIPPOSIDEROS entwickelt.\n"
-        "Hippo AI gehört zu HIPPOSIDEROS.\n\n"
+        "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, entwickelt.\n"
+        "Hippo AI ist ein Produkt der Firma HIPPOSIDEROS.\n\n"
         "WICHTIG:\n"
         "- Antworte direkt auf die Frage des Benutzers.\n"
         "- Gib niemals deine internen Gedanken, Überlegungen oder Analysen aus.\n"
@@ -129,8 +129,9 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     if settings.hippo_api_url and settings.hippo_api_key:
         async with httpx.AsyncClient(timeout=60.0) as client:
             headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
+            model_name = settings.hippo_vision_model or settings.hippo_model
             model_payload = {
-                "model": settings.hippo_model,
+                "model": model_name,
                 "messages": hippo_messages,
                 "temperature": 0.7,
                 "max_tokens": 512,

@@ -358,11 +358,24 @@ function renderAttachmentPreview() {
     pill.className = 'attachment-pill'
 
     if (attachment.previewUrl) {
+      const previewWrap = document.createElement('div')
+      previewWrap.className = 'attachment-thumb-wrap'
       const thumb = document.createElement('img')
       thumb.className = 'attachment-thumb'
       thumb.src = attachment.previewUrl
       thumb.alt = attachment.filename
-      pill.appendChild(thumb)
+      const badge = document.createElement('div')
+      badge.className = `attachment-badge ${attachment.ocrStatus || 'pending'}`
+      badge.textContent =
+        attachment.ocrStatus === 'ready'
+          ? 'OCR bereit'
+          : attachment.ocrStatus === 'error'
+            ? 'OCR Fehler'
+            : attachment.ocrStatus === 'empty'
+              ? 'OCR leer'
+              : 'OCR läuft'
+      previewWrap.append(thumb, badge)
+      pill.appendChild(previewWrap)
     } else {
       const icon = document.createElement('div')
       icon.className = 'item-avatar'
@@ -428,13 +441,26 @@ function renderMessage(role, content, extras = {}) {
       if (attachment.previewUrl) {
         const chip = document.createElement('div')
         chip.className = 'image-chip'
+        if (attachment.ocrStatus) {
+          chip.classList.add(`ocr-${attachment.ocrStatus}`)
+        }
         const image = document.createElement('img')
         image.src = attachment.previewUrl
         image.alt = attachment.filename
+        const badge = document.createElement('div')
+        badge.className = `image-chip-badge ${attachment.ocrStatus || 'pending'}`
+        badge.textContent =
+          attachment.ocrStatus === 'ready'
+            ? 'OCR bereit'
+            : attachment.ocrStatus === 'error'
+              ? 'OCR Fehler'
+              : attachment.ocrStatus === 'empty'
+                ? 'OCR leer'
+                : 'OCR läuft'
         const caption = document.createElement('div')
         caption.className = 'caption'
         caption.textContent = attachment.filename
-        chip.append(image, caption)
+        chip.append(image, badge, caption)
         wrapper.appendChild(chip)
       }
     })
@@ -614,6 +640,7 @@ function buildImageAttachment(file, dataUrl) {
     data_url: dataUrl,
     previewUrl: dataUrl,
     ocr_text: '',
+    ocrStatus: 'pending',
     ocrPromise: null,
   }
 }
@@ -642,11 +669,16 @@ async function attachImages(files) {
         const result = await window.electron.ocrImage({ dataUrl })
         if (result?.ok && result.text) {
           attachment.ocr_text = result.text
+          attachment.ocrStatus = 'ready'
           renderAttachmentPreview()
           return result.text
         }
+        attachment.ocrStatus = 'empty'
+        renderAttachmentPreview()
       } catch (error) {
         console.warn('OCR failed', error)
+        attachment.ocrStatus = 'error'
+        renderAttachmentPreview()
       }
       return ''
     })()

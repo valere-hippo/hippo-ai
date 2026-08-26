@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     hippo_api_url: str | None = None
     hippo_api_key: str | None = None
     hippo_model: str = "hippo-ai"
+    hippo_vision_model: str | None = None
 
     # Optional Whisper/transcription endpoint (if you run a Whisper service)
     whisper_api_url: str | None = None
