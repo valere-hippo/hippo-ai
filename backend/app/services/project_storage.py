@@ -46,6 +46,10 @@ def _storage_prefix() -> str:
 
 
 def project_bucket_name(project: Any) -> str:
+    explicit_bucket = (settings.hippo_s3_bucket_name or "").strip()
+    if explicit_bucket:
+        return explicit_bucket
+
     project_id = getattr(project, "id", None)
     if project_id is None:
         raise ValueError("project.id is required for bucket naming")

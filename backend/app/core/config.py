@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
     aws_session_token: str | None = None
+    hippo_s3_bucket_name: str | None = None
     hippo_s3_bucket_prefix: str = "hippo-ai-"
     hippo_s3_key_prefix: str = "projects"
 
