@@ -9,6 +9,7 @@ from app.models.user import UserRole
 from app.models.project import Project
 from app.models.permission import PermissionLevel
 from app.services.project_storage import (
+    can_use_s3_storage,
     has_s3_storage,
     list_project_files,
     project_bucket_name,
@@ -74,7 +75,7 @@ async def upload_file(project_id: int, db: DbSession, current_user=Depends(get_c
 
 
 @router.get("/projects/{project_id}")
-async def list_project_files(project_id: int, db: DbSession, current_user=Depends(get_current_user)):
+async def get_project_files(project_id: int, db: DbSession, current_user=Depends(get_current_user)):
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if project is None:
@@ -108,9 +109,9 @@ async def get_project_storage(project_id: int, db: DbSession, current_user=Depen
     return {
         "project_id": project.id,
         "project_name": project.name,
-        "provider": "s3" if has_s3_storage() else "local",
-        "bucket": project_bucket_name(project) if has_s3_storage() else None,
-        "key_prefix": project_object_prefix(project) if has_s3_storage() else None,
+        "provider": "s3" if can_use_s3_storage() else "local",
+        "bucket": project_bucket_name(project) if can_use_s3_storage() else None,
+        "key_prefix": project_object_prefix(project) if can_use_s3_storage() else None,
         "watched_folder": project.watched_folder,
         "files": [
             {

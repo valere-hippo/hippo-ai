@@ -69,8 +69,12 @@ def has_s3_storage() -> bool:
     return bool(settings.aws_region and settings.aws_access_key_id and settings.aws_secret_access_key)
 
 
+def can_use_s3_storage() -> bool:
+    return has_s3_storage() and boto3 is not None
+
+
 def s3_client():
-    if not has_s3_storage() or boto3 is None:
+    if not can_use_s3_storage():
         return None
     kwargs: dict[str, Any] = {
         "region_name": settings.aws_region,
@@ -142,24 +146,26 @@ def _local_project_dir(project: Any) -> Path:
 
 def store_project_file(project: Any, filename: str, content: bytes, content_type: str | None = None) -> dict[str, Any]:
     safe_filename = _safe_name(filename)
-    if has_s3_storage():
+    if can_use_s3_storage():
         client = s3_client()
         if client is None:
-            raise RuntimeError("S3 client unavailable")
-        ensure_project_bucket(project)
-        key = f"{project_object_prefix(project)}{safe_filename}"
-        client.put_object(
-            Bucket=project_bucket_name(project),
-            Key=key,
-            Body=content,
-            ContentType=content_type or mimetypes.guess_type(safe_filename)[0] or "application/octet-stream",
-        )
-        return {
-            "filename": safe_filename,
-            "storage": "s3",
-            "bucket": project_bucket_name(project),
-            "key": key,
-        }
+            # Fall back to local storage when S3 is configured but unavailable.
+            pass
+        else:
+            ensure_project_bucket(project)
+            key = f"{project_object_prefix(project)}{safe_filename}"
+            client.put_object(
+                Bucket=project_bucket_name(project),
+                Key=key,
+                Body=content,
+                ContentType=content_type or mimetypes.guess_type(safe_filename)[0] or "application/octet-stream",
+            )
+            return {
+                "filename": safe_filename,
+                "storage": "s3",
+                "bucket": project_bucket_name(project),
+                "key": key,
+            }
 
     path = _local_project_dir(project) / safe_filename
     path.write_bytes(content)
@@ -171,7 +177,7 @@ def store_project_file(project: Any, filename: str, content: bytes, content_type
 
 
 def list_project_files(project: Any) -> list[ProjectFile]:
-    if has_s3_storage():
+    if can_use_s3_storage():
         client = s3_client()
         if client is None:
             return []
@@ -218,7 +224,7 @@ def read_project_file(project: Any, filename: str) -> tuple[bytes, str, str]:
     safe_filename = _safe_name(filename)
     content_type = mimetypes.guess_type(safe_filename)[0] or "application/octet-stream"
 
-    if has_s3_storage():
+    if can_use_s3_storage():
         client = s3_client()
         if client is None:
             raise RuntimeError("S3 client unavailable")
