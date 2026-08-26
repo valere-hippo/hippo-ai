@@ -66,6 +66,267 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
+function normalizeRichTextLine(line) {
+  return String(line || '').replace(/\u00a0/g, ' ').trimEnd()
+}
+
+function stripRichTextMarkers(text) {
+  return String(text || '')
+    .replace(/\s+/g, ' ')
+    .replace(/^(\*{1,3}|_{1,3})\s*/g, '')
+    .replace(/\s*(\*{1,3}|_{1,3})$/g, '')
+    .trim()
+}
+
+function appendInlineMarkup(parent, text) {
+  const source = String(text || '')
+  const tokenRe = /(`[^`]*`|\*\*[\s\S]+?\*\*|__[\s\S]+?__|\*[^*\n]+?\*|_[^_\n]+?_)/g
+  let lastIndex = 0
+
+  const appendText = (chunk) => {
+    if (!chunk) return
+    parent.appendChild(document.createTextNode(chunk))
+  }
+
+  for (const match of source.matchAll(tokenRe)) {
+    const token = match[0]
+    const start = match.index || 0
+    appendText(source.slice(lastIndex, start))
+
+    if (token.startsWith('`') && token.endsWith('`')) {
+      const code = document.createElement('code')
+      code.textContent = token.slice(1, -1)
+      parent.appendChild(code)
+    } else if ((token.startsWith('**') && token.endsWith('**')) || (token.startsWith('__') && token.endsWith('__'))) {
+      const strong = document.createElement('strong')
+      strong.textContent = token.slice(2, -2)
+      parent.appendChild(strong)
+    } else if ((token.startsWith('*') && token.endsWith('*')) || (token.startsWith('_') && token.endsWith('_'))) {
+      const em = document.createElement('em')
+      em.textContent = token.slice(1, -1)
+      parent.appendChild(em)
+    } else {
+      appendText(token)
+    }
+
+    lastIndex = start + token.length
+  }
+
+  appendText(source.slice(lastIndex))
+}
+
+function isTableSeparator(line) {
+  return /^\s*\|?[\s:-]+(?:\|[\s:-]+)+\|?\s*$/.test(line)
+}
+
+function renderRichContent(content) {
+  const root = document.createElement('div')
+  root.className = 'rich-content'
+
+  const lines = String(content || '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .map(normalizeRichTextLine)
+
+  let paragraph = []
+  let quoteLines = []
+  let codeLines = null
+  let listState = null
+  let tableRows = null
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return
+    const p = document.createElement('p')
+    appendInlineMarkup(p, paragraph.join(' '))
+    root.appendChild(p)
+    paragraph = []
+  }
+
+  const flushQuote = () => {
+    if (!quoteLines.length) return
+    const blockquote = document.createElement('blockquote')
+    quoteLines.forEach((quoteLine, index) => {
+      const p = document.createElement('p')
+      appendInlineMarkup(p, quoteLine)
+      blockquote.appendChild(p)
+      if (index < quoteLines.length - 1) {
+        blockquote.appendChild(document.createElement('br'))
+      }
+    })
+    root.appendChild(blockquote)
+    quoteLines = []
+  }
+
+  const flushList = () => {
+    if (!listState) return
+    root.appendChild(listState.element)
+    listState = null
+  }
+
+  const flushTable = () => {
+    if (!tableRows || !tableRows.length) return
+    const table = document.createElement('table')
+    table.className = 'rich-table'
+    const [headerRow, ...bodyRows] = tableRows
+    if (headerRow) {
+      const thead = document.createElement('thead')
+      const tr = document.createElement('tr')
+      headerRow.forEach((cell) => {
+        const th = document.createElement('th')
+        appendInlineMarkup(th, cell)
+        tr.appendChild(th)
+      })
+      thead.appendChild(tr)
+      table.appendChild(thead)
+    }
+    if (bodyRows.length) {
+      const tbody = document.createElement('tbody')
+      bodyRows.forEach((row) => {
+        const tr = document.createElement('tr')
+        row.forEach((cell) => {
+          const td = document.createElement('td')
+          appendInlineMarkup(td, cell)
+          tr.appendChild(td)
+        })
+        tbody.appendChild(tr)
+      })
+      table.appendChild(tbody)
+    }
+    root.appendChild(table)
+    tableRows = null
+  }
+
+  const flushAll = () => {
+    flushParagraph()
+    flushQuote()
+    flushList()
+    flushTable()
+  }
+
+  const ensureList = (type) => {
+    if (!listState || listState.type !== type) {
+      flushParagraph()
+      flushQuote()
+      flushTable()
+      flushList()
+      const element = document.createElement(type)
+      element.className = `rich-list ${type}`
+      listState = { type, element }
+    }
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    const nextLine = lines[index + 1] || ''
+
+    if (!line) {
+      flushAll()
+      continue
+    }
+
+    if (line.startsWith('```')) {
+      if (codeLines) {
+        const pre = document.createElement('pre')
+        pre.className = 'rich-codeblock'
+        const code = document.createElement('code')
+        code.textContent = codeLines.join('\n')
+        pre.appendChild(code)
+        root.appendChild(pre)
+        codeLines = null
+      } else {
+        flushAll()
+        codeLines = []
+      }
+      continue
+    }
+
+    if (codeLines) {
+      codeLines.push(line)
+      continue
+    }
+
+    if (/^#{1,6}\s+/.test(line)) {
+      flushAll()
+      const level = Math.min(6, (line.match(/^#{1,6}/) || [''])[0].length)
+      const heading = document.createElement(`h${level}`)
+      appendInlineMarkup(heading, stripRichTextMarkers(line.replace(/^#{1,6}\s+/, '')))
+      root.appendChild(heading)
+      continue
+    }
+
+    if (line.startsWith('>')) {
+      flushParagraph()
+      flushList()
+      flushTable()
+      quoteLines.push(stripRichTextMarkers(line.replace(/^>\s?/, '')))
+      continue
+    }
+
+    if (quoteLines.length && !line.startsWith('>')) {
+      flushQuote()
+    }
+
+    const bulletMatch = line.match(/^([-*•])\s+(.+)$/)
+    const numberedMatch = line.match(/^(\d+)[.)]\s+(.+)$/)
+
+    if (bulletMatch) {
+      ensureList('ul')
+      const li = document.createElement('li')
+      appendInlineMarkup(li, bulletMatch[2])
+      listState.element.appendChild(li)
+      continue
+    }
+
+    if (numberedMatch) {
+      ensureList('ol')
+      const li = document.createElement('li')
+      appendInlineMarkup(li, numberedMatch[2])
+      listState.element.appendChild(li)
+      continue
+    }
+
+    if (listState) {
+      flushList()
+    }
+
+    if (line.includes('|') && isTableSeparator(nextLine)) {
+      flushParagraph()
+      flushQuote()
+      flushList()
+      tableRows = []
+      const headerCells = line.split('|').map((cell) => cell.trim()).filter(Boolean)
+      if (headerCells.length) tableRows.push(headerCells)
+      index += 1 // skip separator
+      continue
+    }
+
+    if (tableRows) {
+      if (line.includes('|')) {
+        const cells = line.split('|').map((cell) => cell.trim()).filter(Boolean)
+        if (cells.length) {
+          tableRows.push(cells)
+          continue
+        }
+      }
+      flushTable()
+    }
+
+    paragraph.push(stripRichTextMarkers(line))
+  }
+
+  flushAll()
+  if (codeLines) {
+    const pre = document.createElement('pre')
+    pre.className = 'rich-codeblock'
+    const code = document.createElement('code')
+    code.textContent = codeLines.join('\n')
+    pre.appendChild(code)
+    root.appendChild(pre)
+  }
+
+  return root
+}
+
 function initialsFromUser(user) {
   const source = (user?.full_name || user?.email || 'H').trim()
   const parts = source.split(/\s+/).filter(Boolean)
@@ -539,7 +800,7 @@ function renderMessage(role, content, extras = {}) {
   if (content) {
     const text = document.createElement('div')
     text.className = 'message-text'
-    text.textContent = content
+    text.appendChild(renderRichContent(content))
     bubble.appendChild(text)
   }
 

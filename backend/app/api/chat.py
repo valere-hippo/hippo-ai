@@ -98,7 +98,8 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         "- Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
         "- Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert werden soll, antworte ausführlicher, mit klaren Abschnitten, Aufzählungen und einer kurzen Schlussbewertung.\n"
         "- Nenne bei Ordneranalysen zuerst den Überblick, dann die sichtbaren Dateien, dann die Details pro Datei und am Ende ein kurzes Fazit.\n"
-        "- Schreibe Berichte in normalem Fließtext mit knappen Abschnittsüberschriften oder Bulletpoints, aber ohne Markdown-Tabellen und ohne übermäßige Fettschrift.\n"
+        "- Schreibe Berichte mit sauberen Überschriften, Absätzen und Listen. Vermeide dekorative Markdown-Formate wie ###** oder **###.\n"
+        "- Nutze Tabellen nur, wenn sie wirklich klarer sind als Listen.\n"
     )
     hippo_messages.insert(0, {"role": "system", "content": global_sys})
 
@@ -119,6 +120,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
             "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language.\n"
             "For shared-folder questions, produce a detailed answer with overview, file list, per-file observations, and a short conclusion.\n"
+            "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
             "If an image, screenshot, or document is attached, analyze the locally extracted text and metadata; do not claim that you cannot read attachments.\n"
             f"{build_attachment_response_guidance()}"
         )
