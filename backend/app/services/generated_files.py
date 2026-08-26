@@ -7,6 +7,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 import re
 import html
 import mimetypes
+import textwrap
 from xml.sax.saxutils import escape as xml_escape
 
 try:
@@ -25,6 +26,99 @@ FILE_MARKER_RE = re.compile(
 class GeneratedFile:
     filename: str
     content: str
+
+
+@dataclass
+class ReportLine:
+    kind: str
+    text: str
+    level: int = 0
+
+
+def _strip_inline_markup(text: str) -> str:
+    cleaned = text.strip()
+    cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", cleaned)
+    cleaned = re.sub(r"__(.+?)__", r"\1", cleaned)
+    cleaned = re.sub(r"\*(.+?)\*", r"\1", cleaned)
+    cleaned = re.sub(r"_(.+?)_", r"\1", cleaned)
+    cleaned = re.sub(r"`(.+?)`", r"\1", cleaned)
+    return cleaned.strip()
+
+
+def _normalize_report_text(text: str) -> list[str]:
+    lines: list[str] = []
+    for raw_line in (text or "").replace("\r", "").split("\n"):
+        line = raw_line.strip()
+        if line.startswith("```"):
+            continue
+        line = line.replace("\u00a0", " ")
+        lines.append(line)
+    return lines
+
+
+def _parse_report_blocks(text: str) -> list[ReportLine]:
+    blocks: list[ReportLine] = []
+    paragraph_buffer: list[str] = []
+
+    def flush_paragraph() -> None:
+        if paragraph_buffer:
+            blocks.append(ReportLine(kind="paragraph", text=" ".join(paragraph_buffer).strip()))
+            paragraph_buffer.clear()
+
+    for index, line in enumerate(_normalize_report_text(text)):
+        if not line:
+            flush_paragraph()
+            continue
+
+        if re.fullmatch(r"[-–—]{3,}", line):
+            flush_paragraph()
+            blocks.append(ReportLine(kind="rule", text=""))
+            continue
+
+        heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
+        if heading_match:
+            flush_paragraph()
+            blocks.append(
+                ReportLine(
+                    kind="heading",
+                    text=_strip_inline_markup(heading_match.group(2)),
+                    level=len(heading_match.group(1)),
+                )
+            )
+            continue
+
+        if index == 0:
+            candidate = _strip_inline_markup(line)
+            if candidate and len(candidate) <= 100:
+                blocks.append(ReportLine(kind="title", text=candidate, level=0))
+                continue
+
+        if re.match(r"^\*[^*].*\*$", line) or re.match(r"^_[^_].*_$", line):
+            flush_paragraph()
+            blocks.append(ReportLine(kind="subtitle", text=_strip_inline_markup(line), level=0))
+            continue
+
+        bullet_match = re.match(r"^([-*•])\s+(.+)$", line)
+        if bullet_match:
+            flush_paragraph()
+            blocks.append(ReportLine(kind="bullet", text=_strip_inline_markup(bullet_match.group(2)), level=0))
+            continue
+
+        numbered_match = re.match(r"^(\d+[.)])\s+(.+)$", line)
+        if numbered_match:
+            flush_paragraph()
+            blocks.append(ReportLine(kind="numbered", text=_strip_inline_markup(numbered_match.group(2)), level=0))
+            continue
+
+        if "|" in line and not re.fullmatch(r"\|?[-:\s|]+\|?", line):
+            flush_paragraph()
+            blocks.append(ReportLine(kind="tableline", text=_strip_inline_markup(line), level=0))
+            continue
+
+        paragraph_buffer.append(_strip_inline_markup(line))
+
+    flush_paragraph()
+    return blocks
 
 
 def extract_generated_files(text: str) -> tuple[list[GeneratedFile], str]:
@@ -53,52 +147,116 @@ def _pdf_escape(text: str) -> str:
 
 
 def build_simple_pdf_bytes(title: str, body: str) -> bytes:
-    lines = [title.strip()] if title.strip() else []
-    lines.extend((body or "").replace("\r", "").split("\n"))
+    def make_line(text: str, font: str, size: int, x: int, y: int) -> str:
+        return f"BT /{font} {size} Tf 1 0 0 1 {x} {y} Tm ({_pdf_escape(text)}) Tj ET"
 
-    wrapped_lines: list[str] = []
-    for line in lines:
-        if not line:
-            wrapped_lines.append("")
-            continue
-        text = line
-        while len(text) > 90:
-            wrapped_lines.append(text[:90])
-            text = text[90:]
-        wrapped_lines.append(text)
+    def wrap_text(text: str, max_chars: int) -> list[str]:
+        wrapped: list[str] = []
+        for paragraph in (text or "").split("\n"):
+            paragraph = paragraph.strip()
+            if not paragraph:
+                wrapped.append("")
+                continue
+            wrapped.extend(
+                textwrap.wrap(
+                    paragraph,
+                    width=max_chars,
+                    break_long_words=False,
+                    break_on_hyphens=False,
+                )
+                or [paragraph]
+            )
+        return wrapped or [""]
 
-    if not wrapped_lines:
-        wrapped_lines = [" "]
+    blocks = _parse_report_blocks(body)
+    title_text = (title or "Hippo AI Document").strip()
+    if blocks and blocks[0].kind == "title":
+        title_text = blocks[0].text
+        blocks = blocks[1:]
 
-    content_lines = ["BT", "/F1 12 Tf", "72 760 Td"]
-    first = True
-    for line in wrapped_lines:
-        safe = _pdf_escape(line)
-        if first:
-            content_lines.append(f"({safe}) Tj")
-            first = False
+    pages: list[list[str]] = []
+    current_page: list[str] = []
+    y = 740
+
+    def new_page() -> None:
+        nonlocal current_page, y
+        if current_page:
+            pages.append(current_page)
+        current_page = []
+        y = 740
+
+    def add_line(text: str, font: str = "Helvetica", size: int = 12, indent: int = 0, gap_after: int = 4) -> None:
+        nonlocal y
+        line_height = max(16, int(size * 1.45))
+        if y - line_height < 72:
+            new_page()
+        current_page.append(make_line(text, font, size, 72 + indent, y))
+        y -= line_height + gap_after
+
+    def add_wrapped(text: str, font: str = "Helvetica", size: int = 12, indent: int = 0, max_chars: int = 90, gap_after: int = 2) -> None:
+        wrapped = wrap_text(text, max_chars=max_chars)
+        for idx, part in enumerate(wrapped):
+            if part == "":
+                add_line("", font=font, size=size, indent=indent, gap_after=6)
+                continue
+            add_line(part, font=font, size=size, indent=indent, gap_after=gap_after if idx < len(wrapped) - 1 else 8)
+
+    # Title page header
+    add_line(title_text, font="Helvetica-Bold", size=22, indent=0, gap_after=6)
+    add_line("Bericht", font="Helvetica", size=11, indent=0, gap_after=10)
+    current_page.append("BT 0.10 0.49 0.44 rg 72 708 445 2 re f ET")
+    y -= 18
+
+    for block in blocks:
+        if block.kind == "subtitle":
+            add_wrapped(block.text, font="Helvetica-Oblique", size=10, indent=0, max_chars=86, gap_after=6)
+        elif block.kind == "heading":
+            size = 16 if block.level <= 2 else 13
+            add_wrapped(block.text, font="Helvetica-Bold", size=size, indent=0, max_chars=78, gap_after=4)
+        elif block.kind == "bullet":
+            add_wrapped(f"• {block.text}", font="Helvetica", size=11, indent=18, max_chars=82, gap_after=2)
+        elif block.kind == "numbered":
+            add_wrapped(f"{block.text}", font="Helvetica", size=11, indent=18, max_chars=82, gap_after=2)
+        elif block.kind == "tableline":
+            cleaned = re.sub(r"\s*\|\s*", "   ", block.text)
+            add_wrapped(cleaned, font="Helvetica", size=10, indent=10, max_chars=86, gap_after=2)
+        elif block.kind == "rule":
+            current_page.append(f"BT /Helvetica 10 Tf 1 0 0 1 72 {y} Tm (____________________________________________) Tj ET")
+            y -= 16
         else:
-            content_lines.append("T*")
-            content_lines.append(f"({safe}) Tj")
-    content_lines.append("ET")
-    content = "\n".join(content_lines).encode("utf-8")
+            add_wrapped(block.text, font="Helvetica", size=12, indent=0, max_chars=88, gap_after=2)
 
-    objects: list[bytes] = []
-    objects.append(b"<< /Type /Catalog /Pages 2 0 R >>")
-    objects.append(b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
-    objects.append(
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"
-    )
-    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
-    objects.append(
-        f"<< /Length {len(content)} >>\nstream\n".encode("utf-8")
-        + content
-        + b"\nendstream"
-    )
+    pages.append(current_page)
 
     buffer = BytesIO()
     buffer.write(b"%PDF-1.4\n")
+
+    objects: list[bytes] = []
+    objects.append(b"<< /Type /Catalog /Pages 2 0 R >>")
+    page_count = max(1, len(pages))
+    page_object_numbers = [6 + (index * 2) for index in range(page_count)]
+    kids = " ".join(f"{page_no} 0 R" for page_no in page_object_numbers)
+    objects.append(f"<< /Type /Pages /Kids [{kids}] /Count {page_count} >>".encode("utf-8"))
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>")
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>")
+
+    for index in range(page_count):
+        page_lines = pages[index] if index < len(pages) else []
+        page_obj_num = 6 + (index * 2)
+        content_obj_num = page_obj_num + 1
+        content = "\n".join(page_lines).encode("utf-8")
+        page_obj = (
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            f"/Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents {content_obj_num} 0 R >>"
+        ).encode("utf-8")
+        objects.append(page_obj)
+        objects.append(
+            f"<< /Length {len(content)} >>\nstream\n".encode("utf-8")
+            + content
+            + b"\nendstream"
+        )
+
     offsets = [0]
     for index, obj in enumerate(objects, start=1):
         offsets.append(buffer.tell())
@@ -153,16 +311,103 @@ def build_rtf_bytes(title: str, body: str) -> bytes:
 
 
 def build_docx_bytes(title: str, body: str) -> bytes:
-    paragraphs = [title.strip()] if title.strip() else []
-    paragraphs.extend((body or "").replace("\r", "").split("\n"))
-    paragraphs = [line for line in paragraphs if line is not None]
+    blocks = _parse_report_blocks(body)
+    title_text = (title or "Hippo AI Document").strip()
+    if blocks and blocks[0].kind == "title":
+        title_text = blocks[0].text
+        blocks = blocks[1:]
 
-    doc_xml_paragraphs = []
-    for paragraph in paragraphs or [""]:
-        safe = xml_escape(paragraph)
-        doc_xml_paragraphs.append(
-            f"<w:p><w:r><w:t xml:space=\"preserve\">{safe}</w:t></w:r></w:p>"
-        )
+    def run_xml(text: str, *, bold: bool = False, italic: bool = False, size: int | None = None, color: str | None = None) -> str:
+        attrs = []
+        if size is not None:
+            attrs.append(f"<w:sz w:val=\"{size}\"/>")
+        if bold:
+            attrs.append("<w:b/>")
+        if italic:
+            attrs.append("<w:i/>")
+        if color:
+            attrs.append(f"<w:color w:val=\"{color}\"/>")
+        safe = xml_escape(text)
+        return f"<w:r><w:rPr>{''.join(attrs)}</w:rPr><w:t xml:space=\"preserve\">{safe}</w:t></w:r>"
+
+    def paragraph_xml(runs: list[str], *, align: str | None = None, left: int | None = None, before: int | None = None, after: int | None = None) -> str:
+        props = []
+        if align:
+            props.append(f"<w:jc w:val=\"{align}\"/>")
+        if left is not None:
+            props.append(f"<w:ind w:left=\"{left}\"/>")
+        if before is not None or after is not None:
+            attrs = []
+            if before is not None:
+                attrs.append(f"w:before=\"{before}\"")
+            if after is not None:
+                attrs.append(f"w:after=\"{after}\"")
+            props.append(f"<w:spacing {' '.join(attrs)}/>")
+        prop_xml = f"<w:pPr>{''.join(props)}</w:pPr>" if props else ""
+        return f"<w:p>{prop_xml}{''.join(runs)}</w:p>"
+
+    doc_xml_paragraphs: list[str] = [
+        paragraph_xml(
+            [run_xml(title_text, bold=True, size=32, color="1B2A36")],
+            align="center",
+            after=120,
+        ),
+        paragraph_xml(
+            [run_xml("Professioneller Bericht", italic=True, size=20, color="5F7283")],
+            align="center",
+            after=240,
+        ),
+    ]
+
+    for block in blocks:
+        if block.kind == "subtitle":
+            doc_xml_paragraphs.append(
+                paragraph_xml(
+                    [run_xml(block.text, italic=True, size=20, color="5F7283")],
+                    after=180,
+                )
+            )
+        elif block.kind == "heading":
+            size = 26 if block.level <= 2 else 22
+            doc_xml_paragraphs.append(
+                paragraph_xml(
+                    [run_xml(block.text, bold=True, size=size, color="163C4F")],
+                    before=180,
+                    after=120,
+                )
+            )
+        elif block.kind == "bullet":
+            doc_xml_paragraphs.append(
+                paragraph_xml(
+                    [run_xml(f"• {block.text}", size=22)],
+                    left=480,
+                    after=60,
+                )
+            )
+        elif block.kind == "numbered":
+            doc_xml_paragraphs.append(
+                paragraph_xml(
+                    [run_xml(block.text, size=22)],
+                    left=480,
+                    after=60,
+                )
+            )
+        elif block.kind == "tableline":
+            doc_xml_paragraphs.append(
+                paragraph_xml(
+                    [run_xml(re.sub(r"\s*\|\s*", "   ", block.text), size=20)],
+                    left=180,
+                    after=40,
+                )
+            )
+        elif block.kind == "rule":
+            doc_xml_paragraphs.append(
+                paragraph_xml([run_xml("────────────────────────────────────────", size=18, color="CBD7E2")], after=120)
+            )
+        else:
+            doc_xml_paragraphs.append(
+                paragraph_xml([run_xml(block.text, size=22)], after=80)
+            )
 
     document_xml = (
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
