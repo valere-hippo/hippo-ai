@@ -11,6 +11,7 @@ from sqlalchemy import select, insert
 from app.schemas.chat import ChatAttachment
 from app.services.chat_payloads import build_attachment_response_guidance, build_message_content, derive_conversation_title, storage_text
 from app.services.generated_files import build_generated_file_bytes, extract_generated_files
+from app.services.project_storage import build_project_files_context
 import base64
 
 router = APIRouter(prefix="/chat", tags=["chat"]) 
@@ -119,6 +120,22 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             f"{build_attachment_response_guidance()}"
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
+
+        try:
+            project_files_context = build_project_files_context(conv_project)
+            hippo_messages.insert(
+                2,
+                {
+                    "role": "system",
+                    "content": (
+                        "Analyse contextuelle du dossier partagé du projet:\n"
+                        f"{project_files_context}\n\n"
+                        "Quand l'utilisateur demande ce qu'il y a dans le dossier, réponds à partir de ce contexte."
+                    ),
+                },
+            )
+        except Exception:
+            pass
 
     if payload.attachments:
         hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=False)

@@ -11,6 +11,7 @@ import httpx
 from app.schemas.chat import ChatAttachment
 from app.services.chat_payloads import build_attachment_response_guidance, build_message_content, derive_conversation_title, storage_text
 from app.services.generated_files import build_generated_file_bytes, extract_generated_files
+from app.services.project_storage import build_project_files_context
 import base64
 
 router = APIRouter(prefix="/chat-enhanced", tags=["chat-enhanced"]) 
@@ -114,6 +115,22 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             f"{build_attachment_response_guidance()}"
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
+
+        try:
+            project_files_context = build_project_files_context(conv_project)
+            hippo_messages.insert(
+                2,
+                {
+                    "role": "system",
+                    "content": (
+                        "Contexte des fichiers du dossier partagé du projet:\n"
+                        f"{project_files_context}\n\n"
+                        "Utilise ce contexte pour répondre quand l'utilisateur demande d'analyser les fichiers du dossier."
+                    ),
+                },
+            )
+        except Exception:
+            pass
 
     # if project provided, call embedding search service and inject context
     if payload.project_id is not None and settings.hippo_embedding_url:

@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from io import BytesIO
+from zipfile import BadZipFile, ZipFile
+import xml.etree.ElementTree as ET
 
 try:
     import boto3  # type: ignore
@@ -237,3 +240,110 @@ def read_project_file(project: Any, filename: str) -> tuple[bytes, str, str]:
     if not path.exists() or not path.is_file():
         raise FileNotFoundError(safe_filename)
     return path.read_bytes(), content_type, "local"
+
+
+def _truncate(text: str, limit: int = 5000) -> str:
+    text = re.sub(r"\s+\n", "\n", text or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
+def _extract_text_from_pdf_bytes(data: bytes) -> str:
+    try:
+        from pypdf import PdfReader  # type: ignore
+    except Exception:
+        return ""
+
+    try:
+        reader = PdfReader(BytesIO(data))
+        parts: list[str] = []
+        for page in reader.pages[:6]:
+            try:
+                page_text = page.extract_text() or ""
+            except Exception:
+                page_text = ""
+            if page_text.strip():
+                parts.append(page_text.strip())
+        return _truncate("\n\n".join(parts))
+    except Exception:
+        return ""
+
+
+def _extract_text_from_docx_bytes(data: bytes) -> str:
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            xml_bytes = archive.read("word/document.xml")
+    except (BadZipFile, KeyError, OSError):
+        return ""
+
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError:
+        return ""
+
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    paragraphs: list[str] = []
+    for paragraph in root.findall(".//w:p", namespace):
+        text_parts = [node.text for node in paragraph.findall(".//w:t", namespace) if node.text]
+        line = "".join(text_parts).strip()
+        if line:
+            paragraphs.append(line)
+    return _truncate("\n\n".join(paragraphs))
+
+
+def extract_project_file_preview(filename: str, data: bytes, content_type: str | None = None) -> str:
+    safe_filename = (filename or "").lower()
+    mime_type = (content_type or mimetypes.guess_type(safe_filename)[0] or "").lower()
+
+    if mime_type == "application/pdf" or safe_filename.endswith(".pdf"):
+        return _extract_text_from_pdf_bytes(data)
+
+    if mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or safe_filename.endswith(".docx"):
+        return _extract_text_from_docx_bytes(data)
+
+    if mime_type.startswith("text/") or safe_filename.endswith((".txt", ".md", ".csv", ".log", ".rtf")):
+        for encoding in ("utf-8", "utf-16", "latin-1"):
+            try:
+                return _truncate(data.decode(encoding))
+            except UnicodeDecodeError:
+                continue
+        return ""
+
+    if mime_type.startswith("image/") or safe_filename.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")):
+        try:
+            from PIL import Image  # type: ignore
+
+            with Image.open(BytesIO(data)) as image:
+                width, height = image.size
+                mode = image.mode or "unknown"
+                fmt = (image.format or "").upper() or "image"
+                return f"[Image metadata] {fmt} {width}x{height} ({mode})"
+        except Exception:
+            return "[Image attachment]"
+
+    return ""
+
+
+def build_project_files_context(project: Any, max_files: int = 6) -> str:
+    files = list_project_files(project)[:max_files]
+    if not files:
+        return (
+            "Aucun fichier n'est actuellement visible dans le dossier partagé du projet.\n"
+            "Si l'utilisateur s'attend à en voir, explique-lui que le bucket est vide ou que l'index n'est pas encore synchronisé."
+        )
+
+    lines = [
+        "Fichiers visibles dans le dossier partagé du projet:",
+    ]
+    for item in files:
+        try:
+            content, content_type, _storage = read_project_file(project, item.filename)
+            preview = extract_project_file_preview(item.filename, content, content_type)
+        except Exception:
+            preview = ""
+
+        lines.append(f"- {item.filename} ({item.size} bytes, stockage {item.storage})")
+        if preview:
+            lines.append(f"  Aperçu: {preview}")
+    return "\n".join(lines)
