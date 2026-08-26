@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="de">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -18,21 +18,22 @@
           </div>
           <div>
             <div class="brand-title">HIPPO-AI</div>
-            <div class="brand-subtitle">Projects, chats, voice</div>
+            <div class="brand-subtitle">Projekte, Chats, Sprache</div>
           </div>
         </div>
 
         <button id="sidebar-new-chat" class="primary-action">
           <span class="primary-action-icon">+</span>
-          <span>New chat</span>
+          <span>Neuer Chat</span>
         </button>
 
         <div class="sidebar-section">
           <div class="section-heading">
-            <span>Projects</span>
+            <span>Projekte</span>
             <span class="section-count" id="project-count">0</span>
           </div>
           <div id="project-list" class="stack-list"></div>
+          <button id="project-embed-btn" class="ghost-action">Infos ins Embedding speichern</button>
         </div>
 
         <div class="sidebar-section">
@@ -46,20 +47,22 @@
         <div id="admin-section" class="sidebar-section hidden">
           <div class="section-heading">
             <span>Admin</span>
-            <span class="section-badge">team</span>
+            <span class="section-badge">Team</span>
           </div>
-          <button id="admin-create-user" class="ghost-action">Create user</button>
+          <button id="admin-create-user" class="ghost-action">Benutzer erstellen</button>
           <div id="admin-user-list" class="stack-list compact"></div>
         </div>
 
         <div class="sidebar-footer">
           <div class="account-card">
-            <div class="account-avatar" id="account-avatar">H</div>
-            <div class="account-copy">
-              <div id="account-name" class="account-name">Not connected</div>
-              <div id="account-meta" class="account-meta">Sign in to continue</div>
-            </div>
-            <button id="logout-btn" class="icon-button" title="Log out">↗</button>
+            <button id="profile-btn" class="account-main" type="button">
+              <div class="account-avatar" id="account-avatar">H</div>
+              <div class="account-copy">
+                <div id="account-name" class="account-name">Nicht verbunden</div>
+                <div id="account-meta" class="account-meta">Bitte anmelden</div>
+              </div>
+            </button>
+            <button id="logout-btn" class="icon-button" title="Abmelden" type="button">↗</button>
           </div>
         </div>
       </aside>
@@ -68,17 +71,19 @@
         <section id="login-screen" class="login-screen">
           <div class="login-card">
             <div class="login-badge">HIPPO-AI</div>
-            <h1>Sign in</h1>
-            <p>Access your projects, chats, and admin tools.</p>
-            <label class="field">
-              <span>Email</span>
-              <input id="email" class="text-input" type="email" placeholder="you@example.com" autocomplete="email" />
-            </label>
-            <label class="field">
-              <span>Password</span>
-              <input id="password" class="text-input" type="password" placeholder="••••••••" autocomplete="current-password" />
-            </label>
-            <button id="login" class="primary-button">Sign in</button>
+            <h1>Anmelden</h1>
+            <p>Greife auf Projekte, Chats und Admin-Funktionen zu.</p>
+            <form id="login-form">
+              <label class="field">
+                <span>E-Mail</span>
+                <input id="email" class="text-input" type="email" placeholder="name@beispiel.de" autocomplete="email" />
+              </label>
+              <label class="field">
+                <span>Passwort</span>
+                <input id="password" class="text-input" type="password" placeholder="••••••••" autocomplete="current-password" />
+              </label>
+              <button id="login" class="primary-button" type="submit">Anmelden</button>
+            </form>
             <div id="login-result" class="muted-copy"></div>
           </div>
         </section>
@@ -86,12 +91,12 @@
         <section id="workspace-shell" class="workspace-shell hidden">
           <header class="workspace-topbar">
             <div>
-              <div id="page-title" class="page-title">New chat</div>
-              <div id="selected-info" class="page-subtitle">No project selected</div>
+              <div id="page-title" class="page-title">Neuer Chat</div>
+              <div id="selected-info" class="page-subtitle">Kein Projekt gewählt</div>
             </div>
             <div class="topbar-actions">
               <span class="context-pill" id="project-pill">Global</span>
-              <span class="context-pill subtle" id="role-pill">User</span>
+              <span class="context-pill subtle" id="role-pill">Benutzer</span>
             </div>
           </header>
 
@@ -99,24 +104,24 @@
             <div id="chat-log" class="chat-log"></div>
             <div id="empty-state" class="empty-state">
               <div class="empty-card">
-                <div class="empty-kicker">Reference: ChatGPT-style workspace</div>
-                <h2>Start a conversation</h2>
-                <p>Pick a project, type a message, attach an image, or use the mic to draft a message by voice.</p>
+                <div class="empty-kicker">Referenz: ChatGPT-ähnlicher Arbeitsbereich</div>
+                <h2>Starte eine Unterhaltung</h2>
+                <p>Wähle ein Projekt, schreibe eine Nachricht, hänge ein Bild an oder nutze das Mikrofon für Sprache.</p>
               </div>
             </div>
           </div>
 
           <footer class="composer-shell">
             <div id="attachment-preview" class="attachment-preview"></div>
-            <div class="composer">
-              <button id="attach-image-btn" class="composer-button" title="Attach image">📎</button>
-              <button id="mic-btn" class="composer-button" title="Voice message">🎙</button>
-              <textarea id="chat-input" class="composer-input" rows="1" placeholder="Message HIPPO-AI"></textarea>
-              <button id="send-chat" class="send-button">Send</button>
-            </div>
+            <form id="chat-form" class="composer">
+              <button id="attach-image-btn" class="composer-button" type="button" title="Bild anhängen">📎</button>
+              <button id="mic-btn" class="composer-button" type="button" title="Sprachnachricht">🎙</button>
+              <textarea id="chat-input" class="composer-input" rows="1" placeholder="Nachricht an HIPPO-AI"></textarea>
+              <button id="send-chat" class="send-button" type="submit">Senden</button>
+            </form>
             <div class="composer-meta">
-              <span id="composer-hint">Enter to send · Shift+Enter for newline</span>
-              <span id="voice-status">Mic idle</span>
+              <span id="composer-hint">Enter zum Senden · Shift+Enter für neue Zeile</span>
+              <span id="voice-status">Mikrofon bereit</span>
             </div>
             <canvas id="voice-canvas" class="voice-canvas" width="720" height="96" aria-label="Voice recording visualization"></canvas>
           </footer>

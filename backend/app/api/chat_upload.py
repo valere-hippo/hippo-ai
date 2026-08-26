@@ -18,10 +18,10 @@ async def upload_and_attach(project_id: int, file: UploadFile = File(...), db: D
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if project is None:
-        raise HTTPException(status_code=404, detail='Project not found')
+        raise HTTPException(status_code=404, detail='Projekt nicht gefunden.')
     allowed = await has_project_permission(db, current_user, project, level=__import__('app.models.permission', fromlist=['PermissionLevel']).PermissionLevel.WRITE)
     if not allowed:
-        raise HTTPException(status_code=403, detail='Forbidden')
+        raise HTTPException(status_code=403, detail='Zugriff verweigert.')
     # save file
     dest_dir = os.path.join(UPLOAD_ROOT, str(project_id))
     os.makedirs(dest_dir, exist_ok=True)

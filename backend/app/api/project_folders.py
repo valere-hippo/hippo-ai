@@ -14,9 +14,9 @@ async def set_project_folder(project_id: int, payload: dict, db: DbSession, curr
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if project is None:
-        raise HTTPException(status_code=404, detail='Project not found')
+        raise HTTPException(status_code=404, detail='Projekt nicht gefunden.')
     if not (current_user.role == 'ADMIN' or project.owner_id == current_user.id):
-        raise HTTPException(status_code=403, detail='Forbidden')
+        raise HTTPException(status_code=403, detail='Zugriff verweigert.')
     folder = payload.get('folder')
     await db.execute(update(Project).where(Project.id == project_id).values(watched_folder=folder))
     await db.commit()
@@ -27,9 +27,9 @@ async def get_project_folder(project_id: int, db: DbSession, current_user=Depend
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if project is None:
-        raise HTTPException(status_code=404, detail='Project not found')
+        raise HTTPException(status_code=404, detail='Projekt nicht gefunden.')
     # check permission
     allowed = await has_project_permission(db, current_user, project, PermissionLevel.READ)
     if not allowed:
-        raise HTTPException(status_code=403, detail='Forbidden')
+        raise HTTPException(status_code=403, detail='Zugriff verweigert.')
     return {'project_id': project_id, 'folder': project.watched_folder}

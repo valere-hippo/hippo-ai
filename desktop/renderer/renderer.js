@@ -32,6 +32,8 @@ const els = {
   accountName: document.getElementById('account-name'),
   accountMeta: document.getElementById('account-meta'),
   logoutBtn: document.getElementById('logout-btn'),
+  profileBtn: document.getElementById('profile-btn'),
+  projectEmbedBtn: document.getElementById('project-embed-btn'),
   pageTitle: document.getElementById('page-title'),
   selectedInfo: document.getElementById('selected-info'),
   projectPill: document.getElementById('project-pill'),
@@ -39,6 +41,7 @@ const els = {
   chatLog: document.getElementById('chat-log'),
   emptyState: document.getElementById('empty-state'),
   attachmentPreview: document.getElementById('attachment-preview'),
+  chatForm: document.getElementById('chat-form'),
   chatInput: document.getElementById('chat-input'),
   attachImageBtn: document.getElementById('attach-image-btn'),
   imageInput: document.getElementById('image-input'),
@@ -68,12 +71,22 @@ function initialsFromUser(user) {
   return source.slice(0, 2).toUpperCase()
 }
 
+function formatRole(role) {
+  const map = {
+    ADMIN: 'Administrator',
+    MANAGER: 'Manager',
+    USER: 'Benutzer',
+    READ_ONLY: 'Nur lesen',
+  }
+  return map[role] || role
+}
+
 function getContextProject() {
   return state.projects.find((project) => project.id === state.selectedProjectId) || null
 }
 
 function getConversationTitle(conversation) {
-  if (!conversation) return 'New chat'
+  if (!conversation) return 'Neuer Chat'
   return conversation.title || `Chat #${conversation.id}`
 }
 
@@ -135,7 +148,7 @@ function showToast(message, type = 'success') {
   }, 3200)
 }
 
-function showLoader(text = 'Working...') {
+function showLoader(text = 'Bitte warten...') {
   let overlay = document.getElementById('loader-overlay')
   if (!overlay) {
     overlay = document.createElement('div')
@@ -168,29 +181,33 @@ function setScreen(loggedIn) {
 function updatePresence() {
   if (!state.user) {
     els.accountAvatar.textContent = 'H'
-    els.accountName.textContent = 'Not connected'
-    els.accountMeta.textContent = 'Sign in to continue'
-    els.rolePill.textContent = 'User'
+    els.accountName.textContent = 'Nicht verbunden'
+    els.accountMeta.textContent = 'Bitte anmelden'
+    els.rolePill.textContent = 'Benutzer'
+    els.adminSection.classList.add('hidden')
     return
   }
 
   els.accountAvatar.textContent = initialsFromUser(state.user)
   els.accountName.textContent = state.user.full_name || state.user.email
   els.accountMeta.textContent = state.user.email
-  els.rolePill.textContent = state.user.role
+  els.rolePill.textContent = formatRole(state.user.role)
   els.adminSection.classList.toggle('hidden', state.user.role !== 'ADMIN')
 }
 
 function renderContext() {
   const project = getContextProject()
   els.projectPill.textContent = project ? project.name : 'Global'
+  if (els.projectEmbedBtn) {
+    els.projectEmbedBtn.disabled = !project
+  }
   if (state.currentConversationId) {
     const conversation = state.conversations.find((item) => item.id === state.currentConversationId)
     els.pageTitle.textContent = getConversationTitle(conversation)
-    els.selectedInfo.textContent = project ? `Project: ${project.name}` : 'Global conversation'
+    els.selectedInfo.textContent = project ? `Projekt: ${project.name}` : 'Globale Unterhaltung'
   } else {
-    els.pageTitle.textContent = project ? `New chat in ${project.name}` : 'New chat'
-    els.selectedInfo.textContent = project ? `Project: ${project.name}` : 'No project selected'
+    els.pageTitle.textContent = project ? `Neuer Chat in ${project.name}` : 'Neuer Chat'
+    els.selectedInfo.textContent = project ? `Projekt: ${project.name}` : 'Kein Projekt gewählt'
   }
 }
 
@@ -216,7 +233,7 @@ function renderProjects() {
     title.textContent = project.name
     const subtitle = document.createElement('div')
     subtitle.className = 'item-subtitle'
-    subtitle.textContent = project.watched_folder ? project.watched_folder : 'No folder attached'
+    subtitle.textContent = project.watched_folder ? project.watched_folder : 'Kein Ordner verknüpft'
     main.append(title, subtitle)
 
     const chip = document.createElement('div')
@@ -235,7 +252,7 @@ function createProjectCreateCard() {
   const button = document.createElement('button')
   button.type = 'button'
   button.className = 'ghost-action'
-  button.textContent = '+ Create project'
+  button.textContent = '+ Projekt erstellen'
   button.addEventListener('click', openCreateProjectModal)
   return button
 }
@@ -247,14 +264,14 @@ function renderConversations() {
   const allLabel = document.createElement('div')
   allLabel.className = 'section-badge'
   allLabel.style.margin = '0 6px 2px'
-  allLabel.textContent = state.selectedProjectId ? 'Chats and project context' : 'All chats'
+  allLabel.textContent = state.selectedProjectId ? 'Chats und Projektkontext' : 'Alle Chats'
   els.conversationList.appendChild(allLabel)
 
   if (conversations.length === 0) {
     const empty = document.createElement('div')
     empty.className = 'muted-copy'
     empty.style.padding = '8px 6px'
-    empty.textContent = 'No chats yet.'
+    empty.textContent = 'Noch keine Chats.'
     els.conversationList.appendChild(empty)
   } else {
     conversations.forEach((conversation) => {
@@ -282,9 +299,9 @@ function renderConversations() {
       chip.className = 'item-chip'
       if (conversation.project_id) {
         const project = state.projects.find((item) => item.id === conversation.project_id)
-        chip.textContent = project ? project.name : 'project'
+        chip.textContent = project ? project.name : 'Projekt'
       } else {
-        chip.textContent = 'global'
+        chip.textContent = 'Global'
       }
 
       row.append(icon, main, chip)
@@ -314,12 +331,12 @@ function renderUsers() {
     title.textContent = user.full_name || user.email
     const subtitle = document.createElement('div')
     subtitle.className = 'item-subtitle'
-    subtitle.textContent = user.role
+    subtitle.textContent = formatRole(user.role)
     main.append(title, subtitle)
 
     const chip = document.createElement('div')
     chip.className = 'item-chip'
-    chip.textContent = user.is_active ? 'active' : 'disabled'
+    chip.textContent = user.is_active ? 'aktiv' : 'deaktiviert'
 
     row.append(avatar, main, chip)
     els.adminUserList.appendChild(row)
@@ -365,7 +382,7 @@ function renderAttachmentPreview() {
 }
 
 function setVoiceIdle() {
-  els.voiceStatus.textContent = state.isRecording ? 'Recording...' : 'Mic idle'
+  els.voiceStatus.textContent = state.isRecording ? 'Aufnahme läuft...' : 'Mikrofon bereit'
   els.voiceCanvas.classList.toggle('active', state.isRecording)
 }
 
@@ -386,7 +403,7 @@ function renderMessage(role, content, extras = {}) {
   const roleTag = document.createElement('div')
   roleTag.className = 'message-role'
   roleTag.textContent =
-    role === 'user' ? 'You' : role === 'assistant' ? 'Hippo' : role === 'system' ? 'System' : role
+    role === 'user' ? 'Du' : role === 'assistant' ? 'Hippo' : role === 'system' ? 'System' : role
   bubble.appendChild(roleTag)
 
   if (content) {
@@ -488,7 +505,7 @@ async function login() {
     return
   }
 
-  showLoader('Signing in...')
+  showLoader('Anmeldung...')
   try {
     const result = await apiJson('/auth/login', {
       method: 'POST',
@@ -502,8 +519,8 @@ async function login() {
     await loadWorkspace()
     showToast('Signed in')
   } catch (error) {
-    showToast(error.message || 'Login failed', 'error')
-    els.loginResult.textContent = error.message || 'Login failed'
+    showToast(error.message || 'Anmeldung fehlgeschlagen', 'error')
+    els.loginResult.textContent = error.message || 'Anmeldung fehlgeschlagen'
   } finally {
     hideLoader()
   }
@@ -565,7 +582,7 @@ async function openConversation(conversation) {
 }
 
 async function openConversationById(conversationId) {
-  showLoader('Loading conversation...')
+  showLoader('Unterhaltung wird geladen...')
   try {
     const payload = await apiJson(`/chat/conversations/${conversationId}`)
     renderConversationMessages(payload.messages || [])
@@ -603,7 +620,7 @@ function readFileAsDataUrl(file) {
 async function attachImages(files) {
   const imageFiles = [...files].filter((file) => file && file.type && file.type.startsWith('image/'))
   if (!imageFiles.length) {
-    showToast('Only image files are supported here.', 'error')
+    showToast('Hier sind nur Bilddateien erlaubt.', 'error')
     return
   }
 
@@ -624,26 +641,70 @@ async function persistImageAttachment(projectId, attachment) {
       body: formData,
     })
   } catch (error) {
-    showToast(`Image upload skipped: ${error.message || 'unknown error'}`, 'error')
+    showToast(`Bild-Upload übersprungen: ${error.message || 'unbekannter Fehler'}`, 'error')
   }
 }
 
-async function openCreateProjectModal() {
-  const form = createForm([
-    { id: 'name', label: 'Project name', type: 'text', placeholder: 'Project Apollo' },
-    { id: 'folder', label: 'Watched folder', type: 'text', placeholder: '/path/to/shared/folder' },
-  ])
+function buildProjectForm() {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'modal-grid'
 
+  const nameField = document.createElement('label')
+  nameField.className = 'field'
+  nameField.innerHTML = '<span>Projektname</span>'
+  const nameInput = document.createElement('input')
+  nameInput.id = 'name'
+  nameInput.type = 'text'
+  nameInput.className = 'text-input'
+  nameInput.placeholder = 'Projekt Apollo'
+  nameField.appendChild(nameInput)
+
+  const folderField = document.createElement('label')
+  folderField.className = 'field'
+  folderField.innerHTML = '<span>Gemeinsamer Ordner</span>'
+  const folderRow = document.createElement('div')
+  folderRow.style.display = 'flex'
+  folderRow.style.gap = '10px'
+  const folderInput = document.createElement('input')
+  folderInput.id = 'folder'
+  folderInput.type = 'text'
+  folderInput.className = 'text-input'
+  folderInput.placeholder = 'Ordner auswählen'
+  folderInput.readOnly = true
+  folderInput.style.flex = '1'
+  const folderButton = document.createElement('button')
+  folderButton.type = 'button'
+  folderButton.className = 'ghost-action'
+  folderButton.textContent = 'Ordner wählen'
+  folderButton.addEventListener('click', async () => {
+    const selected = await window.electron.selectFolder()
+    if (selected) {
+      folderInput.value = selected
+    }
+  })
+  folderRow.append(folderInput, folderButton)
+  folderField.appendChild(folderRow)
+
+  const hint = document.createElement('div')
+  hint.className = 'muted-copy'
+  hint.textContent = 'Hier abgelegte Dateien können von Hippo AI analysiert werden. Generierte Dokumente werden ebenfalls in diesem Ordner gespeichert.'
+
+  wrapper.append(nameField, folderField, hint)
+  return wrapper
+}
+
+async function openCreateProjectModal() {
+  const form = buildProjectForm()
   const result = await openModal({
-    title: 'Create project',
-    copy: 'Create a project and link a shared folder if you want file generation to save output there.',
+    title: 'Projekt erstellen',
+    copy: 'Wähle einen gemeinsamen Ordner über den Dateidialog aus, statt ihn von Hand einzugeben.',
     content: form,
-    submitLabel: 'Create',
+    submitLabel: 'Erstellen',
   })
 
   if (!result) return
 
-  showLoader('Creating project...')
+  showLoader('Projekt wird erstellt...')
   try {
     await apiJson('/projects/', {
       method: 'POST',
@@ -654,37 +715,77 @@ async function openCreateProjectModal() {
       }),
     })
     await loadWorkspace()
-    showToast('Project created')
+    showToast('Projekt erstellt')
   } catch (error) {
-    showToast(error.message || 'Project creation failed', 'error')
+    showToast(error.message || 'Projekt konnte nicht erstellt werden', 'error')
   } finally {
     hideLoader()
   }
 }
 
-async function openCreateUserModal() {
-  const form = createForm([
-    { id: 'full_name', label: 'Full name', type: 'text', placeholder: 'Jane Doe' },
-    { id: 'email', label: 'Email', type: 'email', placeholder: 'jane@example.com' },
-    { id: 'password', label: 'Password', type: 'password', placeholder: 'At least 8 characters' },
-    {
-      id: 'role',
-      label: 'Role',
-      type: 'select',
-      options: ['USER', 'MANAGER', 'READ_ONLY', 'ADMIN'],
-    },
-  ])
+function buildUserForm(defaults = {}) {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'modal-grid'
 
+  const fields = [
+    { id: 'full_name', label: 'Vollständiger Name', type: 'text', placeholder: 'Jane Doe', value: defaults.full_name || '' },
+    { id: 'email', label: 'E-Mail', type: 'email', placeholder: 'name@beispiel.de', value: defaults.email || '' },
+    { id: 'password', label: 'Passwort', type: 'password', placeholder: defaults.passwordPlaceholder || 'Mindestens 8 Zeichen', value: '' },
+  ]
+
+  fields.forEach((field) => {
+    const row = document.createElement('label')
+    row.className = 'field'
+    const label = document.createElement('span')
+    label.textContent = field.label
+    const input = document.createElement('input')
+    input.id = field.id
+    input.type = field.type
+    input.placeholder = field.placeholder
+    input.className = 'text-input'
+    input.value = field.value
+    row.append(label, input)
+    wrapper.appendChild(row)
+  })
+
+  const roleField = document.createElement('label')
+  roleField.className = 'field'
+  const roleLabel = document.createElement('span')
+  roleLabel.textContent = 'Rolle'
+  const roleSelect = document.createElement('select')
+  roleSelect.id = 'role'
+  roleSelect.className = 'text-input'
+  const roleLabels = {
+    USER: 'Benutzer',
+    MANAGER: 'Manager',
+    READ_ONLY: 'Nur lesen',
+    ADMIN: 'Administrator',
+  }
+  ;['USER', 'MANAGER', 'READ_ONLY', 'ADMIN'].forEach((role) => {
+    const option = document.createElement('option')
+    option.value = role
+    option.textContent = roleLabels[role]
+    if ((defaults.role || 'USER') === role) option.selected = true
+    roleSelect.appendChild(option)
+  })
+  roleField.append(roleLabel, roleSelect)
+  wrapper.appendChild(roleField)
+
+  return wrapper
+}
+
+async function openCreateUserModal() {
+  const form = buildUserForm()
   const result = await openModal({
-    title: 'Create user',
-    copy: 'Admin only. Create a new account directly from the workspace.',
+    title: 'Benutzer erstellen',
+    copy: 'Ein Administrator kann hier direkt ein neues Konto anlegen.',
     content: form,
-    submitLabel: 'Create user',
+    submitLabel: 'Benutzer erstellen',
   })
 
   if (!result) return
 
-  showLoader('Creating user...')
+  showLoader('Benutzer wird erstellt...')
   try {
     await apiJson('/admin/users/', {
       method: 'POST',
@@ -696,9 +797,9 @@ async function openCreateUserModal() {
       }),
     })
     await loadUsers()
-    showToast('User created')
+    showToast('Benutzer erstellt')
   } catch (error) {
-    showToast(error.message || 'User creation failed', 'error')
+    showToast(error.message || 'Benutzer konnte nicht erstellt werden', 'error')
   } finally {
     hideLoader()
   }
@@ -739,6 +840,154 @@ function createForm(fields) {
   return wrapper
 }
 
+function buildProfileForm(user) {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'modal-grid'
+
+  const fields = [
+    { id: 'full_name', label: 'Vollständiger Name', type: 'text', value: user.full_name || '' },
+    { id: 'email', label: 'E-Mail', type: 'email', value: user.email || '' },
+    { id: 'password', label: 'Neues Passwort', type: 'password', placeholder: 'Leer lassen, um es nicht zu ändern' },
+  ]
+
+  fields.forEach((field) => {
+    const row = document.createElement('label')
+    row.className = 'field'
+    const label = document.createElement('span')
+    label.textContent = field.label
+    const input = document.createElement('input')
+    input.id = field.id
+    input.type = field.type
+    input.className = 'text-input'
+    input.placeholder = field.placeholder || ''
+    input.value = field.value || ''
+    row.append(label, input)
+    wrapper.appendChild(row)
+  })
+
+  return wrapper
+}
+
+async function openProfileModal() {
+  if (!state.user) return
+
+  const form = buildProfileForm(state.user)
+  const result = await openModal({
+    title: 'Profil',
+    copy: 'Bearbeite deine persönlichen Daten. Das Passwort ist optional.',
+    content: form,
+    submitLabel: 'Speichern',
+  })
+
+  if (!result) return
+
+  showLoader('Profil wird gespeichert...')
+  try {
+    await apiJson('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        full_name: result.full_name,
+        email: result.email,
+        password: result.password || null,
+      }),
+    })
+    state.user = await loadCurrentUser()
+    updatePresence()
+    showToast('Profil gespeichert')
+  } catch (error) {
+    showToast(error.message || 'Profil konnte nicht gespeichert werden', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
+function buildEmbeddingForm(project = null) {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'modal-grid'
+
+  const textField = document.createElement('label')
+  textField.className = 'field'
+  const textLabel = document.createElement('span')
+  textLabel.textContent = 'Text'
+  const textArea = document.createElement('textarea')
+  textArea.id = 'text'
+  textArea.className = 'composer-input'
+  textArea.style.minHeight = '140px'
+  textArea.placeholder = 'Hier Informationen eingeben, die ins Embedding gespeichert werden sollen.'
+  textField.append(textLabel, textArea)
+
+  const sourceField = document.createElement('label')
+  sourceField.className = 'field'
+  const sourceLabel = document.createElement('span')
+  sourceLabel.textContent = 'Quelle'
+  const sourceInput = document.createElement('input')
+  sourceInput.id = 'source'
+  sourceInput.type = 'text'
+  sourceInput.className = 'text-input'
+  sourceInput.placeholder = 'desktop-test'
+  sourceField.append(sourceLabel, sourceInput)
+
+  const typeField = document.createElement('label')
+  typeField.className = 'field'
+  const typeLabel = document.createElement('span')
+  typeLabel.textContent = 'Typ'
+  const typeInput = document.createElement('input')
+  typeInput.id = 'type'
+  typeInput.type = 'text'
+  typeInput.className = 'text-input'
+  typeInput.placeholder = 'Dokument'
+  typeField.append(typeLabel, typeInput)
+
+  const hint = document.createElement('div')
+  hint.className = 'muted-copy'
+  hint.textContent = project ? `Projekt-ID: ${project.id}` : 'Wähle zuerst ein Projekt.'
+
+  wrapper.append(textField, sourceField, typeField, hint)
+  return wrapper
+}
+
+async function openEmbeddingModal() {
+  const project = getContextProject()
+  if (!project) {
+    showToast('Wähle zuerst ein Projekt aus.', 'error')
+    return
+  }
+
+  const form = buildEmbeddingForm(project)
+  const result = await openModal({
+    title: 'In Embedding speichern',
+    copy: 'Diese Information wird im Embedding-Store des aktuellen Projekts abgelegt.',
+    content: form,
+    submitLabel: 'Speichern',
+  })
+
+  if (!result) return
+
+  showLoader('Embedding wird aktualisiert...')
+  try {
+    await apiJson('/embeddings-proxy/store', {
+      method: 'POST',
+      body: JSON.stringify({
+        project_id: project.id,
+        items: [
+          {
+            text: result.text,
+            metadata: {
+              source: result.source || 'desktop',
+              type: result.type || 'note',
+            },
+          },
+        ],
+      }),
+    })
+    showToast('Informationen ins Embedding gespeichert')
+  } catch (error) {
+    showToast(error.message || 'Embedding konnte nicht gespeichert werden', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
 function openModal({ title, copy, content, submitLabel }) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div')
@@ -759,7 +1008,7 @@ function openModal({ title, copy, content, submitLabel }) {
     const cancel = document.createElement('button')
     cancel.type = 'button'
     cancel.className = 'ghost-action'
-    cancel.textContent = 'Cancel'
+    cancel.textContent = 'Abbrechen'
 
     const confirm = document.createElement('button')
     confirm.type = 'button'
@@ -806,26 +1055,26 @@ function showGeneratedFile(message, projectFolder) {
   if (!fileMatch) return false
 
   if (!projectFolder) {
-    showToast('Select a project with a watched folder first.', 'error')
+    showToast('Wähle zuerst ein Projekt mit zugeordnetem Ordner aus.', 'error')
     return true
   }
 
   const filename = fileMatch[1].trim()
   const content = fileMatch[2]
-  showLoader('Saving file...')
+  showLoader('Datei wird gespeichert...')
   window.electron.saveFile({ folder: projectFolder, filename, data: content })
     .then((result) => {
       hideLoader()
       if (result?.ok) {
-        showToast(`File created: ${result.path}`)
-        renderMessage('system', `File created: ${result.path}`)
+        showToast(`Datei erstellt: ${result.path}`)
+        renderMessage('system', `Datei erstellt: ${result.path}`)
       } else {
-        showToast(result?.error || 'File save failed', 'error')
+        showToast(result?.error || 'Datei konnte nicht gespeichert werden', 'error')
       }
     })
     .catch((error) => {
       hideLoader()
-      showToast(error.message || 'File save failed', 'error')
+      showToast(error.message || 'Datei konnte nicht gespeichert werden', 'error')
     })
 
   return true
@@ -846,10 +1095,10 @@ async function sendChat() {
     await Promise.all(state.draftAttachments.map((attachment) => persistImageAttachment(project.id, attachment)))
   }
 
-  renderMessage('user', message || 'Attachment', { attachments: state.draftAttachments })
+  renderMessage('user', message || 'Anhang', { attachments: state.draftAttachments })
   resetComposer()
 
-  showLoader('Thinking...')
+  showLoader('Denke nach...')
   try {
     const response = await apiJson('/chat-enhanced/', {
       method: 'POST',
@@ -876,7 +1125,7 @@ async function sendChat() {
       renderMessage('assistant', response.reply || '')
     }
   } catch (error) {
-    showToast(error.message || 'Chat failed', 'error')
+    showToast(error.message || 'Chat fehlgeschlagen', 'error')
   } finally {
     hideLoader()
   }
@@ -978,7 +1227,7 @@ async function startRecording() {
   if (state.isRecording) return
 
   if (!navigator.mediaDevices?.getUserMedia) {
-    showToast('Microphone access is not available in this app shell.', 'error')
+    showToast('Der Mikrofonzugriff ist in dieser App-Umgebung nicht verfügbar.', 'error')
     return
   }
 
@@ -1008,7 +1257,7 @@ async function startRecording() {
     }
     state.isRecording = true
     els.micBtn.textContent = '⏹'
-    els.voiceStatus.textContent = 'Recording...'
+    els.voiceStatus.textContent = 'Aufnahme läuft...'
     els.voiceCanvas.classList.add('active')
 
     mediaRecorder.ondataavailable = (event) => {
@@ -1024,14 +1273,14 @@ async function startRecording() {
         els.chatInput.value = transcript
         resizeComposer()
         els.chatInput.focus()
-        showToast('Voice text inserted into the composer')
+        showToast('Spracherkennung wurde in das Eingabefeld übernommen')
       } else {
-        showToast('No transcript was produced.', 'error')
+        showToast('Es wurde kein Text erkannt.', 'error')
       }
     }
 
     if (recognition) {
-      recognition.lang = navigator.language || 'fr-FR'
+      recognition.lang = 'de-DE'
       recognition.continuous = false
       recognition.interimResults = true
       recognition.onresult = (event) => {
@@ -1042,7 +1291,7 @@ async function startRecording() {
         transcriptState.text = parts.join(' ').trim()
       }
       recognition.onerror = (event) => {
-        showToast(`Speech recognition error: ${event.error}`, 'error')
+        showToast(`Fehler bei der Spracherkennung: ${event.error}`, 'error')
       }
       recognition.onend = () => {
         transcriptState.finalised = true
@@ -1053,23 +1302,31 @@ async function startRecording() {
         console.warn(error)
       }
     } else {
-      showToast('Speech recognition is unavailable. The recorder will still capture audio.', 'error')
+      showToast('Spracherkennung ist nicht verfügbar. Die Aufnahme läuft trotzdem.', 'error')
     }
 
     mediaRecorder.start()
     drawVoiceFrame()
   } catch (error) {
-    showToast(error.message || 'Microphone permission denied', 'error')
+    showToast(error.message || 'Mikrofonzugriff verweigert', 'error')
     stopRecordingUI()
   }
 }
 
 function bindComposerEvents() {
+  els.chatForm?.addEventListener('submit', (event) => {
+    event.preventDefault()
+    sendChat()
+  })
   els.chatInput.addEventListener('input', resizeComposer)
   els.chatInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
-      sendChat()
+      if (els.chatForm?.requestSubmit) {
+        els.chatForm.requestSubmit()
+      } else {
+        sendChat()
+      }
     }
   })
 
@@ -1101,18 +1358,16 @@ function bindComposerEvents() {
 function bindSidebarEvents() {
   els.sidebarNewChat.addEventListener('click', startNewChat)
   els.adminCreateUser.addEventListener('click', openCreateUserModal)
+  els.projectEmbedBtn.addEventListener('click', openEmbeddingModal)
+  els.profileBtn.addEventListener('click', openProfileModal)
   els.logoutBtn.addEventListener('click', logout)
 }
 
 function bindAuthEvents() {
-  els.loginButton.addEventListener('click', login)
-  [els.email, els.password].forEach((input) => {
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault()
-        login()
-      }
-    })
+  const loginForm = document.getElementById('login-form')
+  loginForm?.addEventListener('submit', (event) => {
+    event.preventDefault()
+    login()
   })
 }
 

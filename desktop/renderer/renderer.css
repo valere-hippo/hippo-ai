@@ -22,7 +22,10 @@
 html,
 body {
   margin: 0;
+  width: 100%;
+  height: 100%;
   min-height: 100%;
+  overflow: hidden;
   background:
     radial-gradient(circle at top left, rgba(99, 215, 191, 0.14), transparent 30%),
     radial-gradient(circle at bottom right, rgba(154, 178, 255, 0.12), transparent 28%),
@@ -33,6 +36,7 @@ body {
 
 body {
   min-height: 100vh;
+  overflow: hidden;
 }
 
 button,
@@ -48,7 +52,9 @@ textarea {
 .app-shell {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
-  min-height: 100vh;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -59,7 +65,8 @@ textarea {
   background: linear-gradient(180deg, rgba(11, 18, 26, 0.96), rgba(11, 18, 26, 0.9));
   border-right: 1px solid var(--line);
   backdrop-filter: blur(16px);
-  overflow: hidden;
+  overflow: auto;
+  min-height: 0;
 }
 
 .brand-card,
@@ -295,6 +302,15 @@ textarea {
   border-color: var(--line);
 }
 
+.ghost-action:disabled,
+.primary-action:disabled,
+.primary-button:disabled,
+.send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .sidebar-footer {
   margin-top: auto;
   padding-top: 4px;
@@ -306,6 +322,20 @@ textarea {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.account-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
 }
 
 .account-avatar {
@@ -343,6 +373,8 @@ textarea {
 .workspace {
   position: relative;
   min-width: 0;
+  height: 100vh;
+  overflow: hidden;
   background: linear-gradient(180deg, rgba(12, 18, 25, 0.85), rgba(10, 16, 22, 0.96));
 }
 
@@ -350,6 +382,8 @@ textarea {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden;
+  position: relative;
 }
 
 .workspace-topbar {
@@ -392,7 +426,7 @@ textarea {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 26px 22px 220px;
+  padding: 26px 22px 170px;
 }
 
 .message {
@@ -507,10 +541,17 @@ textarea {
 }
 
 .composer-shell {
-  position: sticky;
-  bottom: 0;
-  padding: 0 22px 22px;
-  background: linear-gradient(180deg, rgba(10, 16, 22, 0), rgba(10, 16, 22, 0.88) 26%, rgba(10, 16, 22, 0.98));
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  padding: 0 22px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.composer-shell > * {
+  pointer-events: auto;
 }
 
 .attachment-preview {

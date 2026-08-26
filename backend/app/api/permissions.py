@@ -12,12 +12,12 @@ router = APIRouter(prefix="/permissions", tags=["permissions"])
 async def grant_permission(payload: PermissionCreate, db: DbSession, current_user=Depends(get_current_user)):
     # only admins can grant
     if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail='Forbidden')
+        raise HTTPException(status_code=403, detail='Zugriff verweigert.')
     level = payload.level.upper()
     try:
         lvl = PermissionLevel[level]
     except KeyError:
-        raise HTTPException(status_code=400, detail='Invalid level')
+        raise HTTPException(status_code=400, detail='Ungültige Berechtigungsstufe.')
 
     stmt = insert(ProjectPermission).values(user_id=payload.user_id, project_id=payload.project_id, level=lvl)
     result = await db.execute(stmt.returning(ProjectPermission))

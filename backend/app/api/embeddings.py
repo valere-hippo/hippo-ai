@@ -15,9 +15,11 @@ class EmbeddingResponse(BaseModel):
 
 @router.post('/', response_model=EmbeddingResponse)
 async def create_embeddings(payload: EmbeddingRequest, current_user = Depends(get_current_user)):
-    if not settings.hippo_embedding_url or not settings.hippo_embedding_key:
-        raise HTTPException(status_code=503, detail='Embedding service not configured')
-    headers = {"Authorization": f"Bearer {settings.hippo_embedding_key}", "Content-Type": "application/json"}
+    if not settings.hippo_embedding_url:
+        raise HTTPException(status_code=503, detail='Der Embedding-Dienst ist nicht konfiguriert.')
+    headers = {"Content-Type": "application/json"}
+    if settings.hippo_embedding_key:
+        headers["Authorization"] = f"Bearer {settings.hippo_embedding_key}"
     body = {"texts": payload.texts}
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -30,6 +32,6 @@ async def create_embeddings(payload: EmbeddingRequest, current_user = Depends(ge
             # fallback: if data is list
             if isinstance(data, list):
                 return {'embeddings': data}
-            raise HTTPException(status_code=502, detail='Unexpected embedding service response')
+            raise HTTPException(status_code=502, detail='Unerwartete Antwort des Embedding-Dienstes.')
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f'Embedding service error: {e}')
+        raise HTTPException(status_code=502, detail=f'Fehler des Embedding-Dienstes: {e}')

@@ -8,7 +8,7 @@ router = APIRouter(prefix="/audio", tags=["audio"])
 @router.post('/transcribe')
 async def transcribe_audio(file: UploadFile = File(...), current_user = Depends(get_current_user)):
     if not settings.whisper_api_url or not settings.whisper_api_key:
-        raise HTTPException(status_code=503, detail='Transcription service not configured')
+        raise HTTPException(status_code=503, detail='Der Transkriptionsdienst ist nicht konfiguriert.')
     # read bytes
     data = await file.read()
     headers = {"Authorization": f"Bearer {settings.whisper_api_key}"}
@@ -26,4 +26,4 @@ async def transcribe_audio(file: UploadFile = File(...), current_user = Depends(
                 return {'text': res['transcript']}
             return {'text': str(res)}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f'Transcription error: {e}')
+        raise HTTPException(status_code=502, detail=f'Fehler bei der Transkription: {e}')

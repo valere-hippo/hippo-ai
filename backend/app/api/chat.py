@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.dependencies import get_current_user, DbSession
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.chat import Conversation, ChatMessage
 from app.models.project import Project
 from app.models.permission import PermissionLevel
@@ -32,11 +32,11 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         result = await db.execute(select(Project).where(Project.id == payload.project_id))
         proj = result.scalar_one_or_none()
         if proj is None:
-            raise HTTPException(status_code=404, detail='Project not found')
+            raise HTTPException(status_code=404, detail='Projekt nicht gefunden.')
         from app.services.permissions import has_project_permission
         allowed = await has_project_permission(db, current_user, proj, PermissionLevel.READ)
         if not allowed:
-            raise HTTPException(status_code=403, detail='Forbidden')
+            raise HTTPException(status_code=403, detail='Zugriff verweigert.')
         conv_project = proj
 
     # ensure conversation
@@ -121,7 +121,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             except Exception as e:
                 raise HTTPException(status_code=502, detail=f"Hippo API error: {e}")
     else:
-        raise HTTPException(status_code=503, detail="Hippo API not configured — set HIPPO_API_URL and HIPPO_API_KEY in configuration")
+        raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_API_URL und HIPPO_API_KEY setzen.")
 
     # sanitize assistant reply: remove any <think>...</think> reasoning tags
     import re
@@ -158,7 +158,7 @@ async def get_conversation(conv_id: int, db: DbSession, current_user: User = Dep
     res = await db.execute(select(Conversation).where(Conversation.id == conv_id))
     conv = res.scalar_one_or_none()
     if conv is None:
-        raise HTTPException(status_code=404, detail='Not found')
+        raise HTTPException(status_code=404, detail='Nicht gefunden.')
     # if tied to project, check permission
     if conv.project_id is not None:
         result = await db.execute(select(Project).where(Project.id == conv.project_id))
@@ -166,7 +166,7 @@ async def get_conversation(conv_id: int, db: DbSession, current_user: User = Dep
         from app.services.permissions import has_project_permission
         allowed = await has_project_permission(db, current_user, proj, PermissionLevel.READ)
         if not allowed:
-            raise HTTPException(status_code=403, detail='Forbidden')
+            raise HTTPException(status_code=403, detail='Zugriff verweigert.')
     # fetch messages
     msgs = await db.execute(select(ChatMessage).where(ChatMessage.conversation_id == conv_id).order_by(ChatMessage.created_at))
     return { 'conversation': conv, 'messages': msgs.scalars().all() }
@@ -178,10 +178,10 @@ async def delete_conversation(conv_id: int, db: DbSession, current_user: User = 
     msgs = await db.execute(select(ChatMessage).where(ChatMessage.conversation_id == conv_id))
     msgs = msgs.scalars().all()
     if not msgs:
-        raise HTTPException(status_code=404, detail='Not found')
+        raise HTTPException(status_code=404, detail='Nicht gefunden.')
     participant_ids = set(m.user_id for m in msgs)
     if current_user.role != UserRole.ADMIN and current_user.id not in participant_ids:
-        raise HTTPException(status_code=403, detail='Forbidden')
+        raise HTTPException(status_code=403, detail='Zugriff verweigert.')
     await db.execute(ChatMessage.__table__.delete().where(ChatMessage.conversation_id == conv_id))
     await db.execute(Conversation.__table__.delete().where(Conversation.id == conv_id))
     await db.commit()

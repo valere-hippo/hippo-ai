@@ -32,11 +32,11 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         result = await db.execute(select(Project).where(Project.id == payload.project_id))
         proj = result.scalar_one_or_none()
         if proj is None:
-            raise HTTPException(status_code=404, detail='Project not found')
+            raise HTTPException(status_code=404, detail='Projekt nicht gefunden.')
         from app.services.permissions import has_project_permission
         allowed = await has_project_permission(db, current_user, proj, PermissionLevel.READ)
         if not allowed:
-            raise HTTPException(status_code=403, detail='Forbidden')
+            raise HTTPException(status_code=403, detail='Zugriff verweigert.')
         conv_project = proj
 
     # ensure conversation
@@ -75,8 +75,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     # global system prompt
     global_sys = (
         "Du bist Hippo, ein freundlicher und professioneller KI-Assistent.\n"
-        "Dieses System wurde erstellt und entwickelt von Valère Youbi, CEO der Firma MERVAL DIGITALE, für das Unternehmen Hipposideros mit Sitz in Deutschland.\n"
-        "Antworte in der Sprache des Benutzers und nutze projektspezifisches Wissen, falls vorhanden."
+        "Antworte in der Sprache des Benutzers.\n"
+        "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort."
     )
     hippo_messages.insert(0, {"role": "system", "content": global_sys})
 
@@ -96,10 +96,11 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                         if t:
                             top_texts.append(t)
                 if top_texts:
-                    context_block = '\n\n'.join(top_texts)
+                    context_block = '\n\n'.join(f"- {text}" for text in top_texts)
                     emb_sys = (
-                        "Wichtige projektspezifische Informationen (aus Embeddings):\n" + context_block + "\n\n"
-                        "Wenn nötig, übersetze diese Informationen in die Sprache des Benutzers und nutze sie zur Formulierung der Antwort."
+                        "Gefundene Projekthinweise aus dem Embedding-Store:\n"
+                        f"{context_block}\n\n"
+                        "Verwende diese Hinweise als Faktenbasis und mische sie mit deinen eigenen Schlussfolgerungen."
                     )
                     hippo_messages.insert(1, {"role": "system", "content": emb_sys})
         except Exception:
@@ -107,7 +108,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
     # call Hippo chat completions
     if not (settings.hippo_api_url and settings.hippo_api_key):
-        raise HTTPException(status_code=503, detail='Hippo API not configured')
+        raise HTTPException(status_code=503, detail='Die Hippo-API ist nicht konfiguriert.')
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
@@ -121,7 +122,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             else:
                 reply_text = str(data)
         except Exception as e:
-            raise HTTPException(status_code=502, detail=f'Hippo API error: {e}')
+            raise HTTPException(status_code=502, detail=f'Fehler der Hippo-API: {e}')
 
     # sanitize & store
     import re

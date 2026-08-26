@@ -24,7 +24,7 @@ class EmbeddingSearchRequest(BaseModel):
 @router.post('/store')
 async def store_embeddings(payload: EmbeddingStoreRequest, current_user = Depends(get_current_user)):
     if not settings.hippo_embedding_url:
-        raise HTTPException(status_code=503, detail='Embedding service not configured')
+        raise HTTPException(status_code=503, detail='Der Embedding-Dienst ist nicht konfiguriert.')
     headers = {"Content-Type": "application/json"}
     if settings.hippo_embedding_key:
         headers["Authorization"] = f"Bearer {settings.hippo_embedding_key}"
@@ -35,13 +35,13 @@ async def store_embeddings(payload: EmbeddingStoreRequest, current_user = Depend
             r.raise_for_status()
             return r.json()
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f'Embedding store error: {e}')
+        raise HTTPException(status_code=502, detail=f'Fehler beim Speichern im Embedding: {e}')
 
 
 @router.post('/search')
 async def search_embeddings(payload: EmbeddingSearchRequest, current_user = Depends(get_current_user)):
     if not settings.hippo_embedding_url:
-        raise HTTPException(status_code=503, detail='Embedding service not configured')
+        raise HTTPException(status_code=503, detail='Der Embedding-Dienst ist nicht konfiguriert.')
     headers = {"Content-Type": "application/json"}
     if settings.hippo_embedding_key:
         headers["Authorization"] = f"Bearer {settings.hippo_embedding_key}"
@@ -52,4 +52,4 @@ async def search_embeddings(payload: EmbeddingSearchRequest, current_user = Depe
             r.raise_for_status()
             return r.json()
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f'Embedding search error: {e}')
+        raise HTTPException(status_code=502, detail=f'Fehler bei der Embedding-Suche: {e}')

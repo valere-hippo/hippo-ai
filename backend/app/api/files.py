@@ -1,9 +1,9 @@
 import os
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
-from typing import List
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.api.dependencies import get_current_user, DbSession
+from app.core.config import settings
 from app.models.user import UserRole
 from app.models.project import Project
 from app.models.permission import PermissionLevel
@@ -25,13 +25,13 @@ async def upload_file(project_id: int, db: DbSession, current_user=Depends(get_c
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
 
     # check permission: WRITE required
     from app.services.permissions import has_project_permission
     has = await has_project_permission(db, current_user, project, PermissionLevel.WRITE)
     if not has:
-        raise HTTPException(status_code=403, detail="Forbidden")
+        raise HTTPException(status_code=403, detail="Zugriff verweigert.")
 
     dest_dir = ensure_project_dir(project_id)
     dest_path = os.path.join(dest_dir, file.filename)
@@ -79,9 +79,9 @@ async def list_project_files(project_id: int, db: DbSession, current_user=Depend
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
     if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+        raise HTTPException(status_code=403, detail="Zugriff verweigert.")
 
     dir_path = os.path.join(UPLOAD_ROOT, str(project_id))
     if not os.path.exists(dir_path):

@@ -26,7 +26,7 @@ async def register(payload: UserCreate, db: DbSession) -> User:
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="A user with this email already exists.",
+            detail="Es gibt bereits ein Konto mit dieser E-Mail-Adresse.",
         )
 
     user = User(
@@ -53,14 +53,14 @@ async def login(payload: UserLogin, db: DbSession) -> TokenResponse:
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password.",
+            detail="E-Mail oder Passwort ist ungültig.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive.",
+            detail="Dieses Benutzerkonto ist deaktiviert.",
         )
 
     token = create_access_token(str(user.id))

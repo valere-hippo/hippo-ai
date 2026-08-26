@@ -60,9 +60,9 @@ async def get_project(project_id: int, db: DbSession, current_user=Depends(get_c
     result = await db.execute(stmt)
     project = result.scalar_one_or_none()
     if project is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Projekt nicht gefunden.")
     if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
     return project
 
 
@@ -72,9 +72,9 @@ async def update_project(project_id: int, payload: ProjectCreate, db: DbSession,
     result = await db.execute(stmt)
     project = result.scalar_one_or_none()
     if project is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Projekt nicht gefunden.")
     if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
     # apply updates
     upd = {}
     if payload.name:
@@ -95,9 +95,9 @@ async def delete_project(project_id: int, db: DbSession, current_user=Depends(ge
     result = await db.execute(stmt)
     project = result.scalar_one_or_none()
     if project is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Projekt nicht gefunden.")
     if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
     # delete related permissions, conversations, messages first to avoid FK violations
     from app.models.permission import ProjectPermission
     from app.models.chat import Conversation, ChatMessage
