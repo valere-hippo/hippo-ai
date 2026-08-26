@@ -173,7 +173,6 @@ function hideLoader() {
 }
 
 function setScreen(loggedIn) {
-  els.appShell.classList.toggle('hidden', !loggedIn)
   els.loginScreen.classList.toggle('hidden', loggedIn)
   els.workspaceShell.classList.toggle('hidden', !loggedIn)
 }
