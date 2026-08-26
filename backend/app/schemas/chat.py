@@ -6,6 +6,7 @@ class ChatAttachment(BaseModel):
     filename: str
     mime_type: str | None = None
     data_url: str | None = None
+    ocr_text: str | None = None
 
 
 class ChatMessageCreate(BaseModel):

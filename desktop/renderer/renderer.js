@@ -613,6 +613,8 @@ function buildImageAttachment(file, dataUrl) {
     mime_type: file.type || 'image/*',
     data_url: dataUrl,
     previewUrl: dataUrl,
+    ocr_text: '',
+    ocrPromise: null,
   }
 }
 
@@ -634,7 +636,21 @@ async function attachImages(files) {
 
   for (const file of imageFiles) {
     const dataUrl = await readFileAsDataUrl(file)
-    state.draftAttachments.push(buildImageAttachment(file, dataUrl))
+    const attachment = buildImageAttachment(file, dataUrl)
+    attachment.ocrPromise = (async () => {
+      try {
+        const result = await window.electron.ocrImage({ dataUrl })
+        if (result?.ok && result.text) {
+          attachment.ocr_text = result.text
+          renderAttachmentPreview()
+          return result.text
+        }
+      } catch (error) {
+        console.warn('OCR failed', error)
+      }
+      return ''
+    })()
+    state.draftAttachments.push(attachment)
   }
   renderAttachmentPreview()
 }
@@ -1172,10 +1188,16 @@ async function sendChat() {
   if (!message && state.draftAttachments.length === 0) return
 
   const project = getContextProject()
+  await Promise.all(
+    state.draftAttachments
+      .map((attachment) => attachment.ocrPromise)
+      .filter(Boolean)
+  )
   const attachments = state.draftAttachments.map((attachment) => ({
     filename: attachment.filename,
     mime_type: attachment.mime_type,
     data_url: attachment.data_url,
+    ocr_text: attachment.ocr_text || '',
   }))
 
   if (project && state.draftAttachments.length) {

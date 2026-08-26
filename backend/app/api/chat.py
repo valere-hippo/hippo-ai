@@ -94,6 +94,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         "- Wenn der Benutzer Deutsch schreibt, antworte auf Deutsch.\n"
         "- Wenn der Benutzer Französisch schreibt, antworte auf Französisch.\n"
         "- Wenn der Benutzer Englisch schreibt, antworte auf Englisch.\n"
+        "- Wenn Bilder oder Screenshots angehängt sind, nutze die OCR-/Bildkontextdaten im Prompt und sage nicht, dass du Bilder nicht sehen kannst.\n"
     )
     hippo_messages.insert(0, {"role": "system", "content": global_sys})
 
@@ -112,7 +113,8 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "<file content here>\n"
             "<<<END_FILE>>>\n"
             "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
-            "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language."
+            "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language.\n"
+            "If an image or screenshot is attached, analyze the visible content from OCR and image context; do not claim that you cannot see attachments."
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 

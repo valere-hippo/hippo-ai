@@ -6,6 +6,9 @@ from typing import Any
 def _attachment_text(attachment: Any) -> str:
     filename = getattr(attachment, "filename", "attachment")
     mime_type = getattr(attachment, "mime_type", None) or "unknown"
+    ocr_text = (getattr(attachment, "ocr_text", None) or "").strip()
+    if ocr_text:
+        return f"[Attachment: {filename} | {mime_type}]\n[OCR]\n{ocr_text}"
     return f"[Attachment: {filename} | {mime_type}]"
 
 
@@ -26,6 +29,9 @@ def build_message_content(
         filename = getattr(attachment, "filename", "attachment")
         mime_type = (getattr(attachment, "mime_type", None) or "").lower()
         data_url = getattr(attachment, "data_url", None)
+        ocr_text = (getattr(attachment, "ocr_text", None) or "").strip()
+        if ocr_text:
+            text_parts.append(f"[OCR from {filename}]\n{ocr_text}")
         if include_images and data_url and mime_type.startswith("image/"):
             image_parts.append(
                 {

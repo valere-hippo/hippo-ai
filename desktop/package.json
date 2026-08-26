@@ -14,9 +14,24 @@
   "build": {
     "appId": "com.hippoai.desktop",
     "productName": "HIPPO-AI",
-    "files": ["**/*"],
-    "directories": {"buildResources":"build"},
-    "win": {"target": ["nsis"]},
-    "mac": {"target": ["dmg"]}
+    "files": [
+      "**/*"
+    ],
+    "directories": {
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    }
+  },
+  "dependencies": {
+    "tesseract.js": "^7.0.0"
   }
 }

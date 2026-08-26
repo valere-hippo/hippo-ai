@@ -89,7 +89,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, für HIPPOSIDEROS entwickelt.\n"
         "Hippo AI gehört zu HIPPOSIDEROS.\n"
         "Antworte in der Sprache des Benutzers.\n"
-        "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort."
+        "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort.\n"
+        "Wenn Bilder oder Screenshots angehängt sind, nutze die OCR-/Bildkontextdaten im Prompt und sage nicht, dass du Bilder nicht sehen kannst."
     )
     hippo_messages.insert(0, {"role": "system", "content": global_sys})
 
@@ -107,7 +108,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "<file content here>\n"
             "<<<END_FILE>>>\n"
             "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
-            "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language."
+            "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language.\n"
+            "If an image or screenshot is attached, analyze the visible content from OCR and image context; do not claim that you cannot see attachments."
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const Tesseract = require('tesseract.js')
 
 function createWindow () {
   const win = new BrowserWindow({
@@ -56,6 +57,17 @@ ipcMain.handle('save-file', async (event, { folder, filename, data }) => {
     }
     return { ok: true, path: filePath }
   }catch(e){ return { ok: false, error: e.message } }
+})
+
+ipcMain.handle('ocr-image', async (event, { dataUrl }) => {
+  try {
+    if (!dataUrl) return { ok: false, error: 'No image data provided' }
+    const result = await Tesseract.recognize(dataUrl, 'deu+eng')
+    const text = (result?.data?.text || '').trim()
+    return { ok: true, text }
+  } catch (e) {
+    return { ok: false, error: e.message }
+  }
 })
 
 // collect renderer console errors
