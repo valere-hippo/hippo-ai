@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import insert, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import DbSession, get_current_user
 from app.models.project import Project
 from app.models.user import UserRole
 from app.schemas.project import ProjectCreate, ProjectResponse
+from app.services.notifications import notify_project_created
+from app.services.project_storage import delete_project_bucket, ensure_project_bucket, has_s3_storage
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -24,12 +25,24 @@ async def create_project(payload: ProjectCreate, db: DbSession, current_user=Dep
     await db.commit()
     project = result.scalar_one()
 
+    if has_s3_storage():
+        try:
+            ensure_project_bucket(project)
+        except Exception as error:
+            await db.execute(Project.__table__.delete().where(Project.id == project.id))
+            await db.commit()
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"S3-Bucket konnte nicht erstellt werden: {error}")
+
     # grant owner ADMIN permission explicitly
     from app.models.permission import ProjectPermission, PermissionLevel
     await db.execute(
         insert(ProjectPermission).values(user_id=current_user.id, project_id=project.id, level=PermissionLevel.ADMIN)
     )
     await db.commit()
+    try:
+        await notify_project_created(project, current_user)
+    except Exception:
+        pass
 
     return project
 
@@ -113,4 +126,5 @@ async def delete_project(project_id: int, db: DbSession, current_user=Depends(ge
     # finally delete project
     await db.execute(Project.__table__.delete().where(Project.id == project_id))
     await db.commit()
+    delete_project_bucket(project)
     return {"ok": True}

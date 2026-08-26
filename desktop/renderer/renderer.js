@@ -101,6 +101,29 @@ function deriveConversationTitle(message, attachments = []) {
   return firstAttachment?.filename || 'Neuer Chat'
 }
 
+function formatFileSize(bytes) {
+  const value = Number(bytes || 0)
+  if (!Number.isFinite(value) || value <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let size = value
+  let unitIndex = 0
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+  return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
+}
+
+function formatDateLabel(value) {
+  if (!value) return 'Unbekannt'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Unbekannt'
+  return date.toLocaleString('de-DE', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
 function getAttachmentLabel(attachment) {
   if (!attachment?.filename) return 'Datei'
   const parts = attachment.filename.split('.')
@@ -1051,48 +1074,58 @@ async function openProjectFilesModal(project) {
   if (!project) return
   showLoader('Projektdateien werden geladen...')
   try {
-    const files = await apiJson(`/files/projects/${project.id}`)
+    const storage = await apiJson(`/files/projects/${project.id}/storage`)
     const wrapper = document.createElement('div')
     wrapper.className = 'modal-grid'
 
-    const folderInfo = document.createElement('div')
-    folderInfo.className = 'muted-copy'
-    folderInfo.textContent = project.watched_folder ? `Ordner: ${project.watched_folder}` : 'Kein gemeinsamer Ordner verknüpft.'
-    wrapper.appendChild(folderInfo)
+    const summary = document.createElement('div')
+    summary.className = 'storage-summary'
+    summary.innerHTML = `
+      <div class="storage-summary-line"><span>Speicher</span><strong>${escapeHtml(storage.provider || 'local')}</strong></div>
+      <div class="storage-summary-line"><span>Bucket</span><strong>${escapeHtml(storage.bucket || 'lokal')}</strong></div>
+      <div class="storage-summary-line"><span>Pfad</span><strong>${escapeHtml(storage.key_prefix || project.watched_folder || '—')}</strong></div>
+      <div class="storage-summary-line"><span>Ordner</span><strong>${escapeHtml(storage.watched_folder || '—')}</strong></div>
+    `
+    wrapper.appendChild(summary)
 
-    if (Array.isArray(files) && files.length) {
+    const files = Array.isArray(storage.files) ? storage.files : []
+    if (files.length) {
       files.forEach((file) => {
         const row = document.createElement('div')
         row.className = 'project-file-row'
+        const nameBlock = document.createElement('div')
+        nameBlock.className = 'item-main'
         const name = document.createElement('div')
         name.className = 'item-title'
-        name.textContent = file
-        const badge = document.createElement('div')
-        badge.className = 'item-chip'
-        badge.textContent = 'lokal'
+        name.textContent = file.filename
+        const meta = document.createElement('div')
+        meta.className = 'item-subtitle'
+        meta.textContent = `${formatFileSize(file.size)} · ${formatDateLabel(file.modified_at)} · ${file.storage || 'local'}`
+        nameBlock.append(name, meta)
         const download = document.createElement('button')
         download.type = 'button'
         download.className = 'item-action-button'
         download.textContent = '↓'
         download.title = 'Datei herunterladen'
         download.addEventListener('click', async () => {
-          await downloadProjectFile(project, file)
+          await downloadProjectFile(project, file.filename)
         })
-        row.append(name, badge, download)
+        row.append(nameBlock, download)
         wrapper.appendChild(row)
       })
     } else {
       const empty = document.createElement('div')
       empty.className = 'muted-copy'
-      empty.textContent = 'Im Projektordner sind noch keine Dateien sichtbar.'
+      empty.textContent = 'Im Projekt-Speicher sind noch keine Dateien sichtbar.'
       wrapper.appendChild(empty)
     }
 
     await openModal({
       title: `Dateien · ${project.name}`,
-      copy: 'Diese Liste zeigt die Dateien im verknüpften Projektordner.',
+      copy: 'Diese Liste zeigt den verknüpften Projekt-Speicher und die aktuell verfügbaren Dateien.',
       content: wrapper,
       submitLabel: 'Schließen',
+      width: 'min(900px, 100%)',
     })
   } catch (error) {
     showToast(error.message || 'Projektdateien konnten nicht geladen werden', 'error')
@@ -1179,34 +1212,7 @@ function buildUserForm(defaults = {}) {
 }
 
 async function openCreateUserModal() {
-  const form = buildUserForm()
-  const result = await openModal({
-    title: 'Benutzer erstellen',
-    copy: 'Ein Administrator kann hier direkt ein neues Konto anlegen.',
-    content: form,
-    submitLabel: 'Benutzer erstellen',
-  })
-
-  if (!result) return
-
-  showLoader('Benutzer wird erstellt...')
-  try {
-    await apiJson('/admin/users/', {
-      method: 'POST',
-      body: JSON.stringify({
-        full_name: result.full_name,
-        email: result.email,
-        password: result.password,
-        role: result.role,
-      }),
-    })
-    await loadUsers()
-    showToast('Benutzer erstellt')
-  } catch (error) {
-    showToast(error.message || 'Benutzer konnte nicht erstellt werden', 'error')
-  } finally {
-    hideLoader()
-  }
+  await openUserDashboardModal('users')
 }
 
 function createForm(fields) {
@@ -1244,7 +1250,7 @@ function createForm(fields) {
   return wrapper
 }
 
-function buildProfileForm(user) {
+function buildDashboardUserFields(user) {
   const wrapper = document.createElement('div')
   wrapper.className = 'modal-grid'
 
@@ -1272,37 +1278,69 @@ function buildProfileForm(user) {
   return wrapper
 }
 
-async function openProfileModal() {
-  if (!state.user) return
+function buildDashboardCreateUserFields() {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'modal-grid'
 
-  const form = buildProfileForm(state.user)
-  const result = await openModal({
-    title: 'Profil',
-    copy: 'Bearbeite deine persönlichen Daten. Das Passwort ist optional.',
-    content: form,
-    submitLabel: 'Speichern',
-    extraActions: [
-      {
-        label: 'Abmelden',
-        className: 'ghost-action',
-        onClick: ({ close }) => {
-          close()
-          logout()
-        },
-      },
-    ],
+  const fields = [
+    { id: 'dashboard-user-name', label: 'Vollständiger Name', type: 'text', placeholder: 'Jane Doe' },
+    { id: 'dashboard-user-email', label: 'E-Mail', type: 'email', placeholder: 'name@beispiel.de' },
+    { id: 'dashboard-user-password', label: 'Passwort', type: 'password', placeholder: 'Mindestens 8 Zeichen' },
+  ]
+
+  fields.forEach((field) => {
+    const row = document.createElement('label')
+    row.className = 'field'
+    const label = document.createElement('span')
+    label.textContent = field.label
+    const input = document.createElement('input')
+    input.id = field.id
+    input.type = field.type
+    input.placeholder = field.placeholder
+    input.className = 'text-input'
+    row.append(label, input)
+    wrapper.appendChild(row)
   })
 
-  if (!result) return
+  const roleField = document.createElement('label')
+  roleField.className = 'field'
+  const roleLabel = document.createElement('span')
+  roleLabel.textContent = 'Rolle'
+  const roleSelect = document.createElement('select')
+  roleSelect.id = 'dashboard-user-role'
+  roleSelect.className = 'text-input'
+  const roleLabels = {
+    USER: 'Benutzer',
+    MANAGER: 'Manager',
+    READ_ONLY: 'Nur lesen',
+    ADMIN: 'Administrator',
+  }
+  ;['USER', 'MANAGER', 'READ_ONLY', 'ADMIN'].forEach((role) => {
+    const option = document.createElement('option')
+    option.value = role
+    option.textContent = roleLabels[role]
+    if (role === 'USER') option.selected = true
+    roleSelect.appendChild(option)
+  })
+  roleField.append(roleLabel, roleSelect)
+  wrapper.appendChild(roleField)
+
+  return wrapper
+}
+
+async function saveDashboardProfile(container) {
+  const full_name = container.querySelector('#full_name')?.value.trim() || ''
+  const email = container.querySelector('#email')?.value.trim() || ''
+  const password = container.querySelector('#password')?.value.trim() || ''
 
   showLoader('Profil wird gespeichert...')
   try {
     await apiJson('/users/me', {
       method: 'PATCH',
       body: JSON.stringify({
-        full_name: result.full_name,
-        email: result.email,
-        password: result.password || null,
+        full_name,
+        email,
+        password: password || null,
       }),
     })
     state.user = await loadCurrentUser()
@@ -1313,6 +1351,330 @@ async function openProfileModal() {
   } finally {
     hideLoader()
   }
+}
+
+async function createDashboardUser(container) {
+  const full_name = container.querySelector('#dashboard-user-name')?.value.trim() || ''
+  const email = container.querySelector('#dashboard-user-email')?.value.trim() || ''
+  const password = container.querySelector('#dashboard-user-password')?.value.trim() || ''
+  const role = container.querySelector('#dashboard-user-role')?.value || 'USER'
+
+  if (!full_name || !email || !password) {
+    showToast('Bitte Name, E-Mail und Passwort ausfüllen.', 'error')
+    return
+  }
+
+  showLoader('Benutzer wird erstellt...')
+  try {
+    await apiJson('/admin/users/', {
+      method: 'POST',
+      body: JSON.stringify({
+        full_name,
+        email,
+        password,
+        role,
+      }),
+    })
+    await loadUsers()
+    showToast('Benutzer erstellt')
+  } catch (error) {
+    showToast(error.message || 'Benutzer konnte nicht erstellt werden', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
+function renderDashboardProjectFiles(container, storage) {
+  const fileList = container.querySelector('[data-project-files]')
+  if (!fileList) return
+  fileList.innerHTML = ''
+  const files = Array.isArray(storage?.files) ? storage.files : []
+  if (!files.length) {
+    const empty = document.createElement('div')
+    empty.className = 'muted-copy'
+    empty.textContent = 'Im Bucket sind noch keine Dateien sichtbar.'
+    fileList.appendChild(empty)
+    return
+  }
+
+  files.forEach((file) => {
+    const row = document.createElement('div')
+    row.className = 'project-file-row'
+    const left = document.createElement('div')
+    left.className = 'item-main'
+    const name = document.createElement('div')
+    name.className = 'item-title'
+    name.textContent = file.filename
+    const meta = document.createElement('div')
+    meta.className = 'item-subtitle'
+    meta.textContent = `${formatFileSize(file.size)} · ${formatDateLabel(file.modified_at)} · ${file.storage || 'local'}`
+    left.append(name, meta)
+    const download = document.createElement('button')
+    download.type = 'button'
+    download.className = 'item-action-button'
+    download.textContent = '↓'
+    download.title = 'Datei herunterladen'
+    download.addEventListener('click', async () => {
+      const project = state.projects.find((item) => item.id === storage.project_id)
+      if (project) {
+        await downloadProjectFile(project, file.filename)
+      }
+    })
+    row.append(left, download)
+    fileList.appendChild(row)
+  })
+}
+
+async function refreshDashboardStorage(container, projectId) {
+  const summary = container.querySelector('[data-storage-summary]')
+  if (!summary || !projectId) return
+  summary.textContent = 'Projektdateien werden geladen...'
+  try {
+    const storage = await apiJson(`/files/projects/${projectId}/storage`)
+    renderDashboardProjectFiles(container, storage)
+    summary.innerHTML = `
+      <div class="storage-summary-line"><span>Speicher</span><strong>${escapeHtml(storage.provider || 'local')}</strong></div>
+      <div class="storage-summary-line"><span>Bucket</span><strong>${escapeHtml(storage.bucket || 'lokal')}</strong></div>
+      <div class="storage-summary-line"><span>Pfad</span><strong>${escapeHtml(storage.key_prefix || '—')}</strong></div>
+      <div class="storage-summary-line"><span>Ordner</span><strong>${escapeHtml(storage.watched_folder || '—')}</strong></div>
+    `
+    container.querySelector('[data-upload-btn]').disabled = false
+    container.querySelector('[data-upload-input]').dataset.projectId = String(projectId)
+  } catch (error) {
+    summary.textContent = error.message || 'Projektdateien konnten nicht geladen werden'
+  }
+}
+
+async function uploadDashboardFiles(container, projectId, fileList) {
+  if (!projectId || !fileList?.length) return
+  showLoader('Dateien werden hochgeladen...')
+  try {
+    for (const file of fileList) {
+      const formData = new FormData()
+      formData.append('file', file, file.name)
+      // eslint-disable-next-line no-await-in-loop
+      await apiBlob(`/files/projects/${projectId}/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+    }
+    showToast('Dateien hochgeladen')
+    await refreshDashboardStorage(container, projectId)
+  } catch (error) {
+    showToast(error.message || 'Upload fehlgeschlagen', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
+async function openUserDashboardModal(initialTab = 'profile') {
+  if (!state.user) return
+
+  const wrapper = document.createElement('div')
+  wrapper.className = 'dashboard-modal'
+
+  const header = document.createElement('div')
+  header.className = 'dashboard-header'
+  const headerCopy = document.createElement('div')
+  headerCopy.className = 'dashboard-header-copy'
+  const headerTitle = document.createElement('div')
+  headerTitle.className = 'dashboard-title'
+  headerTitle.textContent = 'Benutzer-Dashboard'
+  const headerMeta = document.createElement('div')
+  headerMeta.className = 'dashboard-meta'
+  headerMeta.textContent = 'Profil, Projekt-Speicher und Benutzerverwaltung an einem Ort.'
+  headerCopy.append(headerTitle, headerMeta)
+
+  const avatar = document.createElement('div')
+  avatar.className = 'dashboard-avatar'
+  avatar.textContent = initialsFromUser(state.user)
+  header.append(headerCopy, avatar)
+
+  const tabs = document.createElement('div')
+  tabs.className = 'dashboard-tabs'
+  const tabButtons = new Map()
+  const panels = new Map()
+
+  function setActiveTab(tabName) {
+    tabButtons.forEach((button, key) => {
+      button.classList.toggle('active', key === tabName)
+    })
+    panels.forEach((panel, key) => {
+      panel.classList.toggle('hidden', key !== tabName)
+    })
+  }
+
+  function createTabButton(name, label) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'dashboard-tab'
+    button.textContent = label
+    button.addEventListener('click', () => {
+      setActiveTab(name)
+      if (name === 'storage' && projectSelect.value) {
+        refreshDashboardStorage(storagePanel, Number(projectSelect.value))
+      }
+    })
+    tabButtons.set(name, button)
+    tabs.appendChild(button)
+    return button
+  }
+
+  const activeTab = state.user.role === 'ADMIN' && initialTab === 'users'
+    ? 'users'
+    : initialTab === 'storage' || initialTab === 'profile'
+      ? initialTab
+      : 'profile'
+  createTabButton('profile', 'Profil')
+  createTabButton('storage', 'S3 / Dateien')
+  if (state.user.role === 'ADMIN') {
+    createTabButton('users', 'Benutzer')
+  }
+
+  const profilePanel = document.createElement('section')
+  profilePanel.className = 'dashboard-panel'
+  const profileForm = buildDashboardUserFields(state.user)
+  const profileActions = document.createElement('div')
+  profileActions.className = 'dashboard-panel-actions'
+  const saveProfileBtn = document.createElement('button')
+  saveProfileBtn.type = 'button'
+  saveProfileBtn.className = 'primary-button'
+  saveProfileBtn.textContent = 'Profil speichern'
+  saveProfileBtn.addEventListener('click', () => saveDashboardProfile(profilePanel))
+  profileActions.appendChild(saveProfileBtn)
+  profilePanel.append(profileForm, profileActions)
+  panels.set('profile', profilePanel)
+
+  const storagePanel = document.createElement('section')
+  storagePanel.className = 'dashboard-panel'
+  const projectRow = document.createElement('div')
+  projectRow.className = 'dashboard-project-row'
+  const projectLabel = document.createElement('label')
+  projectLabel.className = 'field'
+  const projectLabelText = document.createElement('span')
+  projectLabelText.textContent = 'Projekt'
+  const projectSelect = document.createElement('select')
+  projectSelect.className = 'text-input'
+  projectSelect.id = 'dashboard-project-select'
+  const projectOptions = state.projects.filter((project) => project && project.id)
+  projectOptions.forEach((project) => {
+    const option = document.createElement('option')
+    option.value = String(project.id)
+    option.textContent = project.name
+    projectSelect.appendChild(option)
+  })
+  if (initialTab === 'storage' && state.selectedProjectId) {
+    projectSelect.value = String(state.selectedProjectId)
+  } else if (state.selectedProjectId) {
+    projectSelect.value = String(state.selectedProjectId)
+  } else if (projectOptions[0]) {
+    projectSelect.value = String(projectOptions[0].id)
+  }
+  projectLabel.append(projectLabelText, projectSelect)
+
+  const uploadButton = document.createElement('button')
+  uploadButton.type = 'button'
+  uploadButton.className = 'ghost-action'
+  uploadButton.textContent = 'Dateien hochladen'
+  uploadButton.dataset.uploadBtn = 'true'
+
+  const uploadInput = document.createElement('input')
+  uploadInput.type = 'file'
+  uploadInput.multiple = true
+  uploadInput.className = 'hidden'
+  uploadInput.dataset.uploadInput = 'true'
+
+  if (!projectOptions.length) {
+    projectSelect.disabled = true
+    uploadButton.disabled = true
+  }
+
+  projectRow.append(projectLabel, uploadButton)
+  const storageSummary = document.createElement('div')
+  storageSummary.className = 'storage-summary'
+  storageSummary.dataset.storageSummary = 'true'
+  storageSummary.textContent = projectOptions.length ? 'Projektdateien werden geladen...' : 'Kein Projekt ausgewählt.'
+  const storageFiles = document.createElement('div')
+  storageFiles.className = 'modal-grid'
+  storageFiles.dataset.projectFiles = 'true'
+  storagePanel.append(projectRow, uploadInput, storageSummary, storageFiles)
+  panels.set('storage', storagePanel)
+
+  uploadButton.addEventListener('click', () => {
+    const projectId = Number(projectSelect.value)
+    if (!projectId) {
+      showToast('Wähle zuerst ein Projekt aus.', 'error')
+      return
+    }
+    uploadInput.click()
+  })
+
+  uploadInput.addEventListener('change', async () => {
+    const projectId = Number(projectSelect.value)
+    const files = uploadInput.files || []
+    if (!projectId || !files.length) return
+    await uploadDashboardFiles(storagePanel, projectId, files)
+    uploadInput.value = ''
+  })
+
+  projectSelect.addEventListener('change', () => {
+    const projectId = Number(projectSelect.value)
+    if (projectId) {
+      refreshDashboardStorage(storagePanel, projectId)
+    }
+  })
+
+  const usersPanel = document.createElement('section')
+  usersPanel.className = 'dashboard-panel'
+  if (state.user.role === 'ADMIN') {
+    const createUserForm = buildDashboardCreateUserFields()
+    const userActions = document.createElement('div')
+    userActions.className = 'dashboard-panel-actions'
+    const createUserBtn = document.createElement('button')
+    createUserBtn.type = 'button'
+    createUserBtn.className = 'primary-button'
+    createUserBtn.textContent = 'Benutzer erstellen'
+    createUserBtn.addEventListener('click', () => createDashboardUser(usersPanel))
+    userActions.appendChild(createUserBtn)
+    usersPanel.append(createUserForm, userActions)
+    panels.set('users', usersPanel)
+  }
+
+  const panelsWrap = document.createElement('div')
+  panelsWrap.className = 'dashboard-panels'
+  panelsWrap.append(profilePanel, storagePanel)
+  if (state.user.role === 'ADMIN') {
+    panelsWrap.append(usersPanel)
+  }
+
+  wrapper.append(header, tabs, panelsWrap)
+
+  setActiveTab(activeTab)
+  if (activeTab === 'storage' && projectSelect.value) {
+    refreshDashboardStorage(storagePanel, Number(projectSelect.value))
+  }
+
+  await openModal({
+    title: 'Konto',
+    copy: 'Verwalte dein Profil, deine Projektdateien und, falls du Admin bist, Benutzer direkt hier.',
+    content: wrapper,
+    submitLabel: 'Schließen',
+    extraActions: [
+      {
+        label: 'Abmelden',
+        className: 'ghost-action',
+        onClick: ({ close }) => {
+          close()
+          logout()
+        },
+      },
+    ],
+    width: 'min(980px, 100%)',
+  })
+}
+
+async function openProfileModal() {
+  await openUserDashboardModal('profile')
 }
 
 function buildEmbeddingForm(project = null) {
@@ -1428,13 +1790,14 @@ async function openEmbeddingModal() {
   }
 }
 
-function openModal({ title, copy, content, submitLabel, extraActions = [] }) {
+function openModal({ title, copy, content, submitLabel, extraActions = [], width = 'min(520px, 100%)' }) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div')
     overlay.className = 'modal-overlay'
 
     const card = document.createElement('div')
     card.className = 'modal-card'
+    card.style.width = width
 
     const heading = document.createElement('h3')
     heading.textContent = title

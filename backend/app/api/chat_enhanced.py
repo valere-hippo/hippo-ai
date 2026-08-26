@@ -9,7 +9,7 @@ from app.core.config import settings
 from sqlalchemy import select, insert
 import httpx
 from app.schemas.chat import ChatAttachment
-from app.services.chat_payloads import build_message_content, derive_conversation_title, storage_text
+from app.services.chat_payloads import build_attachment_response_guidance, build_message_content, derive_conversation_title, storage_text
 from app.services.generated_files import build_generated_file_bytes, extract_generated_files
 import base64
 
@@ -90,7 +90,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         "Hippo AI gehört der Firma HIPPOSIDEROS.\n"
         "Antworte in der Sprache des Benutzers.\n"
         "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort.\n"
-        "Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst."
+        "Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
+        "Wenn eine Datei oder ein Bild analysiert wird, antworte ausführlich, strukturiert und mit klaren Zwischenüberschriften oder Aufzählungspunkten."
     )
     hippo_messages.insert(0, {"role": "system", "content": global_sys})
 
@@ -109,7 +110,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "<<<END_FILE>>>\n"
             "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
             "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language.\n"
-            "If an image, screenshot, or document is attached, analyze the locally extracted text and metadata; do not claim that you cannot read attachments."
+            "If an image, screenshot, or document is attached, analyze the locally extracted text and metadata; do not claim that you cannot read attachments.\n"
+            f"{build_attachment_response_guidance()}"
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 
@@ -146,7 +148,12 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     async with httpx.AsyncClient(timeout=60.0) as client:
         headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
         model_name = settings.hippo_model
-        payload_h = {"model": model_name, "messages": hippo_messages, "temperature": 0.7, "max_tokens": 512}
+        payload_h = {
+            "model": model_name,
+            "messages": hippo_messages,
+            "temperature": 0.65 if payload.attachments else 0.7,
+            "max_tokens": 1100 if payload.attachments else 512,
+        }
         try:
             r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=payload_h, headers=headers)
             r.raise_for_status()

@@ -1,13 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy import insert
 
 from app.api.dependencies import DbSession, get_current_user
+from app.core.security import hash_password
 from app.models.user import User, UserRole
 from app.schemas.user import AdminUserCreate, UserResponse
-from app.core.security import hash_password
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from app.services.notifications import notify_user_created
 
 router = APIRouter(prefix="/admin/users", tags=["admin-users"]) 
 
@@ -28,6 +26,10 @@ async def create_user(payload: AdminUserCreate, db: DbSession, current_user=Depe
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    try:
+        await notify_user_created(user, current_user)
+    except Exception:
+        pass
     return user
 
 @router.get('/', response_model=list[UserResponse])

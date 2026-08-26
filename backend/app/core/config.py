@@ -27,6 +27,24 @@ class Settings(BaseSettings):
     # Deprecated: local attachment parsing now covers images/screenshots/documents.
     hippo_vision_model: str | None = None
 
+    # AWS / S3 project storage
+    aws_region: str | None = None
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    aws_session_token: str | None = None
+    hippo_s3_bucket_prefix: str = "hippo-ai-"
+    hippo_s3_key_prefix: str = "projects"
+
+    # SMTP notifications
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_sender: str | None = None
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_timeout_seconds: int = 10
+
     # Optional Whisper/transcription endpoint (if you run a Whisper service)
     whisper_api_url: str | None = None
     whisper_api_key: str | None = None

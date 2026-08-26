@@ -5,6 +5,16 @@ from typing import Any
 from app.services.attachment_processing import attachment_context_text
 
 
+def build_attachment_response_guidance() -> str:
+    return (
+        "Wenn die Antwort auf einem angehängten Dokument, Bild oder Screenshot basiert, antworte ausführlicher als üblich.\n"
+        "Erkläre zuerst kurz, worum es sich bei der Datei handelt, dann die wichtigsten Inhalte oder erkannten Elemente, "
+        "danach die relevantesten Details oder Auffälligkeiten und schließe mit einer kompakten Einordnung.\n"
+        "Bei deutschen Anfragen antworte auf Deutsch und verwende eine klare, strukturierte Sprache.\n"
+        "Gib keine internen Gedanken aus und erwähne keine <think>-Blöcke."
+    )
+
+
 def attachment_has_image(attachment: Any) -> bool:
     mime_type = (getattr(attachment, "mime_type", None) or "").lower()
     data_url = (getattr(attachment, "data_url", None) or "").lower()
