@@ -12,45 +12,47 @@
   <body>
     <div id="app-shell" class="app-shell">
       <aside class="sidebar">
-        <div class="brand-card">
-          <div class="brand-mark" aria-hidden="true">
-            <span></span>
+        <div class="sidebar-scroll">
+          <div class="brand-card">
+            <div class="brand-mark" aria-hidden="true">
+              <span></span>
+            </div>
+            <div>
+              <div class="brand-title">HIPPO-AI</div>
+              <div class="brand-subtitle">Projekte, Chats, Sprache</div>
+            </div>
           </div>
-          <div>
-            <div class="brand-title">HIPPO-AI</div>
-            <div class="brand-subtitle">Projekte, Chats, Sprache</div>
-          </div>
-        </div>
 
-        <button id="sidebar-new-chat" class="primary-action">
-          <span class="primary-action-icon">+</span>
-          <span>Neuer Chat</span>
-        </button>
+          <button id="sidebar-new-chat" class="primary-action">
+            <span class="primary-action-icon">+</span>
+            <span>Neuer Chat</span>
+          </button>
 
-        <div class="sidebar-section">
-          <div class="section-heading">
-            <span>Projekte</span>
-            <span class="section-count" id="project-count">0</span>
+          <div class="sidebar-section">
+            <div class="section-heading">
+              <span>Projekte</span>
+              <span class="section-count" id="project-count">0</span>
+            </div>
+            <div id="project-list" class="stack-list"></div>
+            <button id="project-embed-btn" class="ghost-action">Infos ins Embedding speichern</button>
           </div>
-          <div id="project-list" class="stack-list"></div>
-          <button id="project-embed-btn" class="ghost-action">Infos ins Embedding speichern</button>
-        </div>
 
-        <div class="sidebar-section">
-          <div class="section-heading">
-            <span>Chats</span>
-            <span class="section-count" id="chat-count">0</span>
+          <div class="sidebar-section">
+            <div class="section-heading">
+              <span>Chats</span>
+              <span class="section-count" id="chat-count">0</span>
+            </div>
+            <div id="conversation-list" class="stack-list"></div>
           </div>
-          <div id="conversation-list" class="stack-list"></div>
-        </div>
 
-        <div id="admin-section" class="sidebar-section hidden">
-          <div class="section-heading">
-            <span>Admin</span>
-            <span class="section-badge">Team</span>
+          <div id="admin-section" class="sidebar-section hidden">
+            <div class="section-heading">
+              <span>Admin</span>
+              <span class="section-badge">Team</span>
+            </div>
+            <button id="admin-create-user" class="ghost-action">Benutzer erstellen</button>
+            <div id="admin-user-list" class="stack-list compact"></div>
           </div>
-          <button id="admin-create-user" class="ghost-action">Benutzer erstellen</button>
-          <div id="admin-user-list" class="stack-list compact"></div>
         </div>
 
         <div class="sidebar-footer">

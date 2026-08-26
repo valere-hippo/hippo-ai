@@ -238,10 +238,14 @@ function renderContext() {
   if (state.currentConversationId) {
     const conversation = state.conversations.find((item) => item.id === state.currentConversationId)
     els.pageTitle.textContent = getConversationTitle(conversation)
-    els.selectedInfo.textContent = project ? `Projekt: ${project.name}` : 'Globale Unterhaltung'
+    els.selectedInfo.textContent = project
+      ? `Projekt: ${project.name}${project.watched_folder ? ` · Ordner: ${project.watched_folder}` : ''}`
+      : 'Globale Unterhaltung'
   } else {
     els.pageTitle.textContent = project ? `Neuer Chat in ${project.name}` : 'Neuer Chat'
-    els.selectedInfo.textContent = project ? `Projekt: ${project.name}` : 'Kein Projekt gewählt'
+    els.selectedInfo.textContent = project
+      ? `Projekt: ${project.name}${project.watched_folder ? ` · Ordner: ${project.watched_folder}` : ''}`
+      : 'Kein Projekt gewählt'
   }
 }
 
@@ -251,10 +255,17 @@ function renderProjects() {
 
   state.projects.forEach((project) => {
     const active = state.selectedProjectId === project.id
-    const row = document.createElement('button')
-    row.type = 'button'
+    const row = document.createElement('div')
     row.className = `project-item${active ? ' active' : ''}`
+    row.tabIndex = 0
+    row.setAttribute('role', 'button')
     row.addEventListener('click', () => selectProject(project.id))
+    row.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        selectProject(project.id)
+      }
+    })
 
     const icon = document.createElement('div')
     icon.className = 'item-icon'
@@ -275,7 +286,32 @@ function renderProjects() {
     const count = state.conversations.filter((conversation) => conversation.project_id === project.id).length
     chip.textContent = `${count} chats`
 
-    row.append(icon, main, chip)
+    const actions = document.createElement('div')
+    actions.className = 'item-actions'
+
+    const folderAction = document.createElement('button')
+    folderAction.type = 'button'
+    folderAction.className = 'item-action-button'
+    folderAction.title = 'Projekt bearbeiten'
+    folderAction.textContent = '✎'
+    folderAction.addEventListener('click', async (event) => {
+      event.stopPropagation()
+      await openEditProjectModal(project)
+    })
+
+    const deleteAction = document.createElement('button')
+    deleteAction.type = 'button'
+    deleteAction.className = 'item-action-button danger'
+    deleteAction.title = 'Projekt löschen'
+    deleteAction.textContent = '🗑'
+    deleteAction.addEventListener('click', async (event) => {
+      event.stopPropagation()
+      await deleteProject(project)
+    })
+
+    actions.append(folderAction, deleteAction)
+
+    row.append(icon, main, chip, actions)
     els.projectList.appendChild(row)
   })
 
@@ -310,10 +346,17 @@ function renderConversations() {
   } else {
     conversations.forEach((conversation) => {
       const active = state.currentConversationId === conversation.id
-      const row = document.createElement('button')
-      row.type = 'button'
+      const row = document.createElement('div')
       row.className = `conversation-item${active ? ' active' : ''}`
+      row.tabIndex = 0
+      row.setAttribute('role', 'button')
       row.addEventListener('click', () => openConversation(conversation))
+      row.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          openConversation(conversation)
+        }
+      })
 
       const icon = document.createElement('div')
       icon.className = 'item-icon'
@@ -338,7 +381,22 @@ function renderConversations() {
         chip.textContent = 'Global'
       }
 
-      row.append(icon, main, chip)
+      const actions = document.createElement('div')
+      actions.className = 'item-actions'
+
+      const deleteAction = document.createElement('button')
+      deleteAction.type = 'button'
+      deleteAction.className = 'item-action-button danger'
+      deleteAction.title = 'Chat löschen'
+      deleteAction.textContent = '🗑'
+      deleteAction.addEventListener('click', async (event) => {
+        event.stopPropagation()
+        await deleteConversation(conversation)
+      })
+
+      actions.append(deleteAction)
+
+      row.append(icon, main, chip, actions)
       els.conversationList.appendChild(row)
     })
   }
@@ -804,7 +862,7 @@ async function persistAttachment(projectId, attachment) {
   }
 }
 
-function buildProjectForm() {
+function buildProjectForm(defaults = {}) {
   const wrapper = document.createElement('div')
   wrapper.className = 'modal-grid'
 
@@ -816,6 +874,7 @@ function buildProjectForm() {
   nameInput.type = 'text'
   nameInput.className = 'text-input'
   nameInput.placeholder = 'Projekt Apollo'
+  nameInput.value = defaults.name || ''
   nameField.appendChild(nameInput)
 
   const folderField = document.createElement('label')
@@ -831,6 +890,7 @@ function buildProjectForm() {
   folderInput.placeholder = 'Ordner auswählen'
   folderInput.readOnly = true
   folderInput.style.flex = '1'
+  folderInput.value = defaults.folder || ''
   const folderButton = document.createElement('button')
   folderButton.type = 'button'
   folderButton.className = 'ghost-action'
@@ -879,6 +939,191 @@ async function openCreateProjectModal() {
     showToast(error.message || 'Projekt konnte nicht erstellt werden', 'error')
   } finally {
     hideLoader()
+  }
+}
+
+async function openEditProjectModal(project) {
+  if (!project) return
+
+  const form = buildProjectForm({
+    name: project.name,
+    folder: project.watched_folder || '',
+  })
+
+  const result = await openModal({
+    title: 'Projekt bearbeiten',
+    copy: 'Hier siehst und änderst du den gemeinsamen Ordner des Projekts.',
+    content: form,
+    submitLabel: 'Speichern',
+    extraActions: [
+      {
+        label: 'Dateien',
+        className: 'ghost-action',
+        onClick: async ({ close }) => {
+          close()
+          await openProjectFilesModal(project)
+        },
+      },
+      {
+        label: 'Löschen',
+        className: 'ghost-action',
+        onClick: async ({ close }) => {
+          close()
+          await deleteProject(project)
+        },
+      },
+    ],
+  })
+
+  if (!result) return
+
+  showLoader('Projekt wird gespeichert...')
+  try {
+    await apiJson(`/projects/${project.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name: result.name,
+        description: project.description || '',
+        watched_folder: result.folder || null,
+      }),
+    })
+    await loadProjects()
+    await loadConversations()
+    showToast('Projekt gespeichert')
+  } catch (error) {
+    showToast(error.message || 'Projekt konnte nicht gespeichert werden', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
+async function deleteProject(project) {
+  if (!project) return
+  const ok = window.confirm(`Projekt "${project.name}" wirklich löschen?`)
+  if (!ok) return
+
+  showLoader('Projekt wird gelöscht...')
+  try {
+    await apiJson(`/projects/${project.id}`, { method: 'DELETE' })
+    if (state.selectedProjectId === project.id) {
+      state.selectedProjectId = null
+      state.currentConversationId = null
+    }
+    state.projectConversationMemory.delete(project.id)
+    await loadProjects()
+    await loadConversations()
+    renderContext()
+    clearChatLog()
+    showToast('Projekt gelöscht')
+  } catch (error) {
+    showToast(error.message || 'Projekt konnte nicht gelöscht werden', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
+async function deleteConversation(conversation) {
+  if (!conversation) return
+  const ok = window.confirm(`Chat "${getConversationTitle(conversation)}" wirklich löschen?`)
+  if (!ok) return
+
+  showLoader('Chat wird gelöscht...')
+  try {
+    await apiJson(`/chat/conversations/${conversation.id}`, { method: 'DELETE' })
+    if (state.currentConversationId === conversation.id) {
+      state.currentConversationId = null
+      if (state.selectedProjectId) {
+        state.projectConversationMemory.delete(state.selectedProjectId)
+      }
+    }
+    await loadConversations()
+    renderContext()
+    clearChatLog()
+    showToast('Chat gelöscht')
+  } catch (error) {
+    showToast(error.message || 'Chat konnte nicht gelöscht werden', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
+async function openProjectFilesModal(project) {
+  if (!project) return
+  showLoader('Projektdateien werden geladen...')
+  try {
+    const files = await apiJson(`/files/projects/${project.id}`)
+    const wrapper = document.createElement('div')
+    wrapper.className = 'modal-grid'
+
+    const folderInfo = document.createElement('div')
+    folderInfo.className = 'muted-copy'
+    folderInfo.textContent = project.watched_folder ? `Ordner: ${project.watched_folder}` : 'Kein gemeinsamer Ordner verknüpft.'
+    wrapper.appendChild(folderInfo)
+
+    if (Array.isArray(files) && files.length) {
+      files.forEach((file) => {
+        const row = document.createElement('div')
+        row.className = 'project-file-row'
+        const name = document.createElement('div')
+        name.className = 'item-title'
+        name.textContent = file
+        const badge = document.createElement('div')
+        badge.className = 'item-chip'
+        badge.textContent = 'lokal'
+        const download = document.createElement('button')
+        download.type = 'button'
+        download.className = 'item-action-button'
+        download.textContent = '↓'
+        download.title = 'Datei herunterladen'
+        download.addEventListener('click', async () => {
+          await downloadProjectFile(project, file)
+        })
+        row.append(name, badge, download)
+        wrapper.appendChild(row)
+      })
+    } else {
+      const empty = document.createElement('div')
+      empty.className = 'muted-copy'
+      empty.textContent = 'Im Projektordner sind noch keine Dateien sichtbar.'
+      wrapper.appendChild(empty)
+    }
+
+    await openModal({
+      title: `Dateien · ${project.name}`,
+      copy: 'Diese Liste zeigt die Dateien im verknüpften Projektordner.',
+      content: wrapper,
+      submitLabel: 'Schließen',
+    })
+  } catch (error) {
+    showToast(error.message || 'Projektdateien konnten nicht geladen werden', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
+async function downloadProjectFile(project, filename) {
+  try {
+    const response = await apiBlob(`/files/projects/${project.id}/download/${encodeURIComponent(filename)}`)
+    const blob = await response.blob()
+    const buffer = await blob.arrayBuffer()
+    const destinationFolder = project.watched_folder || await window.electron.selectFolder()
+    if (!destinationFolder) {
+      showToast('Kein Zielordner gewählt.', 'error')
+      return
+    }
+    const base64 = arrayBufferToBase64(buffer)
+    const result = await window.electron.saveFile({
+      folder: destinationFolder,
+      filename,
+      data: { base64 },
+    })
+    if (result?.ok) {
+      showToast(`Datei gespeichert: ${result.path}`)
+    } else {
+      showToast(result?.error || 'Datei konnte nicht gespeichert werden', 'error')
+    }
+  } catch (error) {
+    showToast(error.message || 'Datei konnte nicht heruntergeladen werden', 'error')
   }
 }
 
@@ -1488,15 +1733,6 @@ async function startRecording() {
   }
 
   try {
-    if (navigator.mediaDevices.enumerateDevices) {
-      const devices = await navigator.mediaDevices.enumerateDevices()
-      const hasAudioInput = devices.some((device) => device.kind === 'audioinput')
-      if (!hasAudioInput) {
-        showToast('Kein Mikrofon gefunden. Bitte ein Mikrofon anschließen oder ein anderes Eingabegerät wählen.', 'error')
-        return
-      }
-    }
-
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     const audioContext = new (window.AudioContext || window.webkitAudioContext)()
     const analyser = audioContext.createAnalyser()
@@ -1582,6 +1818,10 @@ async function startRecording() {
     const message = String(error?.message || error || '')
     if (/requested device not found|notfounderror/i.test(message)) {
       showToast('Kein Mikrofon gefunden. Bitte ein Mikrofon anschließen.', 'error')
+    } else if (/notallowederror|permission denied|denied/i.test(message)) {
+      showToast('Mikrofonzugriff wurde verweigert.', 'error')
+    } else if (/no audio input|no microphone/i.test(message)) {
+      showToast('Kein Mikrofon gefunden. Bitte ein anderes Eingabegerät wählen.', 'error')
     } else if (/not allowed|permission/i.test(message)) {
       showToast('Mikrofonzugriff wurde verweigert.', 'error')
     } else {

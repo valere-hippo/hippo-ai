@@ -34,6 +34,30 @@ body {
   font-family: "Space Grotesk", system-ui, sans-serif;
 }
 
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 215, 191, 0.55) rgba(255, 255, 255, 0.05);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(99, 215, 191, 0.72), rgba(154, 178, 255, 0.62));
+  border-radius: 999px;
+  border: 2px solid rgba(10, 16, 22, 0.72);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(99, 215, 191, 0.92), rgba(154, 178, 255, 0.84));
+}
+
 body {
   min-height: 100vh;
   overflow: hidden;
@@ -60,13 +84,23 @@ textarea {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px 14px 14px;
+  gap: 12px;
+  padding: 18px 14px 10px;
   background: linear-gradient(180deg, rgba(11, 18, 26, 0.96), rgba(11, 18, 26, 0.9));
   border-right: 1px solid var(--line);
   backdrop-filter: blur(16px);
-  overflow: auto;
+  overflow: hidden;
   min-height: 0;
+}
+
+.sidebar-scroll {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .brand-card,
@@ -311,8 +345,9 @@ textarea {
 }
 
 .sidebar-footer {
-  margin-top: auto;
-  padding-top: 4px;
+  margin-top: 0;
+  padding-top: 0;
+  padding-bottom: 2px;
 }
 
 .account-card {
@@ -426,7 +461,7 @@ textarea {
   grid-row: 1;
   min-height: 0;
   overflow: auto;
-  padding: 26px 22px 18px;
+  padding: 26px 22px 10px;
   position: relative;
   z-index: 1;
 }
@@ -587,7 +622,7 @@ textarea {
   left: auto;
   right: auto;
   bottom: auto;
-  padding: 0 16px 12px;
+  padding: 0 16px 6px;
   background: transparent;
   pointer-events: none;
   z-index: 2;
@@ -744,6 +779,46 @@ textarea {
   gap: 16px;
   margin-top: 10px;
   padding: 0 4px;
+}
+
+.project-item .item-actions,
+.conversation-item .item-actions {
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.project-item:hover .item-actions,
+.conversation-item:hover .item-actions,
+.project-item:focus-within .item-actions,
+.conversation-item:focus-within .item-actions,
+.project-item.active .item-actions,
+.conversation-item.active .item-actions {
+  opacity: 1;
+}
+
+.item-action-button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.item-action-button.danger {
+  color: var(--danger);
+}
+
+.project-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .voice-canvas {

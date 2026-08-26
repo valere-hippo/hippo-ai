@@ -1,5 +1,6 @@
 import os
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select, text
 
 from app.api.dependencies import get_current_user, DbSession
@@ -80,7 +81,9 @@ async def list_project_files(project_id: int, db: DbSession, current_user=Depend
     project = result.scalar_one_or_none()
     if project is None:
         raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
-    if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
+    from app.services.permissions import has_project_permission
+    allowed = await has_project_permission(db, current_user, project, PermissionLevel.READ)
+    if not allowed:
         raise HTTPException(status_code=403, detail="Zugriff verweigert.")
 
     dir_path = os.path.join(UPLOAD_ROOT, str(project_id))
@@ -88,3 +91,21 @@ async def list_project_files(project_id: int, db: DbSession, current_user=Depend
         return []
     files = [f for f in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path, f))]
     return files
+
+
+@router.get("/projects/{project_id}/download/{filename}")
+async def download_project_file(project_id: int, filename: str, db: DbSession, current_user=Depends(get_current_user)):
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
+    from app.services.permissions import has_project_permission
+    allowed = await has_project_permission(db, current_user, project, PermissionLevel.READ)
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert.")
+
+    safe_name = os.path.basename(filename)
+    file_path = os.path.join(UPLOAD_ROOT, str(project_id), safe_name)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
+    return FileResponse(file_path, filename=safe_name)
