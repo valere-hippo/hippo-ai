@@ -10,6 +10,7 @@ from app.core.config import settings
 from sqlalchemy import select, insert
 from app.schemas.chat import ChatAttachment
 from app.services.chat_payloads import build_message_content, derive_conversation_title, storage_text
+from app.services.generated_files import extract_generated_files, save_generated_file
 
 router = APIRouter(prefix="/chat", tags=["chat"]) 
 
@@ -80,7 +81,8 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     # Global system instruction (Hippo assistant) — strict guidance
     global_sys = (
         "Du bist Hippo, ein freundlicher und professioneller KI-Assistent.\n\n"
-        "Dieses System wurde erstellt und entwickelt von Valère Youbi, CEO der Firma MERVAL DIGITALE, für das Unternehmen Hipposideros mit Sitz in Deutschland.\n\n"
+        "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, für HIPPOSIDEROS entwickelt.\n"
+        "Hippo AI gehört zu HIPPOSIDEROS.\n\n"
         "WICHTIG:\n"
         "- Antworte direkt auf die Frage des Benutzers.\n"
         "- Gib niemals deine internen Gedanken, Überlegungen oder Analysen aus.\n"
@@ -96,10 +98,18 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     # If conversation is tied to a project, inform the assistant it may generate files for that project
     if conv_project is not None:
         project_sys = (
-            "You are assisting a user within a project. The user has provided a local shared folder path for this project. "
-            "When the user requests generation of a file, produce only the file content wrapped in the following exact markers so the client can save it:\n"
-            "<<<FILE:filename.rtf>>>\n<file content here>\n<<<END_FILE>>>\n"
-            "Do NOT include additional commentary outside the markers. If a filename is not suggested by the user, choose a sensible filename."
+            "You are assisting a user within a project. The project has a shared folder path where generated files can be saved.\n"
+            "When the user asks for a document, generate one of these file types:\n"
+            "- Word documents: use .docx\n"
+            "- PDF documents: use .pdf\n"
+            "- Images: use .svg\n"
+            "Return only the file payload wrapped in exact markers and no extra commentary.\n"
+            "Use this format:\n"
+            "<<<FILE:filename.ext>>>\n"
+            "<file content here>\n"
+            "<<<END_FILE>>>\n"
+            "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup.\n"
+            "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language."
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 
@@ -156,6 +166,24 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         reply_text = re.sub(r"<think>[\s\S]*?<\/think>", "", reply_text, flags=re.IGNORECASE)
     except Exception:
         pass
+
+    generated_files, cleaned_reply = extract_generated_files(reply_text)
+    project_folder = conv_project.watched_folder if conv_project else None
+    saved_paths: list[str] = []
+    if generated_files and project_folder:
+        for file in generated_files:
+            saved_paths.append(save_generated_file(project_folder, file.filename, file.content))
+        if saved_paths:
+            save_note = "Datei gespeichert: " + ", ".join(saved_paths)
+            reply_text = f"{cleaned_reply}\n\n{save_note}".strip() if cleaned_reply else save_note
+    elif generated_files:
+        reply_text = (
+            f"{cleaned_reply}\n\nIch habe den Entwurf erstellt, aber diesem Chat ist kein gemeinsamer Ordner zugeordnet."
+            if cleaned_reply
+            else "Ich habe den Entwurf erstellt, aber diesem Chat ist kein gemeinsamer Ordner zugeordnet."
+        )
+    elif cleaned_reply:
+        reply_text = cleaned_reply
 
     # store assistant message
     await db.execute(

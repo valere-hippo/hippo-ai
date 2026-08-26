@@ -10,6 +10,7 @@ from sqlalchemy import select, insert
 import httpx
 from app.schemas.chat import ChatAttachment
 from app.services.chat_payloads import build_message_content, derive_conversation_title, storage_text
+from app.services.generated_files import extract_generated_files, save_generated_file
 
 router = APIRouter(prefix="/chat-enhanced", tags=["chat-enhanced"]) 
 
@@ -83,6 +84,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     # global system prompt
     global_sys = (
         "Du bist Hippo, ein freundlicher und professioneller KI-Assistent.\n"
+        "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, für HIPPOSIDEROS entwickelt.\n"
+        "Hippo AI gehört zu HIPPOSIDEROS.\n"
         "Antworte in der Sprache des Benutzers.\n"
         "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort."
     )
@@ -154,6 +157,24 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         reply_text = re.sub(r"<think>[\s\S]*?<\/think>", "", reply_text, flags=re.IGNORECASE)
     except Exception:
         pass
+
+    generated_files, cleaned_reply = extract_generated_files(reply_text)
+    project_folder = conv_project.watched_folder if conv_project else None
+    saved_paths: list[str] = []
+    if generated_files and project_folder:
+        for file in generated_files:
+            saved_paths.append(save_generated_file(project_folder, file.filename, file.content))
+        if saved_paths:
+            save_note = "Datei gespeichert: " + ", ".join(saved_paths)
+            reply_text = f"{cleaned_reply}\n\n{save_note}".strip() if cleaned_reply else save_note
+    elif generated_files:
+        reply_text = (
+            f"{cleaned_reply}\n\nIch habe den Entwurf erstellt, aber diesem Chat ist kein gemeinsamer Ordner zugeordnet."
+            if cleaned_reply
+            else "Ich habe den Entwurf erstellt, aber diesem Chat ist kein gemeinsamer Ordner zugeordnet."
+        )
+    elif cleaned_reply:
+        reply_text = cleaned_reply
 
     await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user.id, role='assistant', content=reply_text))
     await db.commit()

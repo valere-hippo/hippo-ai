@@ -937,24 +937,50 @@ function buildEmbeddingForm(project = null) {
   const sourceField = document.createElement('label')
   sourceField.className = 'field'
   const sourceLabel = document.createElement('span')
-  sourceLabel.textContent = 'Quelle'
-  const sourceInput = document.createElement('input')
+  sourceLabel.textContent = 'Woher stammen die Infos?'
+  const sourceInput = document.createElement('select')
   sourceInput.id = 'source'
-  sourceInput.type = 'text'
   sourceInput.className = 'text-input'
-  sourceInput.placeholder = 'desktop-test'
-  sourceField.append(sourceLabel, sourceInput)
+  ;[
+    ['project-note', 'Eigene Notiz oder Wissen'],
+    ['project-file', 'Aus einer Datei im Projektordner'],
+    ['meeting', 'Besprechung / Protokoll'],
+    ['external', 'Externe Quelle'],
+    ['manual', 'Manuell eingegeben'],
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = label
+    sourceInput.appendChild(option)
+  })
+  const sourceHelp = document.createElement('div')
+  sourceHelp.className = 'muted-copy'
+  sourceHelp.textContent = 'Das hilft Hippo zu verstehen, ob der Inhalt aus einem Dokument, einer Notiz oder einer externen Quelle stammt.'
+  sourceField.append(sourceLabel, sourceInput, sourceHelp)
 
   const typeField = document.createElement('label')
   typeField.className = 'field'
   const typeLabel = document.createElement('span')
-  typeLabel.textContent = 'Typ'
-  const typeInput = document.createElement('input')
+  typeLabel.textContent = 'Was ist das für Inhalt?'
+  const typeInput = document.createElement('select')
   typeInput.id = 'type'
-  typeInput.type = 'text'
   typeInput.className = 'text-input'
-  typeInput.placeholder = 'Dokument'
-  typeField.append(typeLabel, typeInput)
+  ;[
+    ['document', 'Dokument / Bericht'],
+    ['image', 'Bild / Grafik'],
+    ['note', 'Notiz / Freitext'],
+    ['table', 'Tabelle / Liste'],
+    ['instruction', 'Anleitung / Vorgehen'],
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = label
+    typeInput.appendChild(option)
+  })
+  const typeHelp = document.createElement('div')
+  typeHelp.className = 'muted-copy'
+  typeHelp.textContent = 'Wenn du unsicher bist, nimm einfach "Dokument / Bericht" oder "Notiz / Freitext".'
+  typeField.append(typeLabel, typeInput, typeHelp)
 
   const hint = document.createElement('div')
   hint.className = 'muted-copy'
