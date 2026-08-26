@@ -197,13 +197,12 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow: auto;
   padding-right: 2px;
   min-height: 0;
 }
 
 .stack-list.compact {
-  max-height: 184px;
+  max-height: none;
 }
 
 .project-item,
@@ -368,6 +367,7 @@ textarea {
   color: var(--text);
   background: rgba(255, 255, 255, 0.04);
   border-color: var(--line);
+  font-size: 18px;
 }
 
 .workspace {
@@ -426,7 +426,7 @@ textarea {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 26px 22px 170px;
+  padding: 26px 22px 240px;
 }
 
 .message {
@@ -544,8 +544,8 @@ textarea {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 12px;
-  padding: 0 22px;
+  bottom: 10px;
+  padding: 0 16px;
   background: transparent;
   pointer-events: none;
 }
@@ -730,6 +730,16 @@ textarea {
   outline: none;
 }
 
+select.text-input {
+  background-color: #16212e;
+  color: var(--text);
+}
+
+select.text-input option {
+  background: #16212e;
+  color: var(--text);
+}
+
 .text-input:focus,
 .composer-input:focus {
   border-color: rgba(99, 215, 191, 0.35);
@@ -793,6 +803,11 @@ textarea {
   width: auto;
   margin-top: 0;
   min-width: 122px;
+}
+
+.modal-card select.text-input,
+.modal-card option {
+  color: var(--text);
 }
 
 .loader-overlay {

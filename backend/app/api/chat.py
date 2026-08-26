@@ -147,7 +147,17 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
 @router.get('/conversations')
 async def list_conversations(db: DbSession, current_user: User = Depends(get_current_user)):
     # list conversations the user participated in or project-less owned
-    q = select(Conversation).join(ChatMessage, ChatMessage.conversation_id == Conversation.id).where(ChatMessage.user_id == current_user.id)
+    q = (
+        select(Conversation)
+        .where(
+            Conversation.id.in_(
+                select(ChatMessage.conversation_id)
+                .where(ChatMessage.user_id == current_user.id)
+                .distinct()
+            )
+        )
+        .order_by(Conversation.created_at.desc())
+    )
     res = await db.execute(q)
     convs = res.scalars().all()
     return convs
