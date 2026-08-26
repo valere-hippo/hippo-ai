@@ -453,6 +453,37 @@ async function apiBlob(path, options = {}) {
   return response
 }
 
+async function transcribeAudioBlob(blob) {
+  if (!blob || blob.size === 0 || !state.token) return ''
+
+  const formData = new FormData()
+  const ext = blob.type?.includes('ogg')
+    ? 'ogg'
+    : blob.type?.includes('mp4')
+      ? 'm4a'
+      : 'webm'
+  formData.append('file', blob, `voice.${ext}`)
+
+  const response = await fetch(`${API}/audio/transcribe`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData,
+  })
+
+  let data = null
+  try {
+    data = await response.json()
+  } catch (error) {
+    data = null
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.detail || data?.error || `HTTP ${response.status}`)
+  }
+
+  return String(data?.text || '').trim()
+}
+
 function showToast(message, type = 'success') {
   const root = document.getElementById('toast-root')
   if (!root) return
@@ -2617,7 +2648,26 @@ async function startRecording() {
         resizeComposer()
         els.chatInput.focus()
         showToast('Spracherkennung wurde in das Eingabefeld übernommen')
-      } else if (!transcriptState.networkError) {
+        return
+      }
+
+      if (chunks.length) {
+        try {
+          const audioBlob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' })
+          const serverTranscript = await transcribeAudioBlob(audioBlob)
+          if (serverTranscript) {
+            els.chatInput.value = serverTranscript
+            resizeComposer()
+            els.chatInput.focus()
+            showToast('Audio wurde transkribiert und ins Eingabefeld übernommen')
+            return
+          }
+        } catch (error) {
+          console.warn('Server transcription failed', error)
+        }
+      }
+
+      if (!transcriptState.networkError) {
         showToast('Während der Aufnahme wurde kein Text erkannt.', 'error')
       }
     }
