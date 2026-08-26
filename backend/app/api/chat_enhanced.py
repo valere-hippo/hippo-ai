@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+import re
 from app.api.dependencies import get_current_user, DbSession
 from app.models.user import User
 from app.models.chat import Conversation, ChatMessage
@@ -9,8 +10,14 @@ from app.core.config import settings
 from sqlalchemy import select, insert
 import httpx
 from app.schemas.chat import ChatAttachment
-from app.services.chat_payloads import build_attachment_response_guidance, build_message_content, derive_conversation_title, storage_text
-from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
+from app.services.chat_payloads import (
+    build_attachment_response_guidance,
+    build_message_content,
+    derive_conversation_title,
+    looks_like_image_generation_request,
+    storage_text,
+)
+from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.project_storage import build_project_files_context
 import base64
 
@@ -93,6 +100,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort.\n"
         "Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
         "Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert wird, antworte ausführlich, strukturiert und mit klaren Zwischenüberschriften oder Aufzählungspunkten.\n"
+        "Wenn der Benutzer ausdrücklich ein Bild, ein PNG oder eine Grafik generieren möchte, liefere einen echten Dateiblock mit einem Bilddateinamen und keine Anleitung zur manuellen Erstellung.\n"
         "Bei Ordneranalysen liefere zuerst den Überblick, dann die sichtbaren Dateien, dann eine Detailanalyse pro Datei und am Ende ein kurzes Fazit.\n"
         "Schreibe Berichte mit sauberen Überschriften, Absätzen und Listen. Vermeide dekorative Markdown-Formate wie ###** oder **###.\n"
         "Nutze Tabellen nur, wenn sie wirklich klarer sind als Listen.\n"
@@ -113,6 +121,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "<file content here>\n"
             "<<<END_FILE>>>\n"
             "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
+            "If the user explicitly requests an image or PNG, return a real file block with an image filename instead of prose instructions.\n"
             "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language.\n"
             "For shared-folder questions, respond with a detailed structure: overview, visible files, file-by-file details, and conclusion.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
@@ -190,13 +199,23 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             raise HTTPException(status_code=502, detail=f'Fehler der Hippo-API: {e}')
 
     # sanitize & store
-    import re
     try:
         reply_text = re.sub(r"<think>[\s\S]*?<\/think>", "", reply_text, flags=re.IGNORECASE)
     except Exception:
         pass
 
     generated_files, cleaned_reply = extract_generated_files(reply_text)
+    used_image_fallback = False
+    if not generated_files and looks_like_image_generation_request(payload.message, payload.attachments):
+        fallback_title = derive_conversation_title(payload.message, payload.attachments)
+        fallback_name = re.sub(r"[^A-Za-z0-9]+", "_", fallback_title).strip("_").lower() or "hippo_image"
+        generated_files = [
+            GeneratedFile(
+                filename=f"{fallback_name}.png",
+                content=cleaned_reply or reply_text or payload.message,
+            )
+        ]
+        used_image_fallback = True
     serialized_files: list[dict[str, str]] = []
     for file in generated_files:
         try:
@@ -211,7 +230,9 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 "data_base64": base64.b64encode(data).decode("ascii"),
             }
         )
-    if cleaned_reply:
+    if used_image_fallback:
+        reply_text = "Datei wurde erstellt."
+    elif cleaned_reply:
         reply_text = cleaned_reply
     elif generated_files:
         reply_text = "Datei wurde erstellt."

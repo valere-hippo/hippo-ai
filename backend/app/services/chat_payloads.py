@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.attachment_processing import attachment_context_text
+import re
 
 
 def build_attachment_response_guidance() -> str:
@@ -97,3 +98,25 @@ def derive_conversation_title(message: str, attachments: list[Any] | None = None
     if len(base_text) > max_length:
         return base_text[: max_length - 1].rstrip() + "…"
     return base_text
+
+
+IMAGE_REQUEST_RE = re.compile(
+    r"\b(png|jpg|jpeg|image|bild|photo|poster|illustration|illustrer|illustration|generer|générer|generate|erstelle)\b",
+    re.IGNORECASE,
+)
+
+
+def looks_like_image_generation_request(message: str, attachments: list[Any] | None = None) -> bool:
+    text = " ".join(
+        part
+        for part in [
+            (message or "").strip(),
+            " ".join(getattr(att, "filename", "") for att in (attachments or []) if getattr(att, "filename", "")),
+        ]
+        if part
+    ).strip()
+    if not text:
+        return False
+    if "16:9" in text or "16x9" in text:
+        return True
+    return bool(IMAGE_REQUEST_RE.search(text))
