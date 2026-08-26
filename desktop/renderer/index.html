@@ -115,6 +115,7 @@
             <div id="attachment-preview" class="attachment-preview"></div>
             <form id="chat-form" class="composer">
               <button id="attach-image-btn" class="composer-button" type="button" title="Bild anhängen">📎</button>
+              <button id="attach-file-btn" class="composer-button" type="button" title="Datei anhängen">📄</button>
               <button id="mic-btn" class="composer-button" type="button" title="Sprachnachricht">🎙</button>
               <textarea id="chat-input" class="composer-input" rows="1" placeholder="Nachricht an HIPPO-AI"></textarea>
               <button id="send-chat" class="send-button" type="submit">Senden</button>
@@ -130,6 +131,7 @@
     </div>
 
     <input id="image-input" type="file" accept="image/*" class="hidden" />
+    <input id="file-input" type="file" accept="image/*,.pdf,.doc,.docx,.txt,.md,.csv,.rtf" multiple class="hidden" />
     <div id="toast-root"></div>
     <div id="modal-root"></div>
     <div id="loader-root"></div>

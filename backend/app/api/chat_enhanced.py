@@ -9,12 +9,7 @@ from app.core.config import settings
 from sqlalchemy import select, insert
 import httpx
 from app.schemas.chat import ChatAttachment
-from app.services.chat_payloads import (
-    attachments_contain_images,
-    build_message_content,
-    derive_conversation_title,
-    storage_text,
-)
+from app.services.chat_payloads import build_message_content, derive_conversation_title, storage_text
 from app.services.generated_files import build_generated_file_bytes, extract_generated_files
 import base64
 
@@ -85,13 +80,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         role = 'user' if m.role == 'user' else 'assistant' if m.role == 'assistant' else 'system'
         hippo_messages.append({"role": role, "content": m.content})
 
-    has_image_attachments = attachments_contain_images(payload.attachments)
     if payload.attachments:
-        hippo_messages[-1]["content"] = build_message_content(
-            payload.message,
-            payload.attachments,
-            include_images=has_image_attachments and bool(settings.hippo_vision_model),
-        )
+        hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=False)
 
     # global system prompt
     global_sys = (
@@ -100,7 +90,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         "Hippo AI gehört der Firma HIPPOSIDEROS.\n"
         "Antworte in der Sprache des Benutzers.\n"
         "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort.\n"
-        "Wenn Bilder oder Screenshots angehängt sind, nutze die OCR-/Bildkontextdaten im Prompt und sage nicht, dass du Bilder nicht sehen kannst."
+        "Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst."
     )
     hippo_messages.insert(0, {"role": "system", "content": global_sys})
 
@@ -119,7 +109,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "<<<END_FILE>>>\n"
             "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
             "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language.\n"
-            "If an image or screenshot is attached, analyze the visible content from OCR and image context; do not claim that you cannot see attachments."
+            "If an image, screenshot, or document is attached, analyze the locally extracted text and metadata; do not claim that you cannot read attachments."
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 
@@ -149,17 +139,13 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             pass
 
-    fallback_messages = [dict(item) for item in hippo_messages]
-    if payload.attachments:
-        fallback_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=False)
-
     # call Hippo chat completions
     if not (settings.hippo_api_url and settings.hippo_api_key):
         raise HTTPException(status_code=503, detail='Die Hippo-API ist nicht konfiguriert.')
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
-        model_name = settings.hippo_vision_model if has_image_attachments and settings.hippo_vision_model else settings.hippo_model
+        model_name = settings.hippo_model
         payload_h = {"model": model_name, "messages": hippo_messages, "temperature": 0.7, "max_tokens": 512}
         try:
             r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=payload_h, headers=headers)
@@ -169,18 +155,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 reply_text = data['choices'][0]['message']['content']
             else:
                 reply_text = str(data)
-        except httpx.HTTPStatusError as e:
-            if payload.attachments and e.response is not None and e.response.status_code == 400:
-                retry_payload = {"model": settings.hippo_model, "messages": fallback_messages, "temperature": 0.7, "max_tokens": 512}
-                retry = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=retry_payload, headers=headers)
-                retry.raise_for_status()
-                data = retry.json()
-                if isinstance(data, dict) and data.get('choices'):
-                    reply_text = data['choices'][0]['message']['content']
-                else:
-                    reply_text = str(data)
-            else:
-                raise
+        except httpx.HTTPStatusError:
+            raise
         except Exception as e:
             raise HTTPException(status_code=502, detail=f'Fehler der Hippo-API: {e}')
 

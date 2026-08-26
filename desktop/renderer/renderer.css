@@ -541,6 +541,13 @@ textarea {
   color: var(--muted);
 }
 
+.file-avatar {
+  background: linear-gradient(145deg, rgba(154, 178, 255, 0.24), rgba(99, 215, 191, 0.18));
+  color: var(--text);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
 .empty-state {
   position: absolute;
   inset: 0;
@@ -607,6 +614,15 @@ textarea {
   border: 1px solid var(--line);
 }
 
+.attachment-pill.message-file-pill {
+  align-items: flex-start;
+}
+
+.attachment-file-copy {
+  display: grid;
+  gap: 6px;
+}
+
 .attachment-thumb-wrap {
   position: relative;
 }
@@ -650,6 +666,10 @@ textarea {
 
 .attachment-badge.pending {
   background: rgba(73, 81, 88, 0.88);
+}
+
+.attachment-badge.file-inline {
+  position: static;
 }
 
 .attachment-label {

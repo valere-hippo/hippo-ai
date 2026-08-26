@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.attachment_processing import attachment_context_text
+
 
 def attachment_has_image(attachment: Any) -> bool:
     mime_type = (getattr(attachment, "mime_type", None) or "").lower()
@@ -14,12 +16,7 @@ def attachments_contain_images(attachments: list[Any] | None = None) -> bool:
 
 
 def _attachment_text(attachment: Any) -> str:
-    filename = getattr(attachment, "filename", "attachment")
-    mime_type = getattr(attachment, "mime_type", None) or "unknown"
-    ocr_text = (getattr(attachment, "ocr_text", None) or "").strip()
-    if ocr_text:
-        return f"[Attachment: {filename} | {mime_type}]\n[OCR]\n{ocr_text}"
-    return f"[Attachment: {filename} | {mime_type}]"
+    return attachment_context_text(attachment)
 
 
 def build_message_content(
@@ -40,9 +37,6 @@ def build_message_content(
         filename = getattr(attachment, "filename", "attachment")
         mime_type = (getattr(attachment, "mime_type", None) or "").lower()
         data_url = getattr(attachment, "data_url", None)
-        ocr_text = (getattr(attachment, "ocr_text", None) or "").strip()
-        if ocr_text:
-            text_parts.append(f"[OCR from {filename}]\n{ocr_text}")
         if has_images and data_url and mime_type.startswith("image/"):
             image_parts.append(
                 {

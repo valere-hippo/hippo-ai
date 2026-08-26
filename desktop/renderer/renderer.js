@@ -44,7 +44,9 @@ const els = {
   chatForm: document.getElementById('chat-form'),
   chatInput: document.getElementById('chat-input'),
   attachImageBtn: document.getElementById('attach-image-btn'),
+  attachFileBtn: document.getElementById('attach-file-btn'),
   imageInput: document.getElementById('image-input'),
+  fileInput: document.getElementById('file-input'),
   micBtn: document.getElementById('mic-btn'),
   sendChat: document.getElementById('send-chat'),
   voiceStatus: document.getElementById('voice-status'),
@@ -97,6 +99,30 @@ function deriveConversationTitle(message, attachments = []) {
   }
   const firstAttachment = attachments.find((attachment) => attachment?.filename)
   return firstAttachment?.filename || 'Neuer Chat'
+}
+
+function getAttachmentLabel(attachment) {
+  if (!attachment?.filename) return 'Datei'
+  const parts = attachment.filename.split('.')
+  const ext = parts.length > 1 ? parts.pop().toUpperCase() : 'FILE'
+  return ext || 'FILE'
+}
+
+function getAttachmentStatusLabel(attachment) {
+  if (attachment?.kind === 'file') {
+    return attachment.readStatus === 'error'
+      ? 'Lesefehler'
+      : attachment.readStatus === 'ready'
+        ? 'Datei bereit'
+        : 'Liest…'
+  }
+  return attachment?.ocrStatus === 'ready'
+    ? 'OCR prêt'
+    : attachment?.ocrStatus === 'error'
+      ? 'OCR Fehler'
+      : attachment?.ocrStatus === 'empty'
+        ? 'OCR leer'
+        : 'OCR läuft'
 }
 
 function authHeaders(extra = {}) {
@@ -365,27 +391,34 @@ function renderAttachmentPreview() {
       thumb.src = attachment.previewUrl
       thumb.alt = attachment.filename
       const badge = document.createElement('div')
-      badge.className = `attachment-badge ${attachment.ocrStatus || 'pending'}`
-      badge.textContent = attachment.ocrStatus === 'ready'
-        ? 'OCR prêt'
-        : attachment.ocrStatus === 'error'
-          ? 'OCR Fehler'
-          : attachment.ocrStatus === 'empty'
-            ? 'OCR leer'
-            : 'OCR läuft'
+      badge.className = `attachment-badge ${attachment.kind === 'file' ? attachment.readStatus || 'pending' : attachment.ocrStatus || 'pending'}`
+      badge.textContent = getAttachmentStatusLabel(attachment)
       previewWrap.append(thumb, badge)
       pill.appendChild(previewWrap)
+
+      const label = document.createElement('div')
+      label.className = 'attachment-label'
+      label.textContent = attachment.filename
+      pill.appendChild(label)
     } else {
       const icon = document.createElement('div')
       icon.className = 'item-avatar'
-      icon.textContent = 'IMG'
+      icon.textContent = getAttachmentLabel(attachment)
+      if (attachment.kind === 'file') {
+        icon.classList.add('file-avatar')
+      }
       pill.appendChild(icon)
-    }
 
-    const label = document.createElement('div')
-    label.className = 'attachment-label'
-    label.textContent = attachment.filename
-    pill.appendChild(label)
+      const label = document.createElement('div')
+      label.className = 'attachment-label'
+      label.textContent = attachment.filename
+      pill.appendChild(label)
+
+        const badge = document.createElement('div')
+        badge.className = `attachment-badge ${attachment.kind === 'file' ? attachment.readStatus || 'pending' : attachment.ocrStatus || 'pending'}${attachment.kind === 'file' ? ' file-inline' : ''}`
+        badge.textContent = getAttachmentStatusLabel(attachment)
+        pill.appendChild(badge)
+      }
 
     const remove = document.createElement('button')
     remove.type = 'button'
@@ -448,17 +481,28 @@ function renderMessage(role, content, extras = {}) {
         image.alt = attachment.filename
         const badge = document.createElement('div')
         badge.className = `image-chip-badge ${attachment.ocrStatus || 'pending'}`
-        badge.textContent = attachment.ocrStatus === 'ready'
-          ? 'OCR prêt'
-          : attachment.ocrStatus === 'error'
-            ? 'OCR Fehler'
-            : attachment.ocrStatus === 'empty'
-              ? 'OCR leer'
-              : 'OCR läuft'
+        badge.textContent = getAttachmentStatusLabel(attachment)
         const caption = document.createElement('div')
         caption.className = 'caption'
         caption.textContent = attachment.filename
         chip.append(image, badge, caption)
+        wrapper.appendChild(chip)
+      } else {
+        const chip = document.createElement('div')
+        chip.className = 'attachment-pill message-file-pill'
+        const icon = document.createElement('div')
+        icon.className = 'item-avatar file-avatar'
+        icon.textContent = getAttachmentLabel(attachment)
+        const body = document.createElement('div')
+        body.className = 'attachment-file-copy'
+        const label = document.createElement('div')
+        label.className = 'attachment-label'
+        label.textContent = attachment.filename
+        const badge = document.createElement('div')
+        badge.className = `attachment-badge ${attachment.readStatus || 'pending'} file-inline`
+        badge.textContent = getAttachmentStatusLabel(attachment)
+        body.append(label, badge)
+        chip.append(icon, body)
         wrapper.appendChild(chip)
       }
     })
@@ -633,13 +677,30 @@ function resizeComposer() {
 function buildImageAttachment(file, dataUrl) {
   return {
     file,
+    kind: 'image',
     filename: file.name,
     mime_type: file.type || 'image/*',
     data_url: dataUrl,
+    raw_base64: dataUrl.includes(',') ? dataUrl.split(',')[1] : '',
     previewUrl: dataUrl,
     ocr_text: '',
     ocrStatus: 'pending',
     ocrPromise: null,
+  }
+}
+
+function buildFileAttachment(file, rawBase64) {
+  return {
+    file,
+    kind: 'file',
+    filename: file.name,
+    mime_type: file.type || 'application/octet-stream',
+    raw_base64: rawBase64,
+    data_url: null,
+    previewUrl: null,
+    ocr_text: '',
+    readStatus: 'ready',
+    ocrPromise: Promise.resolve(''),
   }
 }
 
@@ -650,6 +711,25 @@ function readFileAsDataUrl(file) {
     reader.onerror = () => reject(reader.error || new Error('Unable to read file'))
     reader.readAsDataURL(file)
   })
+}
+
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error || new Error('Unable to read file'))
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer || [])
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  return btoa(binary)
 }
 
 async function attachImages(files) {
@@ -685,7 +765,32 @@ async function attachImages(files) {
   renderAttachmentPreview()
 }
 
-async function persistImageAttachment(projectId, attachment) {
+async function attachFiles(files) {
+  const selectedFiles = [...files].filter(Boolean)
+  if (!selectedFiles.length) {
+    showToast('Bitte mindestens eine Datei auswählen.', 'error')
+    return
+  }
+
+  for (const file of selectedFiles) {
+    if (file.type && file.type.startsWith('image/')) {
+      // Keep image handling on the OCR path so screenshots still get text locally.
+      // eslint-disable-next-line no-await-in-loop
+      await attachImages([file])
+      continue
+    }
+
+    // Non-image files are sent as bytes so the backend can extract text locally.
+    // eslint-disable-next-line no-await-in-loop
+    const buffer = await readFileAsArrayBuffer(file)
+    const attachment = buildFileAttachment(file, arrayBufferToBase64(buffer))
+    state.draftAttachments.push(attachment)
+  }
+
+  renderAttachmentPreview()
+}
+
+async function persistAttachment(projectId, attachment) {
   if (!projectId || !attachment?.file) return
   const formData = new FormData()
   formData.append('file', attachment.file, attachment.filename)
@@ -1227,11 +1332,12 @@ async function sendChat() {
     filename: attachment.filename,
     mime_type: attachment.mime_type,
     data_url: attachment.data_url,
+    raw_base64: attachment.raw_base64 || '',
     ocr_text: attachment.ocr_text || '',
   }))
 
   if (project && state.draftAttachments.length) {
-    await Promise.all(state.draftAttachments.map((attachment) => persistImageAttachment(project.id, attachment)))
+    await Promise.all(state.draftAttachments.map((attachment) => persistAttachment(project.id, attachment)))
   }
 
   renderMessage('user', message || 'Anhang', { attachments: state.draftAttachments })
@@ -1506,6 +1612,10 @@ function bindComposerEvents() {
     els.imageInput.click()
   })
 
+  els.attachFileBtn.addEventListener('click', () => {
+    els.fileInput.click()
+  })
+
   els.imageInput.addEventListener('change', async () => {
     const files = els.imageInput.files || []
     if (!files.length) return
@@ -1513,6 +1623,16 @@ function bindComposerEvents() {
       await attachImages(files)
     } finally {
       els.imageInput.value = ''
+    }
+  })
+
+  els.fileInput.addEventListener('change', async () => {
+    const files = els.fileInput.files || []
+    if (!files.length) return
+    try {
+      await attachFiles(files)
+    } finally {
+      els.fileInput.value = ''
     }
   })
 
