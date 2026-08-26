@@ -3,6 +3,16 @@ from __future__ import annotations
 from typing import Any
 
 
+def attachment_has_image(attachment: Any) -> bool:
+    mime_type = (getattr(attachment, "mime_type", None) or "").lower()
+    data_url = (getattr(attachment, "data_url", None) or "").lower()
+    return mime_type.startswith("image/") or data_url.startswith("data:image/")
+
+
+def attachments_contain_images(attachments: list[Any] | None = None) -> bool:
+    return any(attachment_has_image(attachment) for attachment in (attachments or []))
+
+
 def _attachment_text(attachment: Any) -> str:
     filename = getattr(attachment, "filename", "attachment")
     mime_type = getattr(attachment, "mime_type", None) or "unknown"
@@ -20,6 +30,7 @@ def build_message_content(
     attachments = attachments or []
     image_parts: list[dict[str, Any]] = []
     text_parts: list[str] = []
+    has_images = include_images and attachments_contain_images(attachments)
 
     base_text = message.strip() if message else ""
     if base_text:
@@ -32,7 +43,7 @@ def build_message_content(
         ocr_text = (getattr(attachment, "ocr_text", None) or "").strip()
         if ocr_text:
             text_parts.append(f"[OCR from {filename}]\n{ocr_text}")
-        if include_images and data_url and mime_type.startswith("image/"):
+        if has_images and data_url and mime_type.startswith("image/"):
             image_parts.append(
                 {
                     "type": "image_url",

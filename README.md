@@ -71,5 +71,5 @@ CI / SSH deploy
 
 Notes
 - For GPU inference using vLLM/Whisper: provision hosts with NVIDIA drivers and nvidia-container-toolkit. Configure model volumes under /models.
-- If you want image understanding in chat, set `HIPPO_VISION_MODEL` to a vision-capable vLLM model name. If it is empty, Hippo falls back to the normal chat model plus local OCR text.
+- If you want image understanding in chat, set `HIPPO_VISION_MODEL` to a vision-capable vLLM model name. When image attachments are present, Hippo routes them to that model; otherwise it falls back to the normal chat model plus local OCR text.
 - Backup Postgres and rotate secrets regularly.

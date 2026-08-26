@@ -366,14 +366,13 @@ function renderAttachmentPreview() {
       thumb.alt = attachment.filename
       const badge = document.createElement('div')
       badge.className = `attachment-badge ${attachment.ocrStatus || 'pending'}`
-      badge.textContent =
-        attachment.ocrStatus === 'ready'
-          ? 'OCR bereit'
-          : attachment.ocrStatus === 'error'
-            ? 'OCR Fehler'
-            : attachment.ocrStatus === 'empty'
-              ? 'OCR leer'
-              : 'OCR läuft'
+      badge.textContent = attachment.ocrStatus === 'ready'
+        ? 'OCR prêt'
+        : attachment.ocrStatus === 'error'
+          ? 'OCR Fehler'
+          : attachment.ocrStatus === 'empty'
+            ? 'OCR leer'
+            : 'OCR läuft'
       previewWrap.append(thumb, badge)
       pill.appendChild(previewWrap)
     } else {
@@ -449,14 +448,13 @@ function renderMessage(role, content, extras = {}) {
         image.alt = attachment.filename
         const badge = document.createElement('div')
         badge.className = `image-chip-badge ${attachment.ocrStatus || 'pending'}`
-        badge.textContent =
-          attachment.ocrStatus === 'ready'
-            ? 'OCR bereit'
-            : attachment.ocrStatus === 'error'
-              ? 'OCR Fehler'
-              : attachment.ocrStatus === 'empty'
-                ? 'OCR leer'
-                : 'OCR läuft'
+        badge.textContent = attachment.ocrStatus === 'ready'
+          ? 'OCR prêt'
+          : attachment.ocrStatus === 'error'
+            ? 'OCR Fehler'
+            : attachment.ocrStatus === 'empty'
+              ? 'OCR leer'
+              : 'OCR läuft'
         const caption = document.createElement('div')
         caption.className = 'caption'
         caption.textContent = attachment.filename

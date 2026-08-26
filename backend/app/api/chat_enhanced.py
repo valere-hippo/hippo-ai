@@ -9,7 +9,12 @@ from app.core.config import settings
 from sqlalchemy import select, insert
 import httpx
 from app.schemas.chat import ChatAttachment
-from app.services.chat_payloads import build_message_content, derive_conversation_title, storage_text
+from app.services.chat_payloads import (
+    attachments_contain_images,
+    build_message_content,
+    derive_conversation_title,
+    storage_text,
+)
 from app.services.generated_files import build_generated_file_bytes, extract_generated_files
 import base64
 
@@ -80,14 +85,19 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         role = 'user' if m.role == 'user' else 'assistant' if m.role == 'assistant' else 'system'
         hippo_messages.append({"role": role, "content": m.content})
 
+    has_image_attachments = attachments_contain_images(payload.attachments)
     if payload.attachments:
-        hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=True)
+        hippo_messages[-1]["content"] = build_message_content(
+            payload.message,
+            payload.attachments,
+            include_images=has_image_attachments and bool(settings.hippo_vision_model),
+        )
 
     # global system prompt
     global_sys = (
         "Du bist Hippo, ein freundlicher und professioneller KI-Assistent.\n"
         "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, entwickelt.\n"
-        "Hippo AI ist ein Produkt der Firma HIPPOSIDEROS.\n"
+        "Hippo AI gehört der Firma HIPPOSIDEROS.\n"
         "Antworte in der Sprache des Benutzers.\n"
         "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort.\n"
         "Wenn Bilder oder Screenshots angehängt sind, nutze die OCR-/Bildkontextdaten im Prompt und sage nicht, dass du Bilder nicht sehen kannst."
@@ -149,7 +159,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
-        model_name = settings.hippo_vision_model or settings.hippo_model
+        model_name = settings.hippo_vision_model if has_image_attachments and settings.hippo_vision_model else settings.hippo_model
         payload_h = {"model": model_name, "messages": hippo_messages, "temperature": 0.7, "max_tokens": 512}
         try:
             r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=payload_h, headers=headers)

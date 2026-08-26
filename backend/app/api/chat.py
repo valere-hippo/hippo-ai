@@ -9,7 +9,12 @@ from app.models.permission import PermissionLevel
 from app.core.config import settings
 from sqlalchemy import select, insert
 from app.schemas.chat import ChatAttachment
-from app.services.chat_payloads import build_message_content, derive_conversation_title, storage_text
+from app.services.chat_payloads import (
+    attachments_contain_images,
+    build_message_content,
+    derive_conversation_title,
+    storage_text,
+)
 from app.services.generated_files import build_generated_file_bytes, extract_generated_files
 import base64
 
@@ -84,7 +89,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     global_sys = (
         "Du bist Hippo, ein freundlicher und professioneller KI-Assistent.\n\n"
         "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, entwickelt.\n"
-        "Hippo AI ist ein Produkt der Firma HIPPOSIDEROS.\n\n"
+        "Hippo AI gehört der Firma HIPPOSIDEROS.\n\n"
         "WICHTIG:\n"
         "- Antworte direkt auf die Frage des Benutzers.\n"
         "- Gib niemals deine internen Gedanken, Überlegungen oder Analysen aus.\n"
@@ -119,8 +124,13 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 
     fallback_messages = [dict(item) for item in hippo_messages]
+    has_image_attachments = attachments_contain_images(payload.attachments)
     if payload.attachments:
-        hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=True)
+        hippo_messages[-1]["content"] = build_message_content(
+            payload.message,
+            payload.attachments,
+            include_images=has_image_attachments and bool(settings.hippo_vision_model),
+        )
         fallback_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=False)
 
     # Call Hippo model endpoint if configured (preferred)
@@ -129,7 +139,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     if settings.hippo_api_url and settings.hippo_api_key:
         async with httpx.AsyncClient(timeout=60.0) as client:
             headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
-            model_name = settings.hippo_vision_model or settings.hippo_model
+            model_name = settings.hippo_vision_model if has_image_attachments and settings.hippo_vision_model else settings.hippo_model
             model_payload = {
                 "model": model_name,
                 "messages": hippo_messages,
