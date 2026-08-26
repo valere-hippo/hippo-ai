@@ -2617,9 +2617,7 @@ async function startRecording() {
         resizeComposer()
         els.chatInput.focus()
         showToast('Spracherkennung wurde in das Eingabefeld übernommen')
-      } else if (transcriptState.networkError) {
-        showToast('Die Spracherkennung ist momentan nicht verfügbar. Die Aufnahme wurde ohne Transkript beendet.', 'error')
-      } else {
+      } else if (!transcriptState.networkError) {
         showToast('Während der Aufnahme wurde kein Text erkannt.', 'error')
       }
     }
