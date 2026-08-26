@@ -98,6 +98,9 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, entwickelt.\n"
         "Hippo AI gehört der Firma HIPPOSIDEROS.\n"
         "Antworte in der Sprache des Benutzers.\n"
+        "Antworte so ausführlich wie nötig, wenn der Benutzer eine detaillierte Erklärung, einen Bericht oder eine Analyse möchte.\n"
+        "Kürze nur, wenn der Benutzer ausdrücklich eine kurze Antwort verlangt.\n"
+        "Wenn eine Antwort lang sein muss, entwickle sie vollständig aus und schließe alle wichtigen Punkte ab.\n"
         "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort.\n"
         "Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
         "Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert wird, antworte ausführlich, strukturiert und mit klaren Zwischenüberschriften oder Aufzählungspunkten.\n"
@@ -180,11 +183,16 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     async with httpx.AsyncClient(timeout=60.0) as client:
         headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
         model_name = settings.hippo_model
+        max_tokens = (
+            settings.hippo_response_max_tokens_long
+            if (payload.attachments or conv_project is not None)
+            else settings.hippo_response_max_tokens
+        )
         payload_h = {
             "model": model_name,
             "messages": hippo_messages,
             "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
-            "max_tokens": 1600 if (payload.attachments or conv_project is not None) else 700,
+            "max_tokens": max_tokens,
         }
         try:
             r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=payload_h, headers=headers)

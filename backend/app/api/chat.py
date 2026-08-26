@@ -96,6 +96,9 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         "Hippo AI gehört der Firma HIPPOSIDEROS.\n\n"
         "WICHTIG:\n"
         "- Antworte direkt auf die Frage des Benutzers.\n"
+        "- Antworte so ausführlich wie nötig, wenn der Benutzer eine detaillierte Erklärung, einen Bericht oder eine Analyse möchte.\n"
+        "- Kürze nur, wenn der Benutzer ausdrücklich eine kurze Antwort verlangt.\n"
+        "- Wenn eine Antwort lang sein muss, entwickle sie vollständig aus und schließe alle wichtigen Punkte ab.\n"
         "- Gib niemals deine internen Gedanken, Überlegungen oder Analysen aus.\n"
         "- Gib niemals Formulierungen wie \"Okay, the user said...\", \"I need to...\", \"Let me check...\" aus.\n"
         "- Gib ausschließlich die fertige Antwort an den Benutzer zurück.\n"
@@ -162,11 +165,16 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         async with httpx.AsyncClient(timeout=60.0) as client:
             headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
             model_name = settings.hippo_model
+            max_tokens = (
+                settings.hippo_response_max_tokens_long
+                if (payload.attachments or conv_project is not None)
+                else settings.hippo_response_max_tokens
+            )
             model_payload = {
                 "model": model_name,
                 "messages": hippo_messages,
                 "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
-                "max_tokens": 1600 if (payload.attachments or conv_project is not None) else 700,
+                "max_tokens": max_tokens,
             }
             try:
                 r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=model_payload, headers=headers)

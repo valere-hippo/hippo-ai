@@ -13,6 +13,8 @@ def build_attachment_response_guidance() -> str:
         "danach die relevantesten Details oder Auffälligkeiten und schließe mit einer kompakten Einordnung.\n"
         "Wenn der Benutzer eine Analyse des gemeinsamen Ordners, einer Datei oder mehrerer Dateien möchte, liefere eine strukturierte Antwort mit Überblick, Dateiliste, Details und Fazit.\n"
         "Verwende bei solchen Anfragen lieber mehrere Absätze, nummerierte Schritte, Aufzählungspunkte und klare Zwischenüberschriften als nur ein bis zwei kurze Sätze.\n"
+        "Wenn der Benutzer eine ausführliche Antwort erwartet, entwickle die Antwort vollständig aus und vermeide unnötige Kürze.\n"
+        "Bevorzuge eine tiefere Erklärung mit Beispielen, Einordnung und sauberen Übergängen statt einer knappen Stichwortliste.\n"
         "Schreibe Überschriften sauber und ohne dekorative Markdown-Rahmen wie ###** oder **###.\n"
         "Vermeide rohe Markdown-Tabellen, wenn eine normale Liste oder ein kurzer erklärender Satz besser lesbar ist.\n"
         "Formuliere die Antwort so, dass sie sich in einzelne Abschnitte gliedert wie in einem professionell gesetzten Dokument.\n"
