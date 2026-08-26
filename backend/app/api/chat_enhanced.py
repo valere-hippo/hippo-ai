@@ -10,7 +10,7 @@ from sqlalchemy import select, insert
 import httpx
 from app.schemas.chat import ChatAttachment
 from app.services.chat_payloads import build_attachment_response_guidance, build_message_content, derive_conversation_title, storage_text
-from app.services.generated_files import build_generated_file_bytes, extract_generated_files
+from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.project_storage import build_project_files_context
 import base64
 
@@ -200,13 +200,13 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     serialized_files: list[dict[str, str]] = []
     for file in generated_files:
         try:
-            data, mime_type = build_generated_file_bytes(file.filename, file.content)
+            data, mime_type, filename = build_generated_file_bytes_with_fallback(file.filename, file.content)
         except Exception:
             # Skip unsupported render targets instead of crashing the chat route.
             continue
         serialized_files.append(
             {
-                "filename": file.filename,
+                "filename": filename,
                 "mime_type": mime_type,
                 "data_base64": base64.b64encode(data).decode("ascii"),
             }

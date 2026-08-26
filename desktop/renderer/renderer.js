@@ -12,6 +12,7 @@ const state = {
   recording: null,
   isRecording: false,
   projectConversationMemory: new Map(),
+  thinkingMessage: null,
 }
 
 const els = {
@@ -491,6 +492,49 @@ function hideLoader() {
   if (overlay) overlay.remove()
 }
 
+function hideThinkingIndicator() {
+  if (state.thinkingMessage) {
+    state.thinkingMessage.remove()
+    state.thinkingMessage = null
+  }
+}
+
+function showThinkingIndicator(text = 'Hippo denkt nach…') {
+  hideThinkingIndicator()
+
+  const message = document.createElement('article')
+  message.className = 'message assistant thinking'
+
+  const bubble = document.createElement('div')
+  bubble.className = 'message-bubble'
+
+  const roleTag = document.createElement('div')
+  roleTag.className = 'message-role'
+  roleTag.textContent = 'Hippo'
+
+  const indicator = document.createElement('div')
+  indicator.className = 'thinking-indicator'
+
+  const label = document.createElement('div')
+  label.className = 'thinking-label'
+  label.textContent = text
+
+  const dots = document.createElement('div')
+  dots.className = 'thinking-dots'
+  for (let index = 0; index < 3; index += 1) {
+    const dot = document.createElement('span')
+    dot.className = 'thinking-dot'
+    dots.appendChild(dot)
+  }
+
+  indicator.append(label, dots)
+  bubble.append(roleTag, indicator)
+  message.appendChild(bubble)
+  els.chatLog.appendChild(message)
+  els.chatLog.scrollTop = els.chatLog.scrollHeight
+  state.thinkingMessage = message
+}
+
 function setScreen(loggedIn) {
   els.loginScreen.classList.toggle('hidden', loggedIn)
   els.workspaceShell.classList.toggle('hidden', !loggedIn)
@@ -802,6 +846,70 @@ function renderMessage(role, content, extras = {}) {
     text.className = 'message-text'
     text.appendChild(renderRichContent(content))
     bubble.appendChild(text)
+  }
+
+  if (extras.generatedFiles?.length) {
+    const artifacts = document.createElement('div')
+    artifacts.className = 'generated-artifacts'
+
+    extras.generatedFiles.forEach((artifact) => {
+      const card = document.createElement('div')
+      card.className = 'generated-artifact-card'
+
+      const previewUrl = artifact?.data_base64 && artifact?.mime_type
+        ? `data:${artifact.mime_type};base64,${artifact.data_base64}`
+        : ''
+      const isImage = artifact?.mime_type?.startsWith('image/')
+
+      if (isImage && previewUrl) {
+        const preview = document.createElement('img')
+        preview.className = 'generated-artifact-preview'
+        preview.src = previewUrl
+        preview.alt = artifact.filename || 'Generierte Datei'
+        card.appendChild(preview)
+      } else {
+        const preview = document.createElement('div')
+        preview.className = 'generated-artifact-preview generated-artifact-placeholder'
+        preview.innerHTML = '<span>FILE</span>'
+        card.appendChild(preview)
+      }
+
+      const body = document.createElement('div')
+      body.className = 'generated-artifact-body'
+
+      const name = document.createElement('div')
+      name.className = 'generated-artifact-name'
+      name.textContent = artifact.filename || 'Generierte Datei'
+
+      const meta = document.createElement('div')
+      meta.className = 'generated-artifact-meta'
+      meta.textContent = artifact.mime_type || 'Datei'
+
+      const actions = document.createElement('div')
+      actions.className = 'generated-artifact-actions'
+
+      const download = document.createElement('button')
+      download.type = 'button'
+      download.className = 'item-action-button'
+      download.textContent = '↓'
+      download.title = 'Datei herunterladen'
+      download.addEventListener('click', () => {
+        if (!previewUrl) return
+        const link = document.createElement('a')
+        link.href = previewUrl
+        link.download = artifact.filename || 'hippo-datei'
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+      })
+
+      actions.append(download)
+      body.append(name, meta, actions)
+      card.appendChild(body)
+      artifacts.appendChild(card)
+    })
+
+    bubble.appendChild(artifacts)
   }
 
   if (extras.attachments?.length) {
@@ -2243,7 +2351,7 @@ async function sendChat() {
   renderMessage('user', message || 'Anhang', { attachments: state.draftAttachments })
   resetComposer()
 
-  showLoader('Denke nach...')
+  showThinkingIndicator('Hippo denkt nach…')
   try {
     const response = await apiJson('/chat-enhanced/', {
       method: 'POST',
@@ -2272,18 +2380,18 @@ async function sendChat() {
     renderContext()
 
     const savedArtifacts = await saveGeneratedArtifacts(response.generated_files, project?.watched_folder || null)
-    const saved = savedArtifacts.length > 0
-    if (!saved) {
+    if (response.reply) {
+      renderMessage('assistant', response.reply, { generatedFiles: response.generated_files })
+    } else if (response.generated_files?.length) {
+      renderMessage('assistant', 'Datei wurde erstellt.', { generatedFiles: response.generated_files })
+    } else {
       const legacySaved = showGeneratedFile(response.reply || '', project?.watched_folder || null)
       if (legacySaved) return
-    }
-    if (response.reply) {
-      renderMessage('assistant', response.reply)
     }
   } catch (error) {
     showToast(error.message || 'Chat fehlgeschlagen', 'error')
   } finally {
-    hideLoader()
+    hideThinkingIndicator()
   }
 }
 

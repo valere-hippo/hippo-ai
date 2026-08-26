@@ -606,10 +606,24 @@ def build_generated_file_bytes(filename: str, content: str) -> tuple[bytes, str]
     return body.encode("utf-8"), guessed_type or "text/plain; charset=utf-8"
 
 
+def build_generated_file_bytes_with_fallback(filename: str, content: str) -> tuple[bytes, str, str]:
+    safe_name = Path(filename).name
+    ext = Path(safe_name).suffix.lower()
+    try:
+        data, mime_type = build_generated_file_bytes(safe_name, content)
+        return data, mime_type, safe_name
+    except RuntimeError as exc:
+        if "Pillow is required" not in str(exc) or ext not in {".png", ".jpg", ".jpeg"}:
+            raise
+        base_title = Path(safe_name).stem.replace("_", " ").strip() or "Hippo AI"
+        fallback_name = f"{Path(safe_name).stem}.svg"
+        return build_svg_bytes(base_title, content or ""), "image/svg+xml", fallback_name
+
+
 def save_generated_file(folder: str, filename: str, content: str) -> str:
     safe_name = Path(filename).name
-    data, _ = build_generated_file_bytes(safe_name, content)
-    target = Path(folder) / safe_name
+    data, _, out_name = build_generated_file_bytes_with_fallback(safe_name, content)
+    target = Path(folder) / out_name
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
 
