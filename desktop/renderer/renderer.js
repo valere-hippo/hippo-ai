@@ -28,9 +28,6 @@ const els = {
   sidebarNewChat: document.getElementById('sidebar-new-chat'),
   projectList: document.getElementById('project-list'),
   conversationList: document.getElementById('conversation-list'),
-  adminSection: document.getElementById('admin-section'),
-  adminCreateUser: document.getElementById('admin-create-user'),
-  adminUserList: document.getElementById('admin-user-list'),
   accountAvatar: document.getElementById('account-avatar'),
   accountName: document.getElementById('account-name'),
   accountMeta: document.getElementById('account-meta'),
@@ -579,7 +576,6 @@ function updatePresence() {
     els.accountName.textContent = 'Nicht verbunden'
     els.accountMeta.textContent = 'Bitte anmelden'
     els.rolePill.textContent = 'Benutzer'
-    els.adminSection.classList.add('hidden')
     return
   }
 
@@ -587,7 +583,6 @@ function updatePresence() {
   els.accountName.textContent = state.user.full_name || state.user.email
   els.accountMeta.textContent = state.user.email
   els.rolePill.textContent = formatRole(state.user.role)
-  els.adminSection.classList.toggle('hidden', state.user.role !== 'ADMIN')
 }
 
 function renderContext() {
@@ -765,32 +760,7 @@ function renderConversations() {
   q('chat-count').textContent = String(conversations.length)
 }
 
-function renderUsers() {
-  els.adminUserList.innerHTML = ''
-  if (state.user?.role !== 'ADMIN') return
-
-  state.users.slice(0, 8).forEach((user) => {
-    const row = document.createElement('div')
-    row.className = 'user-item'
-
-    const avatar = document.createElement('div')
-    avatar.className = 'item-avatar'
-    avatar.textContent = initialsFromUser(user)
-
-    const main = document.createElement('div')
-    main.className = 'item-main'
-    const title = document.createElement('div')
-    title.className = 'item-title'
-    title.textContent = user.full_name || user.email
-    const subtitle = document.createElement('div')
-    subtitle.className = 'item-subtitle'
-    subtitle.textContent = formatRole(user.role)
-    main.append(title, subtitle)
-
-    row.append(avatar, main)
-    els.adminUserList.appendChild(row)
-  })
-}
+function renderUsers() {}
 
 function renderDashboardUsers(container) {
   if (!container) return
@@ -1075,11 +1045,9 @@ async function loadConversations() {
 async function loadUsers() {
   if (state.user?.role !== 'ADMIN') {
     state.users = []
-    renderUsers()
     return
   }
   state.users = await apiJson('/admin/users/')
-  renderUsers()
 }
 
 async function loadWorkspace() {
@@ -1131,7 +1099,6 @@ function logout() {
   clearChatLog()
   renderProjects()
   renderConversations()
-  renderUsers()
   renderAttachmentPreview()
   renderContext()
 }
@@ -2619,7 +2586,7 @@ async function startRecording() {
     const mediaRecorder = new MediaRecorder(stream)
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     const recognition = SpeechRecognition ? new SpeechRecognition() : null
-    const transcriptState = { text: '', finalised: false }
+    const transcriptState = { text: '', finalised: false, networkError: false }
 
     state.recording = {
       stream,
@@ -2650,8 +2617,10 @@ async function startRecording() {
         resizeComposer()
         els.chatInput.focus()
         showToast('Spracherkennung wurde in das Eingabefeld übernommen')
+      } else if (transcriptState.networkError) {
+        showToast('Die Spracherkennung ist momentan nicht verfügbar. Die Aufnahme wurde ohne Transkript beendet.', 'error')
       } else {
-        showToast('Es wurde kein Text erkannt.', 'error')
+        showToast('Während der Aufnahme wurde kein Text erkannt.', 'error')
       }
     }
 
@@ -2672,6 +2641,10 @@ async function startRecording() {
           'audio-capture': 'Das Mikrofon konnte nicht verwendet werden.',
           'not-allowed': 'Mikrofonzugriff wurde verweigert.',
           'service-not-allowed': 'Die Spracherkennung ist nicht erlaubt.',
+        }
+        if (event.error === 'network') {
+          transcriptState.networkError = true
+          return
         }
         showToast(errorMap[event.error] || `Fehler bei der Spracherkennung: ${event.error}`, 'error')
       }
@@ -2766,9 +2739,6 @@ function bindSidebarEvents() {
   els.sidebarNewChat.addEventListener('click', startNewChat)
   els.sidebarToggle?.addEventListener('click', toggleSidebarDrawer)
   els.sidebarBackdrop?.addEventListener('click', closeSidebarDrawer)
-  if (els.adminCreateUser) {
-    els.adminCreateUser.addEventListener('click', openCreateUserModal)
-  }
   els.projectEmbedBtn.addEventListener('click', openEmbeddingModal)
   els.profileBtn.addEventListener('click', openProfileModal)
   els.logoutBtn.addEventListener('click', logout)
@@ -2793,7 +2763,6 @@ async function bootstrap() {
   })
   renderProjects()
   renderConversations()
-  renderUsers()
   renderAttachmentPreview()
   setVoiceIdle()
 
