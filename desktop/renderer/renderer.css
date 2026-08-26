@@ -844,6 +844,7 @@ textarea {
 .dashboard-modal {
   display: grid;
   gap: 14px;
+  max-height: 100%;
 }
 
 .dashboard-header {
@@ -909,6 +910,7 @@ textarea {
 .dashboard-panels {
   display: grid;
   gap: 14px;
+  min-height: 0;
 }
 
 .dashboard-panel {
@@ -1062,11 +1064,15 @@ select.text-input option {
 
 .modal-card {
   width: min(520px, 100%);
+  max-height: min(88vh, 920px);
   border-radius: 24px;
   background: linear-gradient(180deg, rgba(25, 35, 47, 0.98), rgba(16, 24, 33, 0.98));
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
   padding: 22px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .modal-card h3 {
@@ -1078,6 +1084,13 @@ select.text-input option {
   margin-bottom: 18px;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .modal-grid {

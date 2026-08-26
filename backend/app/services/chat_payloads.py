@@ -12,6 +12,7 @@ def build_attachment_response_guidance() -> str:
         "danach die relevantesten Details oder Auffälligkeiten und schließe mit einer kompakten Einordnung.\n"
         "Wenn der Benutzer eine Analyse des gemeinsamen Ordners, einer Datei oder mehrerer Dateien möchte, liefere eine strukturierte Antwort mit Überblick, Dateiliste, Details und Fazit.\n"
         "Verwende bei solchen Anfragen lieber mehrere Absätze oder Aufzählungspunkte als nur ein bis zwei kurze Sätze.\n"
+        "Schreibe Berichte in normalem Fließtext mit kurzen Zwischenüberschriften oder Bulletpoints, aber ohne Markdown-Tabellen und ohne übermäßige Fettschrift.\n"
         "Bei deutschen Anfragen antworte auf Deutsch und verwende eine klare, strukturierte Sprache.\n"
         "Gib keine internen Gedanken aus und erwähne keine <think>-Blöcke."
     )

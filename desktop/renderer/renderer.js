@@ -449,11 +449,7 @@ function renderUsers() {
     subtitle.textContent = formatRole(user.role)
     main.append(title, subtitle)
 
-    const chip = document.createElement('div')
-    chip.className = 'item-chip'
-    chip.textContent = user.is_active ? 'aktiv' : 'deaktiviert'
-
-    row.append(avatar, main, chip)
+    row.append(avatar, main)
     els.adminUserList.appendChild(row)
   })
 }
@@ -1022,8 +1018,10 @@ async function openEditProjectModal(project) {
 
 async function deleteProject(project) {
   if (!project) return
-  const ok = window.confirm(`Projekt "${project.name}" wirklich löschen?`)
-  if (!ok) return
+  const firstOk = window.confirm(`Projekt "${project.name}" wirklich löschen?`)
+  if (!firstOk) return
+  const secondOk = window.confirm(`Letzte Bestätigung: Das Projekt "${project.name}" wird dauerhaft gelöscht. Fortfahren?`)
+  if (!secondOk) return
 
   showLoader('Projekt wird gelöscht...')
   try {
@@ -1047,8 +1045,10 @@ async function deleteProject(project) {
 
 async function deleteConversation(conversation) {
   if (!conversation) return
-  const ok = window.confirm(`Chat "${getConversationTitle(conversation)}" wirklich löschen?`)
-  if (!ok) return
+  const firstOk = window.confirm(`Chat "${getConversationTitle(conversation)}" wirklich löschen?`)
+  if (!firstOk) return
+  const secondOk = window.confirm(`Letzte Bestätigung: Der Chat "${getConversationTitle(conversation)}" wird dauerhaft gelöscht. Fortfahren?`)
+  if (!secondOk) return
 
   showLoader('Chat wird gelöscht...')
   try {
@@ -1628,15 +1628,7 @@ async function openUserDashboardModal(initialTab = 'profile') {
   usersPanel.className = 'dashboard-panel'
   if (state.user.role === 'ADMIN') {
     const createUserForm = buildDashboardCreateUserFields()
-    const userActions = document.createElement('div')
-    userActions.className = 'dashboard-panel-actions'
-    const createUserBtn = document.createElement('button')
-    createUserBtn.type = 'button'
-    createUserBtn.className = 'primary-button'
-    createUserBtn.textContent = 'Benutzer erstellen'
-    createUserBtn.addEventListener('click', () => createDashboardUser(usersPanel))
-    userActions.appendChild(createUserBtn)
-    usersPanel.append(createUserForm, userActions)
+    usersPanel.append(createUserForm)
     panels.set('users', usersPanel)
   }
 
@@ -1805,6 +1797,10 @@ function openModal({ title, copy, content, submitLabel, extraActions = [], width
     copyNode.className = 'modal-copy'
     copyNode.textContent = copy
 
+    const body = document.createElement('div')
+    body.className = 'modal-body'
+    body.appendChild(content)
+
     const actions = document.createElement('div')
     actions.className = 'modal-actions'
 
@@ -1853,7 +1849,7 @@ function openModal({ title, copy, content, submitLabel, extraActions = [], width
       actions.appendChild(action)
     })
     actions.append(cancel, confirm)
-    card.append(heading, copyNode, content, actions)
+    card.append(heading, copyNode, body, actions)
     overlay.appendChild(card)
     document.body.appendChild(overlay)
 
@@ -2252,7 +2248,9 @@ function bindComposerEvents() {
 
 function bindSidebarEvents() {
   els.sidebarNewChat.addEventListener('click', startNewChat)
-  els.adminCreateUser.addEventListener('click', openCreateUserModal)
+  if (els.adminCreateUser) {
+    els.adminCreateUser.addEventListener('click', openCreateUserModal)
+  }
   els.projectEmbedBtn.addEventListener('click', openEmbeddingModal)
   els.profileBtn.addEventListener('click', openProfileModal)
   els.logoutBtn.addEventListener('click', logout)

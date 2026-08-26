@@ -3,11 +3,13 @@ from __future__ import annotations
 import mimetypes
 import os
 import re
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 from io import BytesIO
+from tempfile import TemporaryDirectory
 from zipfile import BadZipFile, ZipFile
 import xml.etree.ElementTree as ET
 
@@ -258,6 +260,7 @@ def _extract_text_from_pdf_bytes(data: bytes) -> str:
     try:
         reader = PdfReader(BytesIO(data))
         parts: list[str] = []
+        page_count = len(reader.pages)
         for page in reader.pages[:6]:
             try:
                 page_text = page.extract_text() or ""
@@ -265,7 +268,10 @@ def _extract_text_from_pdf_bytes(data: bytes) -> str:
                 page_text = ""
             if page_text.strip():
                 parts.append(page_text.strip())
-        return _truncate("\n\n".join(parts))
+        preview = _truncate("\n\n".join(parts))
+        if preview:
+            return f"PDF mit {page_count} Seiten.\nTextauszug:\n{preview}"
+        return f"PDF mit {page_count} Seiten."
     except Exception:
         return ""
 
@@ -289,7 +295,171 @@ def _extract_text_from_docx_bytes(data: bytes) -> str:
         line = "".join(text_parts).strip()
         if line:
             paragraphs.append(line)
-    return _truncate("\n\n".join(paragraphs))
+    preview = _truncate("\n\n".join(paragraphs))
+    if preview:
+        return f"DOCX mit {len(paragraphs)} Absätzen.\nTextauszug:\n{preview}"
+    return f"DOCX mit {len(paragraphs)} Absätzen."
+
+
+def _extract_text_from_plain_bytes(data: bytes) -> str:
+    for encoding in ("utf-8", "utf-16", "latin-1"):
+        try:
+            return _truncate(data.decode(encoding))
+        except UnicodeDecodeError:
+            continue
+    return ""
+
+
+def _shape_type_name(shape_type: int) -> str:
+    mapping = {
+        0: "Null",
+        1: "Point",
+        3: "PolyLine",
+        5: "Polygon",
+        8: "MultiPoint",
+        11: "PointZ",
+        13: "PolyLineZ",
+        15: "PolygonZ",
+        18: "MultiPointZ",
+        21: "PointM",
+        23: "PolyLineM",
+        25: "PolygonM",
+        28: "MultiPointM",
+        31: "MultiPatch",
+    }
+    return mapping.get(shape_type, f"Unknown({shape_type})")
+
+
+def _parse_shp_header(data: bytes) -> tuple[str | None, tuple[float, float, float, float] | None]:
+    if len(data) < 100:
+        return None, None
+    try:
+        shape_type = int.from_bytes(data[32:36], "little", signed=False)
+    except Exception:
+        return None, None
+    try:
+        import struct
+
+        x_min, y_min, x_max, y_max = struct.unpack("<4d", data[36:68])
+        return _shape_type_name(shape_type), (x_min, y_min, x_max, y_max)
+    except Exception:
+        return _shape_type_name(shape_type), None
+
+
+def _extract_shapefile_context(project: Any, stem: str, files_by_name: dict[str, ProjectFile]) -> str:
+    related_names = [f"{stem}{ext}" for ext in (".shp", ".shx", ".dbf", ".prj", ".cpg")]
+    related_files = [name for name in related_names if name in files_by_name]
+    if not related_files:
+        return ""
+
+    parts: list[str] = [f"Geodatenpaket für '{stem}':"]
+    parts.append(f"- Enthaltene Dateien: {', '.join(related_files)}")
+
+    try:
+        with TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir) / stem
+            for name in related_files:
+                data, _, _ = read_project_file(project, name)
+                (Path(tmpdir) / name).write_bytes(data)
+
+            try:
+                import shapefile  # type: ignore
+
+                reader = shapefile.Reader(str(base))
+                shape_type = getattr(reader, "shapeType", None)
+                if shape_type is not None:
+                    parts.append(f"- Geometrietyp: {_shape_type_name(int(shape_type))}")
+                bbox = getattr(reader, "bbox", None)
+                if bbox:
+                    parts.append(
+                        "- Bounding Box: "
+                        f"{bbox[0]:.6f}, {bbox[1]:.6f}, {bbox[2]:.6f}, {bbox[3]:.6f}"
+                    )
+                fields = [field for field in getattr(reader, "fields", [])[1:]]
+                if fields:
+                    formatted_fields = ", ".join(f"{field[0]} ({field[1]})" for field in fields[:10])
+                    parts.append(f"- Felder: {formatted_fields}")
+                record_count = getattr(reader, "numRecords", None)
+                if record_count is not None:
+                    parts.append(f"- Datensätze: {record_count}")
+                try:
+                    records = reader.records()
+                    if records:
+                        first_record = records[0]
+                        record_parts = []
+                        for field in getattr(reader, "fields", [])[1:][:6]:
+                            field_name = field[0]
+                            value = first_record.as_dict().get(field_name)
+                            if value not in (None, ""):
+                                record_parts.append(f"{field_name}={value}")
+                        if record_parts:
+                            parts.append(f"- Beispielinhalt: {', '.join(record_parts)}")
+                except Exception:
+                    pass
+                try:
+                    reader.close()
+                except Exception:
+                    pass
+            except Exception:
+                shp_path = Path(tmpdir) / f"{stem}.shp"
+                if shp_path.exists():
+                    data = shp_path.read_bytes()
+                    shape_type_name, bbox = _parse_shp_header(data)
+                    if shape_type_name:
+                        parts.append(f"- Geometrietyp: {shape_type_name}")
+                    if bbox:
+                        parts.append(
+                            "- Bounding Box: "
+                            f"{bbox[0]:.6f}, {bbox[1]:.6f}, {bbox[2]:.6f}, {bbox[3]:.6f}"
+                        )
+                prj_path = Path(tmpdir) / f"{stem}.prj"
+                if prj_path.exists():
+                    prj_text = _extract_text_from_plain_bytes(prj_path.read_bytes())
+                    if prj_text:
+                        parts.append(f"- Projektion: {prj_text}")
+    except Exception:
+        return ""
+
+    return "\n".join(parts)
+
+
+def _extract_gpkg_context(project: Any, filename: str) -> str:
+    try:
+        data, _, _ = read_project_file(project, filename)
+    except Exception:
+        return ""
+
+    try:
+        with TemporaryDirectory() as tmpdir:
+            gpkg_path = Path(tmpdir) / filename
+            gpkg_path.write_bytes(data)
+            conn = sqlite3.connect(str(gpkg_path))
+            try:
+                cursor = conn.cursor()
+                layers = cursor.execute("SELECT table_name, identifier, description FROM gpkg_contents").fetchall()
+                geom_columns = cursor.execute(
+                    "SELECT table_name, column_name, geometry_type_name, srs_id FROM gpkg_geometry_columns"
+                ).fetchall()
+                parts = [f"GeoPackage '{filename}':"]
+                if layers:
+                    parts.append("- Layer: " + ", ".join(row[0] for row in layers[:8]))
+                if geom_columns:
+                    details = ", ".join(
+                        f"{row[0]}.{row[1]} ({row[2]}, SRS {row[3]})" for row in geom_columns[:8]
+                    )
+                    parts.append(f"- Geometriespalten: {details}")
+                for table_name, _, _ in layers[:3]:
+                    try:
+                        count = cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"').fetchone()
+                        if count:
+                            parts.append(f"- {table_name}: {count[0]} Datensätze")
+                    except Exception:
+                        continue
+                return "\n".join(parts)
+            finally:
+                conn.close()
+    except Exception:
+        return ""
 
 
 def extract_project_file_preview(filename: str, data: bytes, content_type: str | None = None) -> str:
@@ -318,14 +488,24 @@ def extract_project_file_preview(filename: str, data: bytes, content_type: str |
                 width, height = image.size
                 mode = image.mode or "unknown"
                 fmt = (image.format or "").upper() or "image"
-                return f"[Image metadata] {fmt} {width}x{height} ({mode})"
+                meta = f"{fmt} {width}x{height} ({mode})"
+                ocr_text = ""
+                try:
+                    import pytesseract  # type: ignore
+
+                    ocr_text = _truncate((pytesseract.image_to_string(image) or "").strip(), 1200)
+                except Exception:
+                    ocr_text = ""
+                if ocr_text:
+                    return f"[Bild] {meta}\nOCR: {ocr_text}"
+                return f"[Bildmetadaten] {meta}"
         except Exception:
             return "[Image attachment]"
 
     return ""
 
 
-def build_project_files_context(project: Any, max_files: int = 6) -> str:
+def build_project_files_context(project: Any, max_files: int = 12) -> str:
     files = list_project_files(project)[:max_files]
     if not files:
         return (
@@ -333,18 +513,47 @@ def build_project_files_context(project: Any, max_files: int = 6) -> str:
             "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Bucket leer ist oder die Synchronisierung noch nicht abgeschlossen wurde."
         )
 
+    files_by_name = {item.filename: item for item in files}
+    processed: set[str] = set()
+
     lines = [
         f"Im gemeinsamen Ordner des Projekts sind {len(files)} sichtbare Dateien vorhanden:",
     ]
-    for item in files:
+
+    for item in sorted(files, key=lambda entry: entry.filename.lower()):
+        if item.filename in processed:
+            continue
+
+        lower_name = item.filename.lower()
+        stem = Path(item.filename).stem
+        ext = Path(item.filename).suffix.lower()
+        modified = item.modified_at.isoformat(timespec="seconds") if item.modified_at else "unbekannt"
+
+        if ext == ".shp":
+            block = _extract_shapefile_context(project, stem, files_by_name)
+            if block:
+                lines.append(block)
+                for related_ext in (".shp", ".shx", ".dbf", ".prj", ".cpg"):
+                    processed.add(f"{stem}{related_ext}")
+                continue
+
+        if ext == ".gpkg":
+            block = _extract_gpkg_context(project, item.filename)
+            if block:
+                lines.append(block)
+                processed.add(item.filename)
+                continue
+
         try:
             content, content_type, _storage = read_project_file(project, item.filename)
             preview = extract_project_file_preview(item.filename, content, content_type)
         except Exception:
             preview = ""
 
-        modified = item.modified_at.isoformat(timespec="seconds") if item.modified_at else "unbekannt"
         lines.append(f"- {item.filename} ({item.size} bytes, Speicherung {item.storage}, geändert {modified})")
         if preview:
-            lines.append(f"  Vorschau: {preview}")
+            lines.append(f"  Inhalt: {preview}")
+        elif lower_name.endswith((".shx", ".dbf", ".prj", ".cpg")):
+            lines.append("  Inhalt: Begleitdatei für Geodaten.")
+        processed.add(item.filename)
     return "\n".join(lines)

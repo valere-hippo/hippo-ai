@@ -93,7 +93,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort.\n"
         "Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
         "Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert wird, antworte ausführlich, strukturiert und mit klaren Zwischenüberschriften oder Aufzählungspunkten.\n"
-        "Bei Ordneranalysen liefere zuerst den Überblick, dann die sichtbaren Dateien, dann eine Detailanalyse pro Datei und am Ende ein kurzes Fazit."
+        "Bei Ordneranalysen liefere zuerst den Überblick, dann die sichtbaren Dateien, dann eine Detailanalyse pro Datei und am Ende ein kurzes Fazit.\n"
+        "Schreibe Berichte in normalem Fließtext mit knappen Abschnittsüberschriften oder Bulletpoints, aber ohne Markdown-Tabellen und ohne übermäßige Fettschrift.\n"
     )
     hippo_messages.insert(0, {"role": "system", "content": global_sys})
 
@@ -127,7 +128,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                     "content": (
                         "Kontext des gemeinsamen Projektordners:\n"
                         f"{project_files_context}\n\n"
-                        "Nutze diesen Kontext, wenn der Benutzer die Dateien oder den Ordner analysieren möchte, und antworte ausführlich auf Deutsch."
+                        "Nutze diesen Kontext, wenn der Benutzer die Dateien oder den Ordner analysieren möchte, antworte ausführlich auf Deutsch und vermeide Tabellen oder übertriebenes Markdown."
                     ),
                 },
             )

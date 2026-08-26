@@ -98,6 +98,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         "- Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
         "- Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert werden soll, antworte ausführlicher, mit klaren Abschnitten, Aufzählungen und einer kurzen Schlussbewertung.\n"
         "- Nenne bei Ordneranalysen zuerst den Überblick, dann die sichtbaren Dateien, dann die Details pro Datei und am Ende ein kurzes Fazit.\n"
+        "- Schreibe Berichte in normalem Fließtext mit knappen Abschnittsüberschriften oder Bulletpoints, aber ohne Markdown-Tabellen und ohne übermäßige Fettschrift.\n"
     )
     hippo_messages.insert(0, {"role": "system", "content": global_sys})
 
@@ -132,7 +133,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                     "content": (
                         "Kontext des gemeinsamen Projektordners:\n"
                         f"{project_files_context}\n\n"
-                        "Wenn der Benutzer nach dem Inhalt des Ordners fragt, antworte ausführlich auf Deutsch und stütze dich direkt auf diesen Kontext."
+                        "Wenn der Benutzer nach dem Inhalt des Ordners fragt, antworte ausführlich auf Deutsch, stütze dich direkt auf diesen Kontext und vermeide Tabellen oder übertriebenes Markdown."
                     ),
                 },
             )
