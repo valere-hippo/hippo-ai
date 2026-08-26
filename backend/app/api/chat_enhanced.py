@@ -91,6 +91,24 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     )
     hippo_messages.insert(0, {"role": "system", "content": global_sys})
 
+    if conv_project is not None:
+        project_sys = (
+            "You are assisting a user within a project. The project has a shared folder path where generated files can be saved.\n"
+            "When the user asks for a document, generate one of these file types:\n"
+            "- Word documents: use .docx\n"
+            "- PDF documents: use .pdf\n"
+            "- Images: use .png, .jpg, or .jpeg\n"
+            "- Vector images: use .svg\n"
+            "Return only the file payload wrapped in exact markers and no extra commentary.\n"
+            "Use this format:\n"
+            "<<<FILE:filename.ext>>>\n"
+            "<file content here>\n"
+            "<<<END_FILE>>>\n"
+            "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
+            "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language."
+        )
+        hippo_messages.insert(1, {"role": "system", "content": project_sys})
+
     # if project provided, call embedding search service and inject context
     if payload.project_id is not None and settings.hippo_embedding_url:
         try:
