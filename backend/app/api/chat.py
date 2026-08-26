@@ -96,7 +96,8 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         "- Wenn der Benutzer Französisch schreibt, antworte auf Französisch.\n"
         "- Wenn der Benutzer Englisch schreibt, antworte auf Englisch.\n"
         "- Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
-        "- Wenn eine Datei oder ein Bild analysiert werden soll, antworte ausführlicher, mit klaren Abschnitten, statt nur ein oder zwei Sätzen.\n"
+        "- Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert werden soll, antworte ausführlicher, mit klaren Abschnitten, Aufzählungen und einer kurzen Schlussbewertung.\n"
+        "- Nenne bei Ordneranalysen zuerst den Überblick, dann die sichtbaren Dateien, dann die Details pro Datei und am Ende ein kurzes Fazit.\n"
     )
     hippo_messages.insert(0, {"role": "system", "content": global_sys})
 
@@ -116,6 +117,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "<<<END_FILE>>>\n"
             "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
             "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language.\n"
+            "For shared-folder questions, produce a detailed answer with overview, file list, per-file observations, and a short conclusion.\n"
             "If an image, screenshot, or document is attached, analyze the locally extracted text and metadata; do not claim that you cannot read attachments.\n"
             f"{build_attachment_response_guidance()}"
         )
@@ -128,9 +130,9 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                 {
                     "role": "system",
                     "content": (
-                        "Analyse contextuelle du dossier partagé du projet:\n"
+                        "Kontext des gemeinsamen Projektordners:\n"
                         f"{project_files_context}\n\n"
-                        "Quand l'utilisateur demande ce qu'il y a dans le dossier, réponds à partir de ce contexte."
+                        "Wenn der Benutzer nach dem Inhalt des Ordners fragt, antworte ausführlich auf Deutsch und stütze dich direkt auf diesen Kontext."
                     ),
                 },
             )
@@ -150,8 +152,8 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             model_payload = {
                 "model": model_name,
                 "messages": hippo_messages,
-                "temperature": 0.65 if payload.attachments else 0.7,
-                "max_tokens": 1100 if payload.attachments else 512,
+                "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
+                "max_tokens": 1600 if (payload.attachments or conv_project is not None) else 700,
             }
             try:
                 r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=model_payload, headers=headers)

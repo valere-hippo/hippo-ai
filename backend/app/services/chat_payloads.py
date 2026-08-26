@@ -10,6 +10,8 @@ def build_attachment_response_guidance() -> str:
         "Wenn die Antwort auf einem angehängten Dokument, Bild oder Screenshot basiert, antworte ausführlicher als üblich.\n"
         "Erkläre zuerst kurz, worum es sich bei der Datei handelt, dann die wichtigsten Inhalte oder erkannten Elemente, "
         "danach die relevantesten Details oder Auffälligkeiten und schließe mit einer kompakten Einordnung.\n"
+        "Wenn der Benutzer eine Analyse des gemeinsamen Ordners, einer Datei oder mehrerer Dateien möchte, liefere eine strukturierte Antwort mit Überblick, Dateiliste, Details und Fazit.\n"
+        "Verwende bei solchen Anfragen lieber mehrere Absätze oder Aufzählungspunkte als nur ein bis zwei kurze Sätze.\n"
         "Bei deutschen Anfragen antworte auf Deutsch und verwende eine klare, strukturierte Sprache.\n"
         "Gib keine internen Gedanken aus und erwähne keine <think>-Blöcke."
     )

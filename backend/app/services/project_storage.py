@@ -329,12 +329,12 @@ def build_project_files_context(project: Any, max_files: int = 6) -> str:
     files = list_project_files(project)[:max_files]
     if not files:
         return (
-            "Aucun fichier n'est actuellement visible dans le dossier partagé du projet.\n"
-            "Si l'utilisateur s'attend à en voir, explique-lui que le bucket est vide ou que l'index n'est pas encore synchronisé."
+            "Im gemeinsamen Ordner des Projekts sind aktuell keine Dateien sichtbar.\n"
+            "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Bucket leer ist oder die Synchronisierung noch nicht abgeschlossen wurde."
         )
 
     lines = [
-        "Fichiers visibles dans le dossier partagé du projet:",
+        f"Im gemeinsamen Ordner des Projekts sind {len(files)} sichtbare Dateien vorhanden:",
     ]
     for item in files:
         try:
@@ -343,7 +343,8 @@ def build_project_files_context(project: Any, max_files: int = 6) -> str:
         except Exception:
             preview = ""
 
-        lines.append(f"- {item.filename} ({item.size} bytes, stockage {item.storage})")
+        modified = item.modified_at.isoformat(timespec="seconds") if item.modified_at else "unbekannt"
+        lines.append(f"- {item.filename} ({item.size} bytes, Speicherung {item.storage}, geändert {modified})")
         if preview:
-            lines.append(f"  Aperçu: {preview}")
+            lines.append(f"  Vorschau: {preview}")
     return "\n".join(lines)
