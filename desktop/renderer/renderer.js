@@ -823,7 +823,20 @@ function renderDashboardUsers(container) {
     subtitle.textContent = `${formatRole(user.role)} · ${user.email}`
     main.append(title, subtitle)
 
-    row.append(avatar, main)
+    const actions = document.createElement('div')
+    actions.className = 'item-actions'
+
+    const deleteButton = document.createElement('button')
+    deleteButton.type = 'button'
+    deleteButton.className = 'item-action-button danger'
+    deleteButton.title = 'Benutzer löschen'
+    deleteButton.textContent = '🗑'
+    deleteButton.addEventListener('click', async () => {
+      await deleteDashboardUser(user)
+    })
+
+    actions.append(deleteButton)
+    row.append(avatar, main, actions)
     container.appendChild(row)
   })
 }
@@ -1512,51 +1525,77 @@ async function openProjectFilesModal(project) {
   if (!project) return
   showLoader('Projektdateien werden geladen...')
   try {
-    const storage = await apiJson(`/files/projects/${project.id}/storage`)
     const wrapper = document.createElement('div')
     wrapper.className = 'modal-grid'
-
     const summary = document.createElement('div')
     summary.className = 'storage-summary'
-    summary.innerHTML = `
-      <div class="storage-summary-line"><span>Speicher</span><strong>${escapeHtml(storage.provider || 'local')}</strong></div>
-      <div class="storage-summary-line"><span>Bucket</span><strong>${escapeHtml(storage.bucket || 'lokal')}</strong></div>
-      <div class="storage-summary-line"><span>Pfad</span><strong>${escapeHtml(storage.key_prefix || project.watched_folder || '—')}</strong></div>
-      <div class="storage-summary-line"><span>Ordner</span><strong>${escapeHtml(storage.watched_folder || '—')}</strong></div>
-    `
-    wrapper.appendChild(summary)
+    const filesHost = document.createElement('div')
+    filesHost.className = 'modal-grid'
 
-    const files = Array.isArray(storage.files) ? storage.files : []
-    if (files.length) {
-      files.forEach((file) => {
-        const row = document.createElement('div')
-        row.className = 'project-file-row'
-        const nameBlock = document.createElement('div')
-        nameBlock.className = 'item-main'
-        const name = document.createElement('div')
-        name.className = 'item-title'
-        name.textContent = file.filename
-        const meta = document.createElement('div')
-        meta.className = 'item-subtitle'
-        meta.textContent = `${formatFileSize(file.size)} · ${formatDateLabel(file.modified_at)} · ${file.storage || 'local'}`
-        nameBlock.append(name, meta)
-        const download = document.createElement('button')
-        download.type = 'button'
-        download.className = 'item-action-button'
-        download.textContent = '↓'
-        download.title = 'Datei herunterladen'
-        download.addEventListener('click', async () => {
-          await downloadProjectFile(project, file.filename)
+    const renderStorage = (storage) => {
+      wrapper.innerHTML = ''
+      summary.innerHTML = `
+        <div class="storage-summary-line"><span>Speicher</span><strong>${escapeHtml(storage.provider || 'local')}</strong></div>
+        <div class="storage-summary-line"><span>Bucket</span><strong>${escapeHtml(storage.bucket || 'lokal')}</strong></div>
+        <div class="storage-summary-line"><span>Pfad</span><strong>${escapeHtml(storage.key_prefix || project.watched_folder || '—')}</strong></div>
+        <div class="storage-summary-line"><span>Ordner</span><strong>${escapeHtml(storage.watched_folder || '—')}</strong></div>
+      `
+      filesHost.innerHTML = ''
+
+      const files = Array.isArray(storage.files) ? storage.files : []
+      if (files.length) {
+        files.forEach((file) => {
+          const row = document.createElement('div')
+          row.className = 'project-file-row'
+          const nameBlock = document.createElement('div')
+          nameBlock.className = 'item-main'
+          const name = document.createElement('div')
+          name.className = 'item-title'
+          name.textContent = file.filename
+          const meta = document.createElement('div')
+          meta.className = 'item-subtitle'
+          meta.textContent = `${formatFileSize(file.size)} · ${formatDateLabel(file.modified_at)} · ${file.storage || 'local'}`
+          nameBlock.append(name, meta)
+          const download = document.createElement('button')
+          download.type = 'button'
+          download.className = 'item-action-button'
+          download.textContent = '↓'
+          download.title = 'Datei herunterladen'
+          download.addEventListener('click', async () => {
+            await downloadProjectFile(project, file.filename)
+          })
+
+          const remove = document.createElement('button')
+          remove.type = 'button'
+          remove.className = 'item-action-button danger'
+          remove.textContent = '🗑'
+          remove.title = 'Datei löschen'
+          remove.addEventListener('click', async () => {
+            await deleteProjectStorageFile(project, file.filename, refreshModal)
+          })
+
+          const actions = document.createElement('div')
+          actions.className = 'item-actions'
+          actions.append(download, remove)
+          row.append(nameBlock, actions)
+          filesHost.appendChild(row)
         })
-        row.append(nameBlock, download)
-        wrapper.appendChild(row)
-      })
-    } else {
-      const empty = document.createElement('div')
-      empty.className = 'muted-copy'
-      empty.textContent = 'Im Projekt-Speicher sind noch keine Dateien sichtbar.'
-      wrapper.appendChild(empty)
+      } else {
+        const empty = document.createElement('div')
+        empty.className = 'muted-copy'
+        empty.textContent = 'Im Projekt-Speicher sind noch keine Dateien sichtbar.'
+        filesHost.appendChild(empty)
+      }
+
+      wrapper.append(summary, filesHost)
     }
+
+    const refreshModal = async () => {
+      const storage = await apiJson(`/files/projects/${project.id}/storage`)
+      renderStorage(storage)
+    }
+
+    await refreshModal()
 
     await openModal({
       title: `Dateien · ${project.name}`,
@@ -1595,6 +1634,29 @@ async function downloadProjectFile(project, filename) {
     }
   } catch (error) {
     showToast(error.message || 'Datei konnte nicht heruntergeladen werden', 'error')
+  }
+}
+
+async function deleteProjectStorageFile(project, filename, refresh) {
+  if (!project?.id || !filename) return
+  const firstOk = window.confirm(`Datei "${filename}" wirklich löschen?`)
+  if (!firstOk) return
+  const secondOk = window.confirm(`Letzte Bestätigung: "${filename}" wird dauerhaft aus dem Projekt-Speicher entfernt. Fortfahren?`)
+  if (!secondOk) return
+
+  showLoader('Datei wird gelöscht...')
+  try {
+    await apiJson(`/files/projects/${project.id}/storage/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    })
+    showToast(`Datei gelöscht: ${filename}`)
+    if (typeof refresh === 'function') {
+      await refresh()
+    }
+  } catch (error) {
+    showToast(error.message || 'Datei konnte nicht gelöscht werden', 'error')
+  } finally {
+    hideLoader()
   }
 }
 
@@ -1824,6 +1886,34 @@ async function createDashboardUser(container) {
   }
 }
 
+async function deleteDashboardUser(user) {
+  if (!user?.id) return
+  if (state.user?.id === user.id) {
+    showToast('Das eigene Konto kann hier nicht gelöscht werden.', 'error')
+    return
+  }
+
+  const firstOk = window.confirm(`Benutzer "${user.full_name || user.email}" wirklich löschen?`)
+  if (!firstOk) return
+  const secondOk = window.confirm(`Letzte Bestätigung: Benutzer "${user.full_name || user.email}" wird dauerhaft gelöscht. Fortfahren?`)
+  if (!secondOk) return
+
+  showLoader('Benutzer wird gelöscht...')
+  try {
+    await apiJson(`/admin/users/${user.id}`, {
+      method: 'DELETE',
+    })
+    await loadUsers()
+    const dashboardUsersList = document.querySelector('[data-dashboard-users]')
+    if (dashboardUsersList) renderDashboardUsers(dashboardUsersList)
+    showToast('Benutzer gelöscht')
+  } catch (error) {
+    showToast(error.message || 'Benutzer konnte nicht gelöscht werden', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
 function renderDashboardProjectFiles(container, storage) {
   const fileList = container.querySelector('[data-project-files]')
   if (!fileList) return
@@ -1860,7 +1950,23 @@ function renderDashboardProjectFiles(container, storage) {
         await downloadProjectFile(project, file.filename)
       }
     })
-    row.append(left, download)
+
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.className = 'item-action-button danger'
+    remove.textContent = '🗑'
+    remove.title = 'Datei löschen'
+    remove.addEventListener('click', async () => {
+      const project = state.projects.find((item) => item.id === storage.project_id)
+      if (project) {
+        await deleteProjectStorageFile(project, file.filename, () => refreshDashboardStorage(container, storage.project_id))
+      }
+    })
+
+    const actions = document.createElement('div')
+    actions.className = 'item-actions'
+    actions.append(download, remove)
+    row.append(left, actions)
     fileList.appendChild(row)
   })
 }

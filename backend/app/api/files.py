@@ -11,6 +11,7 @@ from app.models.permission import PermissionLevel
 from app.services.project_storage import (
     can_use_s3_storage,
     clear_project_storage,
+    delete_project_file,
     has_s3_storage,
     list_project_files,
     project_bucket_name,
@@ -160,6 +161,47 @@ async def clear_project_storage_endpoint(project_id: int, db: DbSession, current
     return {
         "ok": True,
         "project_id": project.id,
+        "deleted_remote": deleted["deleted_remote"],
+        "deleted_local": deleted["deleted_local"],
+        "provider": "s3" if can_use_s3_storage() else "local",
+    }
+
+
+@router.delete("/projects/{project_id}/storage/{filename}")
+async def delete_project_file_endpoint(project_id: int, filename: str, db: DbSession, current_user=Depends(get_current_user)):
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
+
+    from app.services.permissions import has_project_permission
+    allowed = await has_project_permission(db, current_user, project, PermissionLevel.ADMIN)
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert.")
+
+    existing_files = {item.filename for item in list_project_files(project)}
+    if filename not in existing_files:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
+
+    deleted = delete_project_file(project, filename)
+
+    try:
+        await db.execute(
+            text(
+                "DELETE FROM embeddings "
+                "WHERE project_id = :project_id "
+                "AND metadata ->> 'filename' = :filename"
+            ),
+            {"project_id": project.id, "filename": filename},
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+    return {
+        "ok": True,
+        "project_id": project.id,
+        "filename": deleted["filename"],
         "deleted_remote": deleted["deleted_remote"],
         "deleted_local": deleted["deleted_local"],
         "provider": "s3" if can_use_s3_storage() else "local",

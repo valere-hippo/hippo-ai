@@ -283,6 +283,37 @@ def read_project_file(project: Any, filename: str) -> tuple[bytes, str, str]:
     return path.read_bytes(), content_type, "local"
 
 
+def delete_project_file(project: Any, filename: str) -> dict[str, int | str]:
+    safe_filename = _safe_name(filename)
+    deleted_remote = 0
+    deleted_local = 0
+
+    if can_use_s3_storage():
+        client = s3_client()
+        if client is not None:
+            key = f"{project_object_prefix(project)}{safe_filename}"
+            try:
+                client.delete_object(Bucket=project_bucket_name(project), Key=key)
+                deleted_remote = 1
+            except ClientError:
+                pass
+
+    project_id = getattr(project, "id", None)
+    local_path = LOCAL_STORAGE_ROOT / str(project_id) / safe_filename if project_id is not None else None
+    try:
+        if local_path is not None and local_path.exists() and local_path.is_file():
+            local_path.unlink()
+            deleted_local = 1
+    except Exception:
+        pass
+
+    return {
+        "filename": safe_filename,
+        "deleted_remote": deleted_remote,
+        "deleted_local": deleted_local,
+    }
+
+
 def _truncate(text: str, limit: int = 5000) -> str:
     text = re.sub(r"\s+\n", "\n", text or "").strip()
     if len(text) <= limit:

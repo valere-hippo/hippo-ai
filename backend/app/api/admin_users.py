@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 
 from app.api.dependencies import DbSession, get_current_user
 from app.core.security import hash_password
@@ -39,3 +39,63 @@ async def list_users(db: DbSession, current_user=Depends(get_current_user)):
     result = await db.execute(select(User))
     users = result.scalars().all()
     return users
+
+
+@router.delete('/{user_id}')
+async def delete_user(user_id: int, db: DbSession, current_user=Depends(get_current_user)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail='Zugriff verweigert.')
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail='Das eigene Konto kann hier nicht gelöscht werden.')
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    target = result.scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail='Benutzer nicht gefunden.')
+
+    from app.models.chat import ChatMessage, Conversation
+    from app.models.permission import ProjectPermission
+    from app.models.project import Project
+
+    project_result = await db.execute(select(Project.id).where(Project.owner_id == user_id))
+    owned_project_ids = [row[0] for row in project_result.fetchall()]
+    if owned_project_ids:
+        await db.execute(
+            update(Project)
+            .where(Project.owner_id == user_id)
+            .values(owner_id=current_user.id)
+        )
+
+    conversation_result = await db.execute(
+        select(Conversation.id)
+        .where(
+            Conversation.id.in_(
+                select(ChatMessage.conversation_id).where(ChatMessage.user_id == user_id)
+            )
+        )
+    )
+    conversation_ids = [row[0] for row in conversation_result.fetchall()]
+    deleted_messages = 0
+    deleted_conversations = 0
+    deleted_permissions = 0
+
+    if conversation_ids:
+        msg_result = await db.execute(delete(ChatMessage).where(ChatMessage.conversation_id.in_(conversation_ids)))
+        deleted_messages = msg_result.rowcount or 0
+        conv_result = await db.execute(delete(Conversation).where(Conversation.id.in_(conversation_ids)))
+        deleted_conversations = conv_result.rowcount or 0
+
+    perm_result = await db.execute(delete(ProjectPermission).where(ProjectPermission.user_id == user_id))
+    deleted_permissions = perm_result.rowcount or 0
+
+    await db.execute(delete(User).where(User.id == user_id))
+    await db.commit()
+
+    return {
+        "ok": True,
+        "user_id": user_id,
+        "deleted_messages": deleted_messages,
+        "deleted_conversations": deleted_conversations,
+        "deleted_permissions": deleted_permissions,
+        "reassigned_projects": len(owned_project_ids),
+    }
