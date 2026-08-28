@@ -19,7 +19,7 @@ Server preparation (target host)
 4. Optionally create a systemd service wrapper for docker-compose for auto start.
 
 Workflow behavior
-- On push to main, the workflow will build and push the images to ghcr.io
+- On push to master, the workflow will build and push the images to ghcr.io
 - The deploy job will SSH to DEPLOY_HOST, perform docker login to ghcr, pull images, and run docker-compose up -d
 
 Security notes

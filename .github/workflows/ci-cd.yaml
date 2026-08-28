@@ -1,7 +1,10 @@
 name: CI/CD
 on:
   push:
-    branches: [ main ]
+    branches:
+      - master
+      - main
+      - feature/assistant
   workflow_dispatch:
 
 permissions:
