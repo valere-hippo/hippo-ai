@@ -3,6 +3,27 @@ const path = require('path')
 const fs = require('fs')
 const Tesseract = require('tesseract.js')
 
+function loadRuntimeConfig() {
+  const defaultApiUrl = process.env.HIPPO_API_URL || 'http://localhost:8000'
+  const configPath = path.join(__dirname, 'build-config.json')
+
+  try {
+    if (fs.existsSync(configPath)) {
+      const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+      const apiUrl = String(parsed?.apiUrl || '').trim()
+      return {
+        apiUrl: apiUrl || defaultApiUrl,
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to load runtime config', error)
+  }
+
+  return { apiUrl: defaultApiUrl }
+}
+
+const runtimeConfig = loadRuntimeConfig()
+
 function configurePermissions() {
   try {
     const permissions = new Set(['media', 'microphone', 'display-capture'])
@@ -60,6 +81,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit()
+})
+
+ipcMain.on('get-runtime-config', (event) => {
+  event.returnValue = runtimeConfig
 })
 
 ipcMain.handle('select-folder', async () => {

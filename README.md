@@ -71,6 +71,11 @@ CI / infra deploy
 - On `hippo-ai`, the workflow now only builds and pushes from `master`.
 - Deployment is handled from `hippoject-infra` on the Hetzner self-hosted runner using `AI_DEPLOY_PATH`.
 
+Desktop installers
+- The desktop installer workflow builds Windows `.exe` and macOS `.dmg` artifacts.
+- Set `HIPPO_API_URL` in the repository or organization secrets to point the packaged app to production, for example `https://api.hipposideros-cloud.de`.
+- If `HIPPO_API_URL` is missing, the desktop app falls back to `http://localhost:8000` for local development builds.
+
 Notes
 - For GPU inference using vLLM: provision hosts with NVIDIA drivers and nvidia-container-toolkit. Configure model volumes under /models.
 - Voice dictation uses the local backend STT pipeline (`faster-whisper`). The backend image is pinned to Python 3.12 so PyAV can install cleanly. Tune it with `STT_MODEL`, `STT_DEVICE`, `STT_COMPUTE_TYPE`, and `STT_LANGUAGE` in `.env`.

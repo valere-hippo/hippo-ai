@@ -1,4 +1,19 @@
-const API = 'http://localhost:8000/api/v1'
+const DEFAULT_API = 'http://localhost:8000'
+
+function normalizeApiBaseUrl(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return `${DEFAULT_API}/api/v1`
+  const trimmed = raw.replace(/\/+$/, '')
+  return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`
+}
+
+const API = normalizeApiBaseUrl(
+  window.electron?.runtimeConfig?.apiUrl
+    || window.electron?.runtimeConfig?.apiBaseUrl
+    || window.electron?.runtimeConfig?.url
+    || localStorage.getItem('hippo.api.url')
+    || DEFAULT_API,
+)
 
 const state = {
   token: localStorage.getItem('hippo.token') || '',
