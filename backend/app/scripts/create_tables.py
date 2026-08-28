@@ -1,15 +1,10 @@
 import asyncio
 
-from sqlalchemy import text
-
-from app.core.config import settings
 from app.db.session import engine
-from app.models import Base
+from app.services.database_bootstrap import ensure_database_schema_and_tables
 
 async def main():
-    async with engine.begin() as conn:
-        await conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{settings.postgres_schema}"'))
-        await conn.run_sync(Base.metadata.create_all)
+    await ensure_database_schema_and_tables(engine)
 
 if __name__ == '__main__':
     asyncio.run(main())
