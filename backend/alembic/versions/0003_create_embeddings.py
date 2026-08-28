@@ -20,7 +20,7 @@ def upgrade():
 
     # create embeddings table if not exists
     op.execute("""
-    CREATE TABLE IF NOT EXISTS embeddings (
+    CREATE TABLE IF NOT EXISTS ai_embeddings (
         id BIGSERIAL PRIMARY KEY,
         project_id INTEGER NOT NULL,
         text TEXT NOT NULL,
@@ -31,13 +31,13 @@ def upgrade():
     """)
 
     # create hnsw index for pgvector cosine search
-    op.execute("CREATE INDEX IF NOT EXISTS embeddings_embedding_hnsw ON embeddings USING hnsw (embedding vector_cosine_ops);")
-    op.execute("CREATE INDEX IF NOT EXISTS embeddings_project_id_idx ON embeddings (project_id);")
-    op.execute("CREATE INDEX IF NOT EXISTS embeddings_metadata_idx ON embeddings USING gin (metadata);")
+    op.execute("CREATE INDEX IF NOT EXISTS ai_embeddings_embedding_hnsw ON ai_embeddings USING hnsw (embedding vector_cosine_ops);")
+    op.execute("CREATE INDEX IF NOT EXISTS ai_embeddings_project_id_idx ON ai_embeddings (project_id);")
+    op.execute("CREATE INDEX IF NOT EXISTS ai_embeddings_metadata_idx ON ai_embeddings USING gin (metadata);")
 
 
 def downgrade():
-    op.execute("DROP INDEX IF EXISTS embeddings_metadata_idx;")
-    op.execute("DROP INDEX IF EXISTS embeddings_project_id_idx;")
-    op.execute("DROP INDEX IF EXISTS embeddings_embedding_hnsw;")
-    op.execute("DROP TABLE IF EXISTS embeddings;")
+    op.execute("DROP INDEX IF EXISTS ai_embeddings_metadata_idx;")
+    op.execute("DROP INDEX IF EXISTS ai_embeddings_project_id_idx;")
+    op.execute("DROP INDEX IF EXISTS ai_embeddings_embedding_hnsw;")
+    op.execute("DROP TABLE IF EXISTS ai_embeddings;")

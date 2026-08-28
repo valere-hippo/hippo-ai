@@ -28,7 +28,7 @@ def upgrade() -> None:
     user_role.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
-        "users",
+        "ai_users",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("email", sa.String(length=320), nullable=False),
         sa.Column("full_name", sa.String(length=200), nullable=False),
@@ -43,10 +43,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("email"),
     )
-    op.create_index("ix_users_email", "users", ["email"], unique=True)
+    op.create_index("ix_ai_users_email", "ai_users", ["email"], unique=True)
 
 
 def downgrade() -> None:
-    op.drop_index("ix_users_email", table_name="users")
-    op.drop_table("users")
+    op.drop_index("ix_ai_users_email", table_name="ai_users")
+    op.drop_table("ai_users")
     user_role.drop(op.get_bind(), checkfirst=True)

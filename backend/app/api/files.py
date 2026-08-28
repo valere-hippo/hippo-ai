@@ -5,6 +5,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select, text
 
 from app.api.dependencies import get_current_user, DbSession
+from app.core.config import settings
+from app.db.session import AsyncSessionLocal
 from app.models.user import UserRole
 from app.models.project import Project
 from app.models.permission import PermissionLevel
@@ -21,6 +23,7 @@ from app.services.project_storage import (
 )
 
 router = APIRouter(prefix="/files", tags=["files"]) 
+EMBEDDINGS_TABLE = f"{settings.postgres_schema}.ai_embeddings"
 
 
 @router.post("/projects/{project_id}/upload", status_code=status.HTTP_201_CREATED)
@@ -42,7 +45,6 @@ async def upload_file(project_id: int, db: DbSession, current_user=Depends(get_c
 
     # attempt to auto-index text files (txt, md)
     try:
-        from app.core.config import settings
         _, ext = file.filename.lower().rsplit(".", 1) if "." in file.filename else ("", "")
         if f".{ext}" in ['.txt', '.md', '.markdown'] and getattr(settings, 'hippo_embedding_url', None):
             text_content = content.decode('utf-8', errors='ignore')
@@ -60,9 +62,9 @@ async def upload_file(project_id: int, db: DbSession, current_user=Depends(get_c
                     # insert into embeddings table (assumes pgvector column 'embedding')
                     try:
                         async def _insert_embedding():
-                            async with DbSession() as session:
+                            async with AsyncSessionLocal() as session:
                                 await session.execute(
-                                    text("INSERT INTO embeddings (project_id, text, embedding, metadata) VALUES (:project_id, :text, :embedding, :metadata)"),
+                                    text(f"INSERT INTO {EMBEDDINGS_TABLE} (project_id, text, embedding, metadata) VALUES (:project_id, :text, :embedding, :metadata)"),
                                     {"project_id": project_id, "text": text_content, "embedding": emb, "metadata": json.dumps({"filename": file.filename})}
                                 )
                                 await session.commit()
@@ -188,7 +190,7 @@ async def delete_project_file_endpoint(project_id: int, filename: str, db: DbSes
     try:
         await db.execute(
             text(
-                "DELETE FROM embeddings "
+                f"DELETE FROM {EMBEDDINGS_TABLE} "
                 "WHERE project_id = :project_id "
                 "AND metadata ->> 'filename' = :filename"
             ),

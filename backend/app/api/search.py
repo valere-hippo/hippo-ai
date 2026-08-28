@@ -6,6 +6,7 @@ from sqlalchemy import text
 import httpx
 
 router = APIRouter(prefix="/search", tags=["search"])
+EMBEDDINGS_TABLE = f"{settings.postgres_schema}.ai_embeddings"
 
 class SearchRequest(BaseModel):
     query: str
@@ -45,12 +46,12 @@ async def semantic_search(payload: SearchRequest, db: DbSession, user = Depends(
         except Exception as e:
             raise HTTPException(status_code=502, detail=f'Embedding error: {e}')
 
-    # Query Postgres pgvector table — assumes table `embeddings` with columns id, project_id, text, embedding (vector), metadata (jsonb)
+    # Query Postgres pgvector table — assumes table `ai_embeddings` with columns id, project_id, text, embedding (vector), metadata (jsonb)
     # Use <vector> <-> cube operator (pgvector uses <-> for distance)
     # Use 1 - distance as similarity score and cast param to vector
     sql = text(
         "SELECT id, text, metadata, 1 - (embedding <=> (:vec)::vector) AS similarity "
-        "FROM embeddings "
+        f"FROM {EMBEDDINGS_TABLE} "
         + ("WHERE project_id = :project_id " if payload.project_id is not None else "")
         + "ORDER BY embedding <=> (:vec)::vector LIMIT :k OFFSET :offset"
     )
@@ -70,6 +71,6 @@ async def semantic_search(payload: SearchRequest, db: DbSession, user = Depends(
     except Exception as e:
         # detect common pgvector / missing-table issues and return a helpful message
         err_msg = str(e)
-        if 'UndefinedTableError' in err_msg or 'relation "embeddings" does not exist' in err_msg:
-            raise HTTPException(status_code=503, detail='Embeddings table not found or pgvector not installed. Run migrations and install the pgvector extension.')
+        if 'UndefinedTableError' in err_msg or 'relation "ai_embeddings" does not exist' in err_msg or 'relation "embeddings" does not exist' in err_msg:
+            raise HTTPException(status_code=503, detail=f'Embeddings table not found in schema "{settings.postgres_schema}" or pgvector not installed. Run migrations and install the pgvector extension.')
         raise HTTPException(status_code=500, detail=f'Database error: {e}')

@@ -12,10 +12,10 @@ class PermissionLevel(PyEnum):
 
 
 class ProjectPermission(Base):
-    __tablename__ = "project_permissions"
+    __tablename__ = "ai_project_permissions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("hippoai.ai_users.id"), nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("hippoai.ai_projects.id"), nullable=False)
     level: Mapped[PermissionLevel] = mapped_column(Enum(PermissionLevel, name="permission_level"), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

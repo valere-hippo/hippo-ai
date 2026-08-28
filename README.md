@@ -25,19 +25,20 @@ Implemented:
 
 1. Copy `.env.example` to `.env`
 2. Set a strong `JWT_SECRET_KEY`
-3. Run:
+3. Optionally set `POSTGRES_SCHEMA=hippoai` if you want to override the default database schema name.
+4. Run:
 
 ```bash
 docker compose up --build
 ```
 
-4. Apply database migrations:
+5. Apply database migrations:
 
 ```bash
 docker compose exec api alembic upgrade head
 ```
 
-5. API:
+6. API:
 - http://localhost:8000
 - Swagger: http://localhost:8000/docs
 - Health: http://localhost:8000/health

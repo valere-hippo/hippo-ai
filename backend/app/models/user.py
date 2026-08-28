@@ -14,7 +14,7 @@ class UserRole(StrEnum):
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "ai_users"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)

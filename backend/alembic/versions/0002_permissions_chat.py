@@ -20,7 +20,7 @@ def upgrade():
     permission_level.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
-        'project_permissions',
+        'ai_project_permissions',
         sa.Column('id', sa.Integer(), primary_key=True),
         sa.Column('user_id', sa.Integer(), nullable=False),
         sa.Column('project_id', sa.Integer(), nullable=False),
@@ -29,7 +29,7 @@ def upgrade():
     )
 
     op.create_table(
-        'conversations',
+        'ai_conversations',
         sa.Column('id', sa.Integer(), primary_key=True),
         sa.Column('title', sa.String(length=200), nullable=True),
         sa.Column('project_id', sa.Integer(), nullable=True),
@@ -37,7 +37,7 @@ def upgrade():
     )
 
     op.create_table(
-        'chat_messages',
+        'ai_chat_messages',
         sa.Column('id', sa.Integer(), primary_key=True),
         sa.Column('conversation_id', sa.Integer(), nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
@@ -48,7 +48,7 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_table('chat_messages')
-    op.drop_table('conversations')
-    op.drop_table('project_permissions')
+    op.drop_table('ai_chat_messages')
+    op.drop_table('ai_conversations')
+    op.drop_table('ai_project_permissions')
     sa.Enum(name='permission_level').drop(op.get_bind(), checkfirst=True)

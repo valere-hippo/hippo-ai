@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     postgres_password: str
     postgres_host: str = "postgres"
     postgres_port: int = 5432
+    postgres_schema: str = "hippoai"
 
     redis_port: int = 6379
 
