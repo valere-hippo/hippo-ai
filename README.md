@@ -64,11 +64,12 @@ docker compose pull
 docker compose up -d --remove-orphans
 ```
 
-CI / SSH deploy
-- The CI builds images and pushes to ghcr.io/${OWNER}/hippo-ai-api and hippo-ai-desktop. The CI deploy job SSHes to your host and runs the deploy script.
-- Required repository secrets for CI deployment:
+CI / infra deploy
+- The CI builds images and pushes to ghcr.io/${OWNER}/hippo-ai-api and hippo-ai-desktop.
+- Required repository secrets for the build workflow:
   - GHCR_TOKEN (GitHub PAT with packages:write)
-  - DEPLOY_HOST, DEPLOY_USER, SSH_PUBLIC_KEY, AI_DEPLOY_PATH, DEPLOY_PORT (optional)
+- On `hippo-ai`, the workflow now only builds and pushes from `master`.
+- Deployment is handled from `hippoject-infra` on the Hetzner self-hosted runner using `AI_DEPLOY_PATH`.
 
 Notes
 - For GPU inference using vLLM: provision hosts with NVIDIA drivers and nvidia-container-toolkit. Configure model volumes under /models.
