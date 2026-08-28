@@ -65,7 +65,7 @@ docker compose up -d --remove-orphans
 ```
 
 CI / infra deploy
-- The CI builds images and pushes to ghcr.io/${OWNER}/hippo-ai-api and hippo-ai-desktop.
+- The CI builds the API image and pushes it to ghcr.io/${OWNER}/hippo-ai-api.
 - Required repository secrets for the build workflow:
   - GHCR_TOKEN (GitHub PAT with packages:write)
 - On `hippo-ai`, the workflow now only builds and pushes from `master`.

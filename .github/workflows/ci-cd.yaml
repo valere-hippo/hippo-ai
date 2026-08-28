@@ -37,10 +37,3 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/hippo-ai-api:latest
           platforms: linux/amd64,linux/arm64
 
-      - name: Build and push Desktop image
-        uses: docker/build-push-action@v4
-        with:
-          context: ./desktop
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/hippo-ai-desktop:latest
-          platforms: linux/amd64,linux/arm64
