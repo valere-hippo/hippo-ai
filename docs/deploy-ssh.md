@@ -7,9 +7,9 @@ Overview
 Required repository secrets (Settings → Secrets → Actions)
 - DEPLOY_HOST: target host IP or hostname
 - DEPLOY_USER: ssh user for deployment
-- DEPLOY_SSH_KEY: private SSH key for DEPLOY_USER (no passphrase), base64 or raw
+- SSH_PUBLIC_KEY: SSH private key material used by the deploy job (keep the existing infra secret name if you already use it there)
 - DEPLOY_PORT: (optional) SSH port, default 22
-- DEPLOY_PATH: path on remote host where the docker-compose.yml lives (working directory)
+- AI_DEPLOY_PATH: path on remote host where the docker-compose.yml lives (working directory)
 - GHCR_TOKEN: Personal Access Token (packages:write, read) or use repo GITHUB_TOKEN for same-repo pushes
 
 Server preparation (target host)

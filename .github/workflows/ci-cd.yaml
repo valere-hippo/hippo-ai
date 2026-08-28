@@ -56,13 +56,13 @@ jobs:
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          key: ${{ secrets.SSH_PUBLIC_KEY || secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
           script: |
             set -e
             echo "Logging into ghcr..."
             echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
-            cd ${{ secrets.DEPLOY_PATH }} || exit 0
+            cd ${{ secrets.AI_DEPLOY_PATH || secrets.DEPLOY_PATH }} || exit 0
             echo "Pulling images..."
             docker-compose pull || true
             echo "Bringing up services..."
