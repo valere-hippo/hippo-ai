@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     smtp_use_ssl: bool = False
     smtp_timeout_seconds: int = 10
 
+    # Bootstrap admin user created on startup if missing
+    bootstrap_admin_full_name: str = "Valere Youbi"
+    bootstrap_admin_email: str = "v.youbi@hipposideros.de"
+    bootstrap_admin_password: str = "Royaume1991."
+
     # Local speech-to-text backend
     stt_model: str = "base"
     stt_device: str = "cpu"

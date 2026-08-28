@@ -2,6 +2,8 @@ from fastapi import FastAPI
 
 from app.api.routes import api_router
 from app.core.config import settings
+from app.db.session import AsyncSessionLocal
+from app.services.bootstrap import ensure_bootstrap_admin
 
 app = FastAPI(
     title="HIPPO-AI API",
@@ -10,6 +12,14 @@ app = FastAPI(
 )
 
 app.include_router(api_router)
+
+
+@app.on_event("startup")
+async def bootstrap_default_admin() -> None:
+    async with AsyncSessionLocal() as session:
+        created = await ensure_bootstrap_admin(session)
+        if created:
+            print(f"Bootstrap admin created: {settings.bootstrap_admin_email}")
 
 
 @app.get("/health", tags=["system"])
