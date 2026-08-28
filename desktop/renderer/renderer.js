@@ -1,4 +1,4 @@
-const DEFAULT_API = 'http://localhost:8000'
+const DEFAULT_API = 'https://hippo-api.hipposideros-cloud.de'
 
 function normalizeApiBaseUrl(value) {
   const raw = String(value || '').trim()

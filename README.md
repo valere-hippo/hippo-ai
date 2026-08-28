@@ -74,7 +74,7 @@ CI / infra deploy
 
 Desktop installers
 - The desktop installer workflow builds Windows `.exe` and macOS `.dmg` artifacts.
-- Set `HIPPO_API_URL` in the repository or organization secrets to point the packaged app to production, for example `https://api.hipposideros-cloud.de`.
+- Set `HIPPO_API_URL` in the repository or organization secrets to point the packaged app to production, for example `https://hippo-api.hipposideros-cloud.de`.
 - If `HIPPO_API_URL` is missing, the desktop app falls back to `http://localhost:8000` for local development builds.
 
 Notes
