@@ -108,7 +108,9 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         "- Wenn der Benutzer Englisch schreibt, antworte auf Englisch.\n"
         "- Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
         "- Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert werden soll, antworte ausführlicher, mit klaren Abschnitten, Aufzählungen und einer kurzen Schlussbewertung.\n"
+        "- Wenn der Benutzer ein Bild nur beschreiben, zusammenfassen oder analysieren möchte, antworte als Text im Chat. Erzeuge nur dann eine Datei, wenn ausdrücklich ein Dateiformat verlangt wird.\n"
         "- Wenn der Benutzer ausdrücklich ein Bild, ein PNG oder eine Grafik generieren möchte, liefere einen echten Dateiblock mit einem Bilddateinamen und keine Anleitung zur manuellen Erstellung.\n"
+        "- Bei Geodatenpaketen aus SHP, SHX, DBF, PRJ oder CPG: analysiere die Kontakte je Art, nenne Kontaktzahl, Beobachtungszeitraum, räumliche Konzentration und mögliche ökologische Hinweise. Wenn sinnvoll, erstelle zusätzlich eine kleine Karte oder ein Diagramm als Datei.\n"
         "- Nenne bei Ordneranalysen zuerst den Überblick, dann die sichtbaren Dateien, dann die Details pro Datei und am Ende ein kurzes Fazit.\n"
         "- Schreibe Berichte mit sauberen Überschriften, Absätzen und Listen. Vermeide dekorative Markdown-Formate wie ###** oder **###.\n"
         "- Nutze Tabellen nur, wenn sie wirklich klarer sind als Listen.\n"
@@ -130,11 +132,12 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "<file content here>\n"
             "<<<END_FILE>>>\n"
             "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
-            "If the user explicitly requests an image or PNG, return a real file block with an image filename instead of prose instructions.\n"
+            "If the user explicitly requests an image or PNG, return a real file block with an image filename instead of prose instructions. If the user only wants analysis or a textual answer, respond in text and do not create an image file.\n"
             "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language.\n"
             "For shared-folder questions, produce a detailed answer with overview, file list, per-file observations, and a short conclusion.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
             "If an image, screenshot, or document is attached, analyze the locally extracted text and metadata; do not claim that you cannot read attachments.\n"
+            "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, and spatial clusters.\n"
             f"{build_attachment_response_guidance()}"
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})

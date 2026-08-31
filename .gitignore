@@ -6,6 +6,9 @@ __pycache__/
 .venv/
 dist/
 build/
+!desktop/build/
+desktop/build/*
+!desktop/build/icon.ico
 *.log
 .DS_Store
 .idea/

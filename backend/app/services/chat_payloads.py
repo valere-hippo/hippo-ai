@@ -19,6 +19,8 @@ def build_attachment_response_guidance() -> str:
         "Vermeide rohe Markdown-Tabellen, wenn eine normale Liste oder ein kurzer erklärender Satz besser lesbar ist.\n"
         "Formuliere die Antwort so, dass sie sich in einzelne Abschnitte gliedert wie in einem professionell gesetzten Dokument.\n"
         "Bei deutschen Anfragen antworte auf Deutsch und verwende eine klare, strukturierte Sprache.\n"
+        "Antworte standardmäßig als Text im Chat. Erzeuge nur dann eine Datei, wenn der Benutzer ausdrücklich ein Word-, PDF-, Bild- oder anderes Dateiformat verlangt.\n"
+        "Wenn der Benutzer ein Bild nur beschreiben, analysieren oder zusammenfassen möchte, antworte in Text und liefere keine Bilddatei.\n"
         "Gib keine internen Gedanken aus und erwähne keine <think>-Blöcke."
     )
 
@@ -102,10 +104,8 @@ def derive_conversation_title(message: str, attachments: list[Any] | None = None
     return base_text
 
 
-IMAGE_REQUEST_RE = re.compile(
-    r"\b(png|jpg|jpeg|image|bild|photo|poster|illustration|illustrer|illustration|generer|générer|generate|erstelle)\b",
-    re.IGNORECASE,
-)
+IMAGE_GEN_VERB_RE = re.compile(r"\b(erstelle|erzeuge|generiere|male|zeichne|render|mach|create|generate|draw|make|produce|fais|cr[eé]e|fabrique)\b", re.IGNORECASE)
+IMAGE_GEN_NOUN_RE = re.compile(r"\b(png|jpg|jpeg|image|bild|photo|foto|poster|illustration|grafik|diagramm|karte|map|svg|logo|icon)\b", re.IGNORECASE)
 
 
 def looks_like_image_generation_request(message: str, attachments: list[Any] | None = None) -> bool:
@@ -121,4 +121,5 @@ def looks_like_image_generation_request(message: str, attachments: list[Any] | N
         return False
     if "16:9" in text or "16x9" in text:
         return True
-    return bool(IMAGE_REQUEST_RE.search(text))
+    has_explicit_output_hint = bool(re.search(r"\b(als\s+bild|als\s+datei|im\s+format|dateiblock|file\s+block|exportiere|export|speichere)\b", text, re.IGNORECASE))
+    return bool(IMAGE_GEN_VERB_RE.search(text) and (IMAGE_GEN_NOUN_RE.search(text) or has_explicit_output_hint))

@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from app.services.chat_payloads import attachments_contain_images, build_message_content
+from app.services.chat_payloads import attachments_contain_images, build_message_content, looks_like_image_generation_request
 
 
 def test_attachments_contain_images_detects_image_mime_and_data_url():
@@ -35,3 +35,9 @@ def test_build_message_content_uses_image_parts_only_when_enabled():
     assert isinstance(content_without_images, str)
     assert "image_url" not in content_without_images
     assert "Affiche de conférence" in content_without_images
+
+
+def test_looks_like_image_generation_request_requires_explicit_creation_language():
+    assert looks_like_image_generation_request("Erstelle bitte ein Bild als PNG.")
+    assert not looks_like_image_generation_request("Bitte beschreibe das Bild und analysiere den Inhalt.")
+    assert not looks_like_image_generation_request("Analysiere das Foto und schreibe den Text im Chat.")

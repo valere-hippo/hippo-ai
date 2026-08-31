@@ -321,6 +321,220 @@ def _truncate(text: str, limit: int = 5000) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
+def _clean_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8", errors="ignore").strip()
+        except Exception:
+            return ""
+    return str(value).strip()
+
+
+def _looks_like_date_field(name: str, field_type: str | None = None) -> bool:
+    lowered = (name or "").lower()
+    if field_type and field_type.upper() == "D":
+        return True
+    return any(token in lowered for token in ("date", "datum", "obs", "beob", "time", "zeit", "season", "saison"))
+
+
+def _parse_date_value(value: Any) -> datetime | None:
+    if value in (None, ""):
+        return None
+    text = _clean_value(value)
+    if not text:
+        return None
+    candidates = [
+        "%Y%m%d",
+        "%Y-%m-%d",
+        "%d.%m.%Y",
+        "%d/%m/%Y",
+        "%Y/%m/%d",
+        "%Y-%m-%d %H:%M:%S",
+        "%d.%m.%Y %H:%M:%S",
+    ]
+    for fmt in candidates:
+        try:
+            return datetime.strptime(text[: len(fmt.replace("%", "")) + 10], fmt)
+        except Exception:
+            continue
+    return None
+
+
+def _extract_candidates_from_fields(reader: Any, records: list[Any]) -> list[str]:
+    fields = [field for field in getattr(reader, "fields", [])[1:]]
+    if not fields or not records:
+        return []
+
+    scored_fields: list[str] = []
+    for field in fields:
+        name = field[0]
+        lowered = name.lower()
+        if any(token in lowered for token in ("species", "spezies", "taxon", "art", "name", "latin", "scient", "common", "spec", "typ")):
+            scored_fields.append(name)
+
+    if not scored_fields:
+        scored_fields = [field[0] for field in fields[:6]]
+
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for record in records:
+        record_dict = record.as_dict() if hasattr(record, "as_dict") else {}
+        for field_name in scored_fields:
+            value = _clean_value(record_dict.get(field_name))
+            if not value:
+                continue
+            if value not in seen:
+                seen.add(value)
+                candidates.append(value)
+            if len(candidates) >= 4:
+                return candidates
+    return candidates
+
+
+def _grid_label(x_ratio: float, y_ratio: float) -> str:
+    if x_ratio < 0.33:
+        east_west = "westlich"
+    elif x_ratio > 0.66:
+        east_west = "östlich"
+    else:
+        east_west = "zentral"
+
+    if y_ratio < 0.33:
+        north_south = "südlich"
+    elif y_ratio > 0.66:
+        north_south = "nördlich"
+    else:
+        north_south = "mittig"
+
+    if east_west == "zentral" and north_south == "mittig":
+        return "zentral"
+    return f"{north_south}-{east_west}"
+
+
+def _extract_geometry_concentration(reader: Any, bbox: tuple[float, float, float, float] | None) -> str:
+    try:
+        shapes = reader.shapes()
+    except Exception:
+        return ""
+
+    if not shapes:
+        return ""
+
+    min_x = min_y = max_x = max_y = None
+    if bbox:
+        min_x, min_y, max_x, max_y = bbox
+    else:
+        xs = [point[0] for shape in shapes for point in getattr(shape, "points", []) if point]
+        ys = [point[1] for shape in shapes for point in getattr(shape, "points", []) if point]
+        if not xs or not ys:
+            return ""
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+
+    if min_x is None or min_y is None or max_x is None or max_y is None:
+        return ""
+
+    width = max(max_x - min_x, 0.0)
+    height = max(max_y - min_y, 0.0)
+    if width == 0 and height == 0:
+        return "alle Punkte liegen praktisch an derselben Position"
+
+    grid: dict[tuple[int, int], int] = {}
+    for shape in shapes:
+        points = getattr(shape, "points", []) or []
+        if not points:
+            continue
+        xs = [pt[0] for pt in points if pt]
+        ys = [pt[1] for pt in points if pt]
+        if not xs or not ys:
+            continue
+        cx = sum(xs) / len(xs)
+        cy = sum(ys) / len(ys)
+        x_ratio = 0.5 if width == 0 else min(max((cx - min_x) / width, 0.0), 0.999)
+        y_ratio = 0.5 if height == 0 else min(max((cy - min_y) / height, 0.0), 0.999)
+        key = (int(x_ratio * 4), int(y_ratio * 4))
+        grid[key] = grid.get(key, 0) + 1
+
+    if not grid:
+        return ""
+
+    (x_bucket, y_bucket), count = max(grid.items(), key=lambda item: item[1])
+    x_ratio = (x_bucket + 0.5) / 4
+    y_ratio = (y_bucket + 0.5) / 4
+    label = _grid_label(x_ratio, y_ratio)
+    return f"Schwerpunkt der Kontakte: {label} innerhalb der Bounding Box ({count} Treffpunkte im dichtesten Rasterfeld)."
+
+
+def _infer_ecological_hints(fields: list[Any], records: list[Any], species_names: list[str]) -> list[str]:
+    hints: list[str] = []
+    field_names = [field[0].lower() for field in fields]
+    record_dicts = [record.as_dict() if hasattr(record, "as_dict") else {} for record in records[:50]]
+
+    habitat_fields = [name for name in field_names if any(token in name for token in ("habitat", "biotop", "landcover", "land use", "veget", "cover", "struktur", "site", "location", "ort", "area"))]
+    breeding_fields = [name for name in field_names if any(token in name for token in ("breed", "brut", "nest", "repro", "kolonie", "territ", "revier", "spawn"))]
+
+    if habitat_fields:
+        habitat_values: list[str] = []
+        for record in record_dicts:
+            for field_name in habitat_fields:
+                value = _clean_value(record.get(field_name))
+                if value and value not in habitat_values:
+                    habitat_values.append(value)
+                if len(habitat_values) >= 3:
+                    break
+            if len(habitat_values) >= 3:
+                break
+        if habitat_values:
+            hints.append(f"Hinweise zu Habitat / Standort: {', '.join(habitat_values[:3])}")
+
+    if breeding_fields:
+        breeding_values: list[str] = []
+        for record in record_dicts:
+            for field_name in breeding_fields:
+                value = _clean_value(record.get(field_name))
+                if value and value not in breeding_values:
+                    breeding_values.append(value)
+                if len(breeding_values) >= 3:
+                    break
+            if len(breeding_values) >= 3:
+                break
+        if breeding_values:
+            hints.append(f"Hinweise zu Revier / Brut / Kolonie: {', '.join(breeding_values[:3])}")
+
+    if species_names:
+        if len(species_names) == 1:
+            hints.append(f"Vermutlich eine Art im Datensatz: {species_names[0]}")
+        else:
+            hints.append(f"Vermutlich mehrere Arten / Taxa: {', '.join(species_names[:3])}")
+
+    return hints
+
+
+def _summarize_date_range(fields: list[Any], records: list[Any]) -> str:
+    dates: list[datetime] = []
+    for field in fields:
+        field_name = field[0]
+        field_type = field[1] if len(field) > 1 else None
+        if not _looks_like_date_field(field_name, field_type):
+            continue
+        for record in records:
+            record_dict = record.as_dict() if hasattr(record, "as_dict") else {}
+            parsed = _parse_date_value(record_dict.get(field_name))
+            if parsed:
+                dates.append(parsed)
+
+    if not dates:
+        return ""
+
+    start = min(dates)
+    end = max(dates)
+    if start.date() == end.date():
+        return f"Beobachtungsdatum: {start.date().isoformat()}"
+    return f"Beobachtungszeitraum: {start.date().isoformat()} bis {end.date().isoformat()}"
+
+
 def _extract_text_from_pdf_bytes(data: bytes) -> str:
     try:
         from pypdf import PdfReader  # type: ignore
@@ -436,6 +650,13 @@ def _extract_shapefile_context(project: Any, stem: str, files_by_name: dict[str,
                 import shapefile  # type: ignore
 
                 reader = shapefile.Reader(str(base))
+                fields = [field for field in getattr(reader, "fields", [])[1:]]
+                records = []
+                try:
+                    records = list(reader.records())
+                except Exception:
+                    records = []
+
                 shape_type = getattr(reader, "shapeType", None)
                 if shape_type is not None:
                     parts.append(f"- Geometrietyp: {_shape_type_name(int(shape_type))}")
@@ -445,22 +666,40 @@ def _extract_shapefile_context(project: Any, stem: str, files_by_name: dict[str,
                         "- Bounding Box: "
                         f"{bbox[0]:.6f}, {bbox[1]:.6f}, {bbox[2]:.6f}, {bbox[3]:.6f}"
                     )
-                fields = [field for field in getattr(reader, "fields", [])[1:]]
                 if fields:
                     formatted_fields = ", ".join(f"{field[0]} ({field[1]})" for field in fields[:10])
                     parts.append(f"- Felder: {formatted_fields}")
                 record_count = getattr(reader, "numRecords", None)
+                if record_count is None:
+                    record_count = len(records)
                 if record_count is not None:
-                    parts.append(f"- Datensätze: {record_count}")
+                    parts.append(f"- Kontakte / Datensätze: {record_count}")
+
+                observation_range = _summarize_date_range(fields, records)
+                if observation_range:
+                    parts.append(f"- {observation_range}")
+
+                species_names = _extract_candidates_from_fields(reader, records)
+                if species_names:
+                    parts.append(f"- Artenhinweise: {', '.join(species_names[:4])}")
+
+                concentration = _extract_geometry_concentration(reader, bbox if bbox else None)
+                if concentration:
+                    parts.append(f"- {concentration}")
+
+                ecological_hints = _infer_ecological_hints(fields, records, species_names)
+                for hint in ecological_hints:
+                    parts.append(f"- {hint}")
+
                 try:
-                    records = reader.records()
                     if records:
                         first_record = records[0]
+                        record_dict = first_record.as_dict() if hasattr(first_record, "as_dict") else {}
                         record_parts = []
-                        for field in getattr(reader, "fields", [])[1:][:6]:
+                        for field in fields[:8]:
                             field_name = field[0]
-                            value = first_record.as_dict().get(field_name)
-                            if value not in (None, ""):
+                            value = _clean_value(record_dict.get(field_name))
+                            if value:
                                 record_parts.append(f"{field_name}={value}")
                         if record_parts:
                             parts.append(f"- Beispielinhalt: {', '.join(record_parts)}")
@@ -487,6 +726,9 @@ def _extract_shapefile_context(project: Any, stem: str, files_by_name: dict[str,
                     prj_text = _extract_text_from_plain_bytes(prj_path.read_bytes())
                     if prj_text:
                         parts.append(f"- Projektion: {prj_text}")
+                dbf_path = Path(tmpdir) / f"{stem}.dbf"
+                if dbf_path.exists():
+                    parts.append("- DBF vorhanden: Attributtabelle für die Kontakte/Objekte.")
     except Exception:
         return ""
 
@@ -599,7 +841,7 @@ def build_project_files_context(project: Any, max_files: int = 12) -> str:
         ext = Path(item.filename).suffix.lower()
         modified = item.modified_at.isoformat(timespec="seconds") if item.modified_at else "unbekannt"
 
-        if ext == ".shp":
+        if ext in {".shp", ".shx", ".dbf", ".prj", ".cpg"}:
             block = _extract_shapefile_context(project, stem, files_by_name)
             if block:
                 lines.append(block)

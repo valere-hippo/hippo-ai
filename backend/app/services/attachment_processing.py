@@ -111,6 +111,25 @@ def _image_metadata(data: bytes) -> str:
         return "image attachment"
 
 
+def _extract_text_from_image(data: bytes) -> str:
+    try:
+        from PIL import Image  # type: ignore
+    except Exception:
+        return ""
+
+    try:
+        import pytesseract  # type: ignore
+    except Exception:
+        return ""
+
+    try:
+        with Image.open(BytesIO(data)) as image:
+            text = pytesseract.image_to_string(image, lang="deu+eng") or ""
+            return _truncate(text)
+    except Exception:
+        return ""
+
+
 def extract_attachment_text(attachment: Any) -> str:
     existing_text = (getattr(attachment, "ocr_text", None) or "").strip()
     if existing_text:
@@ -131,6 +150,9 @@ def extract_attachment_text(attachment: Any) -> str:
         or filename.lower().endswith(".docx")
     ):
         return _extract_text_from_docx(data)
+
+    if mime_type.startswith("image/") or filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff")):
+        return _extract_text_from_image(data)
 
     if mime_type.startswith("text/") or filename.lower().endswith((".txt", ".md", ".csv", ".log", ".rtf")):
         return _extract_text_from_plain_text(data)

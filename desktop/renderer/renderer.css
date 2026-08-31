@@ -880,6 +880,27 @@ textarea {
   text-align: center;
 }
 
+.empty-card-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.empty-mini-card {
+  padding: 16px 16px 14px;
+  border-radius: 18px;
+  text-align: left;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--line);
+}
+
+.empty-mini-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
 .empty-card h2 {
   margin: 10px 0 8px;
   font-size: 28px;
