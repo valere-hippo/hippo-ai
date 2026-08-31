@@ -13,6 +13,7 @@ from io import BytesIO
 from tempfile import TemporaryDirectory
 from zipfile import BadZipFile, ZipFile
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape as xml_escape
 
 try:
     import boto3  # type: ignore
@@ -740,6 +741,232 @@ def _extract_gpkg_context(project: Any, filename: str) -> str:
         data, _, _ = read_project_file(project, filename)
     except Exception:
         return ""
+
+
+def _find_shapefile_stems(project: Any) -> list[str]:
+    stems: list[str] = []
+    seen: set[str] = set()
+    for item in list_project_files(project):
+        if Path(item.filename).suffix.lower() != ".shp":
+            continue
+        stem = Path(item.filename).stem
+        if stem not in seen:
+            seen.add(stem)
+            stems.append(stem)
+    return stems
+
+
+def _shape_points(shape: Any) -> list[tuple[float, float]]:
+    points: list[tuple[float, float]] = []
+    for point in getattr(shape, "points", []) or []:
+        try:
+            x, y = float(point[0]), float(point[1])
+        except Exception:
+            continue
+        points.append((x, y))
+    return points
+
+
+def _map_palette(index: int) -> str:
+    palette = ["#63d7bf", "#9ab2ff", "#ffd37a", "#ff8fb1", "#8ce6a5", "#d0a0ff"]
+    return palette[index % len(palette)]
+
+
+def _render_geodata_svg(title: str, shape_type: str, shapes: list[Any], records: list[Any], fields: list[Any], bbox: tuple[float, float, float, float] | None) -> str:
+    width = 1500
+    height = 960
+    margin = 72
+    panel_w = 320
+    map_x0 = margin
+    map_y0 = margin
+    map_w = width - panel_w - margin * 3
+    map_h = height - margin * 2
+
+    all_points = [point for shape in shapes for point in _shape_points(shape)]
+    if not all_points and bbox:
+        all_points = [(bbox[0], bbox[1]), (bbox[2], bbox[3])]
+    if not all_points:
+        all_points = [(0.0, 0.0), (1.0, 1.0)]
+
+    xs = [point[0] for point in all_points]
+    ys = [point[1] for point in all_points]
+    min_x = min(xs)
+    max_x = max(xs)
+    min_y = min(ys)
+    max_y = max(ys)
+
+    if bbox:
+        min_x = min(min_x, bbox[0])
+        min_y = min(min_y, bbox[1])
+        max_x = max(max_x, bbox[2])
+        max_y = max(max_y, bbox[3])
+
+    dx = max(max_x - min_x, 1e-9)
+    dy = max(max_y - min_y, 1e-9)
+    pad_x = dx * 0.06
+    pad_y = dy * 0.06
+    min_x -= pad_x
+    max_x += pad_x
+    min_y -= pad_y
+    max_y += pad_y
+    dx = max(max_x - min_x, 1e-9)
+    dy = max(max_y - min_y, 1e-9)
+
+    def sx(x: float) -> float:
+        return map_x0 + ((x - min_x) / dx) * map_w
+
+    def sy(y: float) -> float:
+        return map_y0 + map_h - ((y - min_y) / dy) * map_h
+
+    def svg_point(point: tuple[float, float]) -> str:
+        return f"{sx(point[0]):.2f},{sy(point[1]):.2f}"
+
+    grid_lines: list[str] = []
+    for index in range(6):
+        t = index / 5 if 5 else 0
+        gx = map_x0 + t * map_w
+        gy = map_y0 + t * map_h
+        grid_lines.append(f'<line x1="{gx:.2f}" y1="{map_y0:.2f}" x2="{gx:.2f}" y2="{map_y0 + map_h:.2f}" />')
+        grid_lines.append(f'<line x1="{map_x0:.2f}" y1="{gy:.2f}" x2="{map_x0 + map_w:.2f}" y2="{gy:.2f}" />')
+
+    shape_markup: list[str] = []
+    for idx, shape in enumerate(shapes[:120]):
+        points = _shape_points(shape)
+        if not points:
+            continue
+        color = _map_palette(idx)
+        shape_type_id = getattr(shape, "shapeType", None)
+        if shape_type_id in {1, 8, 11, 18, 21, 28} or (shape_type_id is None and len(points) == 1):
+            for point in points:
+                shape_markup.append(
+                    f'<circle cx="{sx(point[0]):.2f}" cy="{sy(point[1]):.2f}" r="5.5" fill="{color}" stroke="#081118" stroke-width="1.5" />'
+                )
+        else:
+            parts = getattr(shape, "parts", []) or [0]
+            boundaries = list(parts) + [len(points)]
+            for start, end in zip(boundaries, boundaries[1:]):
+                segment = points[start:end]
+                if not segment:
+                    continue
+                path_d = "M " + " L ".join(svg_point(point) for point in segment)
+                if shape_type_id in {3, 13, 23}:
+                    shape_markup.append(
+                        f'<path d="{path_d}" fill="none" stroke="{color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.92" />'
+                    )
+                else:
+                    shape_markup.append(
+                        f'<path d="{path_d} Z" fill="{color}" fill-opacity="0.24" stroke="{color}" stroke-width="2.8" stroke-linejoin="round" />'
+                    )
+
+    labels: list[str] = []
+    label_fields = [field for field in fields if any(token in field[0].lower() for token in ("species", "spezies", "taxon", "art", "name", "latin", "common", "spec"))]
+    for idx, record in enumerate(records[:8]):
+        record_dict = record.as_dict() if hasattr(record, "as_dict") else {}
+        label = ""
+        for field in label_fields[:3]:
+            value = _clean_value(record_dict.get(field[0]))
+            if value:
+                label = value
+                break
+        if not label:
+            label = f"Feature {idx + 1}"
+        points = _shape_points(shapes[idx]) if idx < len(shapes) else []
+        if not points:
+            continue
+        cx = sum(point[0] for point in points) / len(points)
+        cy = sum(point[1] for point in points) / len(points)
+        labels.append(
+            f'<text x="{sx(cx) + 8:.2f}" y="{sy(cy) - 8:.2f}" fill="#edf4fb" font-size="14" font-weight="600" stroke="#081118" stroke-width="3" paint-order="stroke">{xml_escape(label)}</text>'
+        )
+
+    coordinate_marks = [
+        f'<text x="{map_x0:.2f}" y="{map_y0 + map_h + 28:.2f}" fill="#93a6b8" font-size="12">{min_x:.4f}</text>',
+        f'<text x="{map_x0 + map_w - 64:.2f}" y="{map_y0 + map_h + 28:.2f}" fill="#93a6b8" font-size="12">{max_x:.4f}</text>',
+        f'<text x="{map_x0 - 8:.2f}" y="{map_y0 + 14:.2f}" fill="#93a6b8" font-size="12">{max_y:.4f}</text>',
+        f'<text x="{map_x0 - 8:.2f}" y="{map_y0 + map_h:.2f}" fill="#93a6b8" font-size="12">{min_y:.4f}</text>',
+    ]
+
+    legend_items: list[str] = []
+    for idx, record in enumerate(records[:6]):
+        record_dict = record.as_dict() if hasattr(record, "as_dict") else {}
+        summary = []
+        for field in fields[:5]:
+            value = _clean_value(record_dict.get(field[0]))
+            if value:
+                summary.append(f"{field[0]}={value}")
+        legend_items.append(
+            f'<text x="{width - panel_w + 26}" y="{220 + idx * 56}" fill="#c9d7e6" font-size="13">{xml_escape("; ".join(summary) if summary else f"Datensatz {idx + 1}")}</text>'
+        )
+
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a1016"/>
+      <stop offset="100%" stop-color="#111a25"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#182331"/>
+      <stop offset="100%" stop-color="#111a25"/>
+    </linearGradient>
+    <style>
+      .frame {{ fill: none; stroke: rgba(255,255,255,0.9); stroke-width: 2.2; }}
+      .grid {{ stroke: rgba(255,255,255,0.07); stroke-width: 1; }}
+    </style>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#bg)"/>
+  <rect x="36" y="36" width="{width - 72}" height="{height - 72}" rx="30" fill="url(#panel)" stroke="rgba(255,255,255,0.88)" stroke-width="2"/>
+  <rect x="{map_x0:.2f}" y="{map_y0:.2f}" width="{map_w:.2f}" height="{map_h:.2f}" rx="22" fill="#0f1720" stroke="rgba(99,215,191,0.28)" stroke-width="1.5"/>
+  {''.join(grid_lines)}
+  {''.join(shape_markup)}
+  {''.join(labels)}
+  {''.join(coordinate_marks)}
+  <rect x="{width - panel_w + 18}" y="60" width="{panel_w - 48}" height="{height - 120}" rx="18" fill="#101923" stroke="rgba(255,255,255,0.08)"/>
+  <text x="{width - panel_w + 36}" y="100" fill="#63d7bf" font-size="20" font-weight="700">Hippo AI</text>
+  <text x="{width - panel_w + 36}" y="138" fill="#edf4fb" font-size="24" font-weight="700">{xml_escape(title)}</text>
+  <text x="{width - panel_w + 36}" y="178" fill="#93a6b8" font-size="13">{xml_escape(shape_type)} · {len(records)} Kontakte</text>
+  {''.join(legend_items)}
+  <text x="{width - panel_w + 36}" y="{height - 70}" fill="#63d7bf" font-size="12">Koordinatenkarte aus Projektdateien</text>
+</svg>'''
+
+
+def build_geodata_map_file(project: Any, query: str | None = None) -> tuple[str, str] | None:
+    stems = _find_shapefile_stems(project)
+    if not stems:
+        return None
+
+    query_text = (query or "").lower()
+    selected_stem = stems[0]
+    for stem in stems:
+        if stem.lower() in query_text:
+            selected_stem = stem
+            break
+
+    related_names = [f"{selected_stem}{ext}" for ext in (".shp", ".shx", ".dbf", ".prj", ".cpg")]
+    related_files = [name for name in related_names if any(item.filename == name for item in list_project_files(project))]
+    if not related_files:
+        return None
+
+    try:
+        with TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir) / selected_stem
+            for name in related_files:
+                data, _, _ = read_project_file(project, name)
+                (Path(tmpdir) / name).write_bytes(data)
+
+            import shapefile  # type: ignore
+
+            reader = shapefile.Reader(str(base))
+            shapes = list(reader.shapes())
+            records = list(reader.records())
+            fields = [field for field in getattr(reader, "fields", [])[1:]]
+            shape_type = _shape_type_name(int(getattr(reader, "shapeType", 0) or 0))
+            bbox = getattr(reader, "bbox", None)
+            title = f"{selected_stem.replace('_', ' ').strip() or 'Geodaten'}"
+            svg = _render_geodata_svg(title, shape_type, shapes, records, fields, bbox if bbox else None)
+            safe_name = re.sub(r"[^A-Za-z0-9]+", "_", selected_stem).strip("_").lower() or "hippo_map"
+            return f"{safe_name}.svg", svg
+    except Exception:
+        return None
 
     try:
         with TemporaryDirectory() as tmpdir:

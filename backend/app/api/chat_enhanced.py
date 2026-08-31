@@ -15,11 +15,12 @@ from app.services.chat_payloads import (
     build_attachment_response_guidance,
     build_message_content,
     derive_conversation_title,
+    looks_like_geodata_visual_request,
     looks_like_image_generation_request,
     storage_text,
 )
 from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
-from app.services.project_storage import build_project_files_context
+from app.services.project_storage import build_geodata_map_file, build_project_files_context
 import base64
 
 router = APIRouter(prefix="/chat-enhanced", tags=["chat-enhanced"]) 
@@ -218,14 +219,37 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
     generated_files, cleaned_reply = extract_generated_files(reply_text)
     image_request = looks_like_image_generation_request(payload.message, payload.attachments)
+    geodata_visual_request = looks_like_geodata_visual_request(payload.message, payload.attachments)
+    geodata_direct_svg: tuple[str, str] | None = None
+
+    if image_request and conv_project is not None and geodata_visual_request:
+        geodata_file = build_geodata_map_file(conv_project, payload.message)
+        if geodata_file:
+            generated_files = [GeneratedFile(filename=geodata_file[0], content=geodata_file[1])]
+            geodata_direct_svg = geodata_file
+
+    has_image_attachment = any((getattr(att, 'mime_type', '') or '').lower().startswith('image/') for att in (payload.attachments or []))
+    discarded_visual = False
+    if has_image_attachment and not image_request and generated_files:
+        remaining_files = []
+        for file in generated_files:
+            if Path(file.filename).suffix.lower() in {'.png', '.jpg', '.jpeg', '.svg'}:
+                discarded_visual = True
+                continue
+            remaining_files.append(file)
+        generated_files = remaining_files
+
     if image_request and generated_files:
         normalized_files: list[GeneratedFile] = []
         for file in generated_files:
             suffix = Path(file.filename).suffix.lower()
+            if geodata_direct_svg and file.filename == geodata_direct_svg[0]:
+                normalized_files.append(file)
+                continue
             if suffix in {".svg", ".png", ".jpg", ".jpeg"}:
                 safe_stem = re.sub(r"[^A-Za-z0-9]+", "_", Path(file.filename).stem).strip("_").lower() or "hippo_image"
                 content = file.content
-                if suffix == ".svg" and file.content.lstrip().startswith("<svg"):
+                if suffix == ".svg" and not file.content.lstrip().startswith("<svg"):
                     content = cleaned_reply or reply_text or payload.message
                 normalized_files.append(GeneratedFile(filename=f"{safe_stem}.png", content=content))
             else:
@@ -245,6 +269,15 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     serialized_files: list[dict[str, str]] = []
     for file in generated_files:
         try:
+            if geodata_direct_svg and file.filename == geodata_direct_svg[0]:
+                serialized_files.append(
+                    {
+                        "filename": file.filename,
+                        "mime_type": "image/svg+xml",
+                        "data_base64": base64.b64encode(file.content.encode("utf-8")).decode("ascii"),
+                    }
+                )
+                continue
             data, mime_type, filename = build_generated_file_bytes_with_fallback(file.filename, file.content)
         except Exception:
             # Skip unsupported render targets instead of crashing the chat route.
@@ -258,6 +291,10 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         )
     if used_image_fallback:
         reply_text = "Datei wurde erstellt."
+    elif geodata_direct_svg and not cleaned_reply:
+        reply_text = "Karte wurde erstellt."
+    elif discarded_visual and not cleaned_reply:
+        reply_text = "Ich habe das Bild analysiert und antworte absichtlich als Text statt mit einer neuen Bilddatei."
     elif cleaned_reply:
         reply_text = cleaned_reply
     elif generated_files:

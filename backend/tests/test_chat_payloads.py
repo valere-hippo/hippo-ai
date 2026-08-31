@@ -1,6 +1,11 @@
 from types import SimpleNamespace
 
-from app.services.chat_payloads import attachments_contain_images, build_message_content, looks_like_image_generation_request
+from app.services.chat_payloads import (
+    attachments_contain_images,
+    build_message_content,
+    looks_like_geodata_visual_request,
+    looks_like_image_generation_request,
+)
 
 
 def test_attachments_contain_images_detects_image_mime_and_data_url():
@@ -41,3 +46,9 @@ def test_looks_like_image_generation_request_requires_explicit_creation_language
     assert looks_like_image_generation_request("Erstelle bitte ein Bild als PNG.")
     assert not looks_like_image_generation_request("Bitte beschreibe das Bild und analysiere den Inhalt.")
     assert not looks_like_image_generation_request("Analysiere das Foto und schreibe den Text im Chat.")
+
+
+def test_looks_like_geodata_visual_request_detects_map_intent():
+    assert looks_like_geodata_visual_request("Erstelle eine Karte der Koordinaten aus den SHP-Dateien.")
+    assert looks_like_geodata_visual_request("Generiere eine GIS-Karte der Reviere.")
+    assert not looks_like_geodata_visual_request("Beschreibe mir die Daten aus der Datei.")
