@@ -107,6 +107,10 @@ def derive_conversation_title(message: str, attachments: list[Any] | None = None
 IMAGE_GEN_VERB_RE = re.compile(r"\b(erstelle|erzeuge|generiere|male|zeichne|render|mach|create|generate|draw|make|produce|fais|cr[eé]e|fabrique)\b", re.IGNORECASE)
 IMAGE_GEN_NOUN_RE = re.compile(r"\b(png|jpg|jpeg|image|bild|photo|foto|poster|illustration|grafik|diagramm|karte|map|svg|logo|icon)\b", re.IGNORECASE)
 GEODATA_VISUAL_NOUN_RE = re.compile(r"\b(karte|map|polygon|polygone|territorium|territorial|revier|gebiet|geodaten|koordinaten|coordinate|coordinates|diagramm|plot|gis)\b", re.IGNORECASE)
+IMAGE_ANALYSIS_RE = re.compile(
+    r"\b(describe|beschreibe|erkl[aä]re|analyse|analysiere|sag\s+mir|was\s+siehst\s+du|what\s+do\s+you\s+see|que\s+vois[- ]tu|dis[- ]moi)\b",
+    re.IGNORECASE,
+)
 
 
 def looks_like_image_generation_request(message: str, attachments: list[Any] | None = None) -> bool:
@@ -138,3 +142,17 @@ def looks_like_geodata_visual_request(message: str, attachments: list[Any] | Non
     if not text:
         return False
     return bool(IMAGE_GEN_VERB_RE.search(text) and GEODATA_VISUAL_NOUN_RE.search(text))
+
+
+def looks_like_image_analysis_request(message: str, attachments: list[Any] | None = None) -> bool:
+    text = " ".join(
+        part
+        for part in [
+            (message or "").strip(),
+            " ".join(getattr(att, "filename", "") for att in (attachments or []) if getattr(att, "filename", "")),
+        ]
+        if part
+    ).strip()
+    if not text:
+        return False
+    return bool(IMAGE_ANALYSIS_RE.search(text))

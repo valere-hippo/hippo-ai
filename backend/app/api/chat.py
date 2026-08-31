@@ -15,6 +15,7 @@ from app.services.chat_payloads import (
     build_attachment_response_guidance,
     build_message_content,
     derive_conversation_title,
+    looks_like_image_analysis_request,
     looks_like_geodata_visual_request,
     looks_like_image_generation_request,
     storage_text,
@@ -108,6 +109,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         "- Wenn der Benutzer Französisch schreibt, antworte auf Französisch.\n"
         "- Wenn der Benutzer Englisch schreibt, antworte auf Englisch.\n"
         "- Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
+        "- Wenn ein Bild angehängt ist und der Benutzer eine Beschreibung, Analyse oder Zusammenfassung möchte, bewerte das Bild direkt visuell und stütze dich nicht nur auf OCR, Dateiname oder Metadaten.\n"
         "- Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert werden soll, antworte ausführlicher, mit klaren Abschnitten, Aufzählungen und einer kurzen Schlussbewertung.\n"
         "- Wenn der Benutzer ein Bild nur beschreiben, zusammenfassen oder analysieren möchte, antworte als Text im Chat. Erzeuge nur dann eine Datei, wenn ausdrücklich ein Dateiformat verlangt wird.\n"
         "- Wenn der Benutzer ausdrücklich ein Bild, ein PNG oder eine Grafik generieren möchte, liefere einen echten Dateiblock mit einem Bilddateinamen und keine Anleitung zur manuellen Erstellung.\n"
@@ -160,7 +162,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             pass
 
     if payload.attachments:
-        hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=False)
+        hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=True)
 
     # Call Hippo model endpoint if configured (preferred)
     import httpx
@@ -214,14 +216,10 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
 
     has_image_attachment = any((getattr(att, 'mime_type', '') or '').lower().startswith('image/') for att in (payload.attachments or []))
     discarded_visual = False
-    if has_image_attachment and not image_request and generated_files:
-        remaining_files = []
-        for file in generated_files:
-            if Path(file.filename).suffix.lower() in {'.png', '.jpg', '.jpeg', '.svg'}:
-                discarded_visual = True
-                continue
-            remaining_files.append(file)
-        generated_files = remaining_files
+    if has_image_attachment and not image_request and looks_like_image_analysis_request(payload.message, payload.attachments):
+        if generated_files:
+            discarded_visual = True
+        generated_files = []
 
     if image_request and generated_files:
         normalized_files: list[GeneratedFile] = []
@@ -278,7 +276,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     elif geodata_direct_svg and not cleaned_reply:
         reply_text = "Karte wurde erstellt."
     elif discarded_visual and not cleaned_reply:
-        reply_text = "Ich habe das Bild analysiert und antworte absichtlich als Text statt mit einer neuen Bilddatei."
+        reply_text = "Ich habe das Bild visuell analysiert, antworte aber bewusst als Text statt mit einer neuen Datei."
     elif cleaned_reply:
         reply_text = cleaned_reply
     elif generated_files:
