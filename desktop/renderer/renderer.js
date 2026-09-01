@@ -1081,6 +1081,32 @@ function syncSelectedProjectConversation() {
   }
 }
 
+function normalizeActiveConversationState() {
+  const conversationExists = state.conversations.some((conversation) => conversation.id === state.currentConversationId)
+  if (!conversationExists) {
+    state.currentConversationId = null
+  }
+
+  if (state.selectedProjectId && !state.projects.some((project) => project.id === state.selectedProjectId)) {
+    state.selectedProjectId = null
+    state.currentConversationId = null
+  }
+
+  for (const [projectId, conversationId] of state.projectConversationMemory.entries()) {
+    const projectExists = state.projects.some((project) => project.id === projectId)
+    const conversationExistsForProject = state.conversations.some(
+      (conversation) => conversation.id === conversationId && conversation.project_id === projectId,
+    )
+    if (!projectExists || !conversationExistsForProject) {
+      state.projectConversationMemory.delete(projectId)
+    }
+  }
+
+  if (state.selectedProjectId) {
+    syncSelectedProjectConversation()
+  }
+}
+
 async function loadCurrentUser() {
   const user = await apiJson('/users/me')
   state.user = user
@@ -1090,6 +1116,7 @@ async function loadCurrentUser() {
 
 async function loadProjects() {
   state.projects = await apiJson('/projects/')
+  normalizeActiveConversationState()
   renderProjects()
   renderContext()
 }
@@ -1097,6 +1124,7 @@ async function loadProjects() {
 async function loadConversations() {
   const conversations = await apiJson('/chat/conversations')
   state.conversations = Array.isArray(conversations) ? conversations : []
+  normalizeActiveConversationState()
   renderConversations()
   renderContext()
 }
@@ -2545,6 +2573,8 @@ async function saveGeneratedArtifacts(artifacts, projectFolder) {
 async function sendChat() {
   const message = els.chatInput.value.trim()
   if (!message && state.draftAttachments.length === 0) return
+
+  normalizeActiveConversationState()
 
   const project = getContextProject()
   await Promise.all(

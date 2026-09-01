@@ -56,8 +56,16 @@ async def search_embedding_context(db: Any, query: str, project_id: int | None =
     if project_id is not None:
         params["project_id"] = project_id
 
-    result = await db.execute(sql, params)
-    rows = result.fetchall()
+    try:
+        result = await db.execute(sql, params)
+        rows = result.fetchall()
+    except Exception:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        return []
+
     return [
         {
             "id": row[0],
