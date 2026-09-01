@@ -176,8 +176,9 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                         "role": "system",
                         "content": (
                             f"{embedding_context}\n\n"
-                            "Verwende diese Hinweise als ergänzende Faktenbasis und mische sie mit deinem Modellwissen. "
-                            "Wenn sie zur aktuellen Frage passen, gewichte sie hoch; andernfalls ignoriere sie."
+                            "Verwende diese Hinweise als projektspezifische Primärquelle für Fakten aus dem Projekt. "
+                            "Wenn die Hinweise zur aktuellen Frage passen, antworte direkt daraus und formuliere sie sauber im Chat neu. "
+                            "Nur wenn sie nicht passen, ergänze mit deinem Modellwissen."
                         ),
                     },
                 )

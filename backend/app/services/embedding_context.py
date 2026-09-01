@@ -36,9 +36,54 @@ async def _get_query_embedding(query: str) -> list[float] | None:
     return None
 
 
-async def search_embedding_context(db: Any, query: str, project_id: int | None = None, limit: int = 5) -> list[dict[str, Any]]:
+async def _search_remote_embedding_context(query: str, project_id: int, limit: int) -> list[dict[str, Any]]:
+    if not settings.hippo_embedding_url:
+        return []
+
+    headers = {"Content-Type": "application/json"}
+    if settings.hippo_embedding_key:
+        headers["Authorization"] = f"Bearer {settings.hippo_embedding_key}"
+
+    payload = {"project_id": project_id, "query": query, "limit": limit, "min_score": 0.0}
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            settings.hippo_embedding_url.rstrip("/") + "/embeddings/search",
+            json=payload,
+            headers=headers,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+    items: list[dict[str, Any]] = []
+    if isinstance(data, dict):
+        raw_results = data.get("results")
+        if isinstance(raw_results, list):
+            items = raw_results
+    elif isinstance(data, list):
+        items = data
+
+    normalized: list[dict[str, Any]] = []
+    for row in items:
+        if not isinstance(row, dict):
+            continue
+        text_value = str(row.get("text") or "").strip()
+        if not text_value:
+            continue
+        normalized.append(
+            {
+                "id": row.get("id"),
+                "text": text_value,
+                "score": float(row.get("score") or row.get("similarity") or 0.0),
+                "metadata": row.get("metadata"),
+            }
+        )
+    return normalized
+
+
+async def _search_local_embedding_context(db: Any, query: str, project_id: int | None = None, limit: int = 5) -> list[dict[str, Any]]:
     query = (query or "").strip()
-    if not query or not settings.hippo_embedding_url:
+    if not query:
         return []
 
     embedding = await _get_query_embedding(query)
@@ -75,6 +120,18 @@ async def search_embedding_context(db: Any, query: str, project_id: int | None =
         }
         for row in rows
     ]
+
+
+async def search_embedding_context(db: Any, query: str, project_id: int | None = None, limit: int = 5) -> list[dict[str, Any]]:
+    if project_id is not None:
+        try:
+            remote_items = await _search_remote_embedding_context(query, project_id, limit)
+            if remote_items:
+                return remote_items
+        except Exception:
+            pass
+
+    return await _search_local_embedding_context(db, query, project_id=project_id, limit=limit)
 
 
 def format_embedding_context(items: list[dict[str, Any]], title: str = "Gefundene Projekthinweise aus dem Embedding-Store") -> str:
