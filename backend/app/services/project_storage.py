@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import mimetypes
 import os
 import re
@@ -1044,7 +1045,10 @@ def extract_project_file_preview(filename: str, data: bytes, content_type: str |
     return ""
 
 
-def build_project_files_context(project: Any, max_files: int = 12) -> str:
+IMAGE_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
+
+
+async def build_project_files_context(project: Any, max_files: int = 12) -> str:
     files = list_project_files(project)[:max_files]
     if not files:
         return (
@@ -1054,6 +1058,15 @@ def build_project_files_context(project: Any, max_files: int = 12) -> str:
 
     files_by_name = {item.filename: item for item in files}
     processed: set[str] = set()
+    image_summaries: dict[str, asyncio.Task[str]] = {}
+
+    from app.services.vision_analysis import summarize_project_image_file
+
+    for item in files:
+        lower_name = item.filename.lower()
+        ext = Path(item.filename).suffix.lower()
+        if ext in IMAGE_FILE_EXTENSIONS or lower_name.endswith(tuple(IMAGE_FILE_EXTENSIONS)):
+            image_summaries[item.filename] = asyncio.create_task(summarize_project_image_file(project, item.filename))
 
     lines = [
         f"Im gemeinsamen Ordner des Projekts sind {len(files)} sichtbare Dateien vorhanden:",
@@ -1083,15 +1096,24 @@ def build_project_files_context(project: Any, max_files: int = 12) -> str:
                 processed.add(item.filename)
                 continue
 
-        try:
-            content, content_type, _storage = read_project_file(project, item.filename)
-            preview = extract_project_file_preview(item.filename, content, content_type)
-        except Exception:
-            preview = ""
+        summary = ""
+        if ext in IMAGE_FILE_EXTENSIONS or lower_name.endswith(tuple(IMAGE_FILE_EXTENSIONS)):
+            task = image_summaries.get(item.filename)
+            if task is not None:
+                try:
+                    summary = (await task).strip()
+                except Exception:
+                    summary = ""
+            if not summary:
+                try:
+                    content, content_type, _storage = read_project_file(project, item.filename)
+                    summary = extract_project_file_preview(item.filename, content, content_type)
+                except Exception:
+                    summary = ""
 
         lines.append(f"- {item.filename} ({item.size} bytes, Speicherung {item.storage}, geändert {modified})")
-        if preview:
-            lines.append(f"  Inhalt: {preview}")
+        if summary:
+            lines.append(f"  Inhalt: {summary}")
         elif lower_name.endswith((".shx", ".dbf", ".prj", ".cpg")):
             lines.append("  Inhalt: Begleitdatei für Geodaten.")
         processed.add(item.filename)

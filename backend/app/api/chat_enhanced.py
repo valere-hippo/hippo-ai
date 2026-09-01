@@ -13,14 +13,13 @@ import httpx
 from app.schemas.chat import ChatAttachment
 from app.services.chat_payloads import (
     build_attachment_response_guidance,
-    build_message_content,
     derive_conversation_title,
     looks_like_image_analysis_request,
     looks_like_geodata_visual_request,
     looks_like_image_generation_request,
-    storage_text,
 )
 from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
+from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 import base64
 
@@ -61,13 +60,17 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         conv = result.scalar_one()
         conv_id = conv.id
 
+    stored_message_content = await build_vision_enriched_text(payload.message, payload.attachments)
+    if not stored_message_content:
+        stored_message_content = (payload.message or "").strip()
+
     # store user message
     await db.execute(
         insert(ChatMessage).values(
             conversation_id=conv_id,
             user_id=current_user.id,
             role='user',
-            content=storage_text(payload.message, payload.attachments),
+            content=stored_message_content,
         )
     )
     await db.commit()
@@ -92,7 +95,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         hippo_messages.append({"role": role, "content": m.content})
 
     if payload.attachments:
-        hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=True)
+        hippo_messages[-1]["content"] = stored_message_content
 
     # global system prompt
     global_sys = (
@@ -104,8 +107,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         "Kürze nur, wenn der Benutzer ausdrücklich eine kurze Antwort verlangt.\n"
         "Wenn eine Antwort lang sein muss, entwickle sie vollständig aus und schließe alle wichtigen Punkte ab.\n"
         "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort.\n"
-        "Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
-        "Wenn ein Bild angehängt ist und der Benutzer eine Beschreibung, Analyse oder Zusammenfassung möchte, bewerte das Bild direkt visuell und stütze dich nicht nur auf OCR, Dateiname oder Metadaten.\n"
+        "Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die vom Vision-Modell gelieferten Beschreibungen und die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
+        "Bilder werden vorab vom Vision-Modell analysiert. Nutze diese Beschreibung direkt und stütze dich nicht nur auf OCR, Dateiname oder Metadaten.\n"
         "Wenn der Benutzer ein Bild nur beschreiben, zusammenfassen oder analysieren möchte, antworte als Text im Chat. Erzeuge nur dann eine Datei, wenn ausdrücklich ein Dateiformat verlangt wird.\n"
         "Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert wird, antworte ausführlich, strukturiert und mit klaren Zwischenüberschriften oder Aufzählungspunkten.\n"
         "Wenn der Benutzer ausdrücklich ein Bild, ein PNG oder eine Grafik generieren möchte, liefere einen echten Dateiblock mit einem Bilddateinamen und keine Anleitung zur manuellen Erstellung.\n"
@@ -134,14 +137,14 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language.\n"
             "For shared-folder questions, respond with a detailed structure: overview, visible files, file-by-file details, and conclusion.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
-            "If an image, screenshot, or document is attached, analyze the locally extracted text and metadata; do not claim that you cannot read attachments.\n"
+            "If an image, screenshot, or document is attached, rely on the supplied vision summary and any locally extracted text; do not claim that you cannot read attachments.\n"
             "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, and spatial clusters.\n"
             f"{build_attachment_response_guidance()}"
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 
         try:
-            project_files_context = build_project_files_context(conv_project)
+            project_files_context = await build_project_files_context(conv_project)
             hippo_messages.insert(
                 2,
                 {

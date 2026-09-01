@@ -5,6 +5,7 @@
   "scripts": {
     "start": "electron .",
     "package:win": "electron-builder --windows",
+    "build:mac-icon": "bash scripts/make-macos-icon.sh",
     "package:mac": "electron-builder --mac"
   },
   "devDependencies": {
@@ -29,7 +30,8 @@
     "mac": {
       "target": [
         "dmg"
-      ]
+      ],
+      "icon": "build/icon.icns"
     }
   },
   "dependencies": {

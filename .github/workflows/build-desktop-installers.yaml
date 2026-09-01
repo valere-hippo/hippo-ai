@@ -70,6 +70,9 @@ jobs:
         env:
           HIPPO_API_URL: ${{ secrets.HIPPO_API_URL || 'https://hippo-api.hipposideros-cloud.de' }}
 
+      - name: Build macOS icon
+        run: npm run build:mac-icon
+
       - name: Build macOS installer
         run: npm run package:mac
 

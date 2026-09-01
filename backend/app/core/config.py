@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     hippo_api_url: str | None = None
     hippo_api_key: str | None = None
     hippo_model: str = "hippo-ai"
+    hippo_vision_url: str | None = None
     hippo_response_max_tokens: int = 4096
     hippo_response_max_tokens_long: int = 8192
     # Deprecated: local attachment parsing now covers images/screenshots/documents.
