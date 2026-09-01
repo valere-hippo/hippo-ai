@@ -19,6 +19,7 @@ from app.services.chat_payloads import (
     looks_like_image_generation_request,
 )
 from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
+from app.services.embedding_context import build_embedding_context_for_request
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 import base64
@@ -97,8 +98,9 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     # Global system instruction (Hippo assistant) — strict guidance
     global_sys = (
         "Du bist Hippo, ein freundlicher und professioneller KI-Assistent.\n\n"
-        "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, entwickelt.\n"
-        "Hippo AI gehört der Firma HIPPOSIDEROS.\n\n"
+        "Hippo AI wurde für die Firma Hipposideros entwickelt.\n"
+        "Der Gründer von Hipposideros ist Oliver Meier-Ronfeld.\n"
+        "Valère Youbi ist der Entwickler von Hippo AI und CEO der MERVAL DIGITALE; nenne ihn nur, wenn nach der Entwicklung von Hippo AI gefragt wird.\n\n"
         "WICHTIG:\n"
         "- Antworte direkt auf die Frage des Benutzers.\n"
         "- Antworte so ausführlich wie nötig, wenn der Benutzer eine detaillierte Erklärung, einen Bericht oder eine Analyse möchte.\n"
@@ -113,6 +115,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         "- Wenn der Benutzer Englisch schreibt, antworte auf Englisch.\n"
         "- Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die vom Vision-Modell gelieferten Beschreibungen und die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
         "- Bilder werden vorab vom Vision-Modell analysiert. Nutze diese Beschreibung direkt und stütze dich nicht nur auf OCR, Dateiname oder Metadaten.\n"
+        "- Nutze die eingeblendeten Embedding-Hinweise als zusätzliche Faktenbasis, auch wenn sie aus anderen Projekten stammen, solange sie zur Frage passen.\n"
         "- Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert werden soll, antworte ausführlicher, mit klaren Abschnitten, Aufzählungen und einer kurzen Schlussbewertung.\n"
         "- Wenn der Benutzer ein Bild nur beschreiben, zusammenfassen oder analysieren möchte, antworte als Text im Chat. Erzeuge nur dann eine Datei, wenn ausdrücklich ein Dateiformat verlangt wird.\n"
         "- Wenn der Benutzer ausdrücklich ein Bild, ein PNG oder eine Grafik generieren möchte, liefere einen echten Dateiblock mit einem Bilddateinamen und keine Anleitung zur manuellen Erstellung.\n"
@@ -143,6 +146,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "For shared-folder questions, produce a detailed answer with overview, file list, per-file observations, and a short conclusion.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
             "If an image, screenshot, or document is attached, rely on the supplied vision summary and any locally extracted text; do not claim that you cannot read attachments.\n"
+            "Use the injected embedding hints as additional factual context, including hints from other projects when they are relevant.\n"
             "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, and spatial clusters.\n"
             f"{build_attachment_response_guidance()}"
         )
@@ -163,6 +167,23 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             )
         except Exception:
             pass
+
+    try:
+        embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=payload.project_id)
+        if embedding_context:
+            hippo_messages.insert(
+                1 if conv_project is None else 3,
+                {
+                    "role": "system",
+                    "content": (
+                        f"{embedding_context}\n\n"
+                        "Nutze diese Hinweise als ergänzende Faktenbasis und mische sie mit deinem Modellwissen. "
+                        "Wenn sie mit der aktuellen Frage zusammenhängen, ziehe sie vor; wenn nicht, ignoriere sie."
+                    ),
+                },
+            )
+    except Exception:
+        pass
 
     if payload.attachments:
         hippo_messages[-1]["content"] = stored_message_content

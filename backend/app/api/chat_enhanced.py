@@ -19,6 +19,7 @@ from app.services.chat_payloads import (
     looks_like_image_generation_request,
 )
 from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
+from app.services.embedding_context import build_embedding_context_for_request
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 import base64
@@ -100,8 +101,9 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     # global system prompt
     global_sys = (
         "Du bist Hippo, ein freundlicher und professioneller KI-Assistent.\n"
-        "Hippo AI wurde im August 2026 von Valère Youbi, CEO der MERVAL DIGITALE, entwickelt.\n"
-        "Hippo AI gehört der Firma HIPPOSIDEROS.\n"
+        "Hippo AI wurde für die Firma Hipposideros entwickelt.\n"
+        "Der Gründer von Hipposideros ist Oliver Meier-Ronfeld.\n"
+        "Valère Youbi ist der Entwickler von Hippo AI und CEO der MERVAL DIGITALE; nenne ihn nur, wenn nach der Entwicklung von Hippo AI gefragt wird.\n"
         "Antworte in der Sprache des Benutzers.\n"
         "Antworte so ausführlich wie nötig, wenn der Benutzer eine detaillierte Erklärung, einen Bericht oder eine Analyse möchte.\n"
         "Kürze nur, wenn der Benutzer ausdrücklich eine kurze Antwort verlangt.\n"
@@ -109,6 +111,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         "Nutze projektspezifisches Wissen, falls vorhanden, und verbinde es mit deinem Modellwissen zu einer einzigen, klaren Antwort.\n"
         "Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die vom Vision-Modell gelieferten Beschreibungen und die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
         "Bilder werden vorab vom Vision-Modell analysiert. Nutze diese Beschreibung direkt und stütze dich nicht nur auf OCR, Dateiname oder Metadaten.\n"
+        "Nutze die eingeblendeten Embedding-Hinweise als zusätzliche Faktenbasis, auch wenn sie aus anderen Projekten stammen, solange sie zur Frage passen.\n"
         "Wenn der Benutzer ein Bild nur beschreiben, zusammenfassen oder analysieren möchte, antworte als Text im Chat. Erzeuge nur dann eine Datei, wenn ausdrücklich ein Dateiformat verlangt wird.\n"
         "Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert wird, antworte ausführlich, strukturiert und mit klaren Zwischenüberschriften oder Aufzählungspunkten.\n"
         "Wenn der Benutzer ausdrücklich ein Bild, ein PNG oder eine Grafik generieren möchte, liefere einen echten Dateiblock mit einem Bilddateinamen und keine Anleitung zur manuellen Erstellung.\n"
@@ -138,6 +141,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "For shared-folder questions, respond with a detailed structure: overview, visible files, file-by-file details, and conclusion.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
             "If an image, screenshot, or document is attached, rely on the supplied vision summary and any locally extracted text; do not claim that you cannot read attachments.\n"
+            "Use the injected embedding hints as additional factual context, including hints from other projects when they are relevant.\n"
             "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, and spatial clusters.\n"
             f"{build_attachment_response_guidance()}"
         )
@@ -159,31 +163,22 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             pass
 
-    # if project provided, call embedding search service and inject context
-    if payload.project_id is not None and settings.hippo_embedding_url:
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as emb_client:
-                emb_body = {"project_id": payload.project_id, "query": payload.message, "limit": 5, "min_score": 0.0}
-                emb_resp = await emb_client.post(settings.hippo_embedding_url.rstrip('/') + '/embeddings/search', json=emb_body)
-                emb_resp.raise_for_status()
-                emb_data = emb_resp.json()
-                results = emb_data.get('results') or emb_data.get('items') or emb_data.get('data') or emb_data.get('hits') or emb_data
-                top_texts = []
-                if isinstance(results, list):
-                    for it in results[:5]:
-                        t = it.get('text') if isinstance(it, dict) else (it if isinstance(it, str) else None)
-                        if t:
-                            top_texts.append(t)
-                if top_texts:
-                    context_block = '\n\n'.join(f"- {text}" for text in top_texts)
-                    emb_sys = (
-                        "Gefundene Projekthinweise aus dem Embedding-Store:\n"
-                        f"{context_block}\n\n"
-                        "Verwende diese Hinweise als Faktenbasis und mische sie mit deinen eigenen Schlussfolgerungen."
-                    )
-                    hippo_messages.insert(1, {"role": "system", "content": emb_sys})
-        except Exception:
-            pass
+    try:
+        embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=payload.project_id)
+        if embedding_context:
+            hippo_messages.insert(
+                1 if conv_project is None else 3,
+                {
+                    "role": "system",
+                    "content": (
+                        f"{embedding_context}\n\n"
+                        "Verwende diese Hinweise als ergänzende Faktenbasis und mische sie mit deinen eigenen Schlussfolgerungen. "
+                        "Wenn sie zur aktuellen Frage passen, gewichte sie hoch; andernfalls ignoriere sie."
+                    ),
+                },
+            )
+    except Exception:
+        pass
 
     # call Hippo chat completions
     if not (settings.hippo_api_url and settings.hippo_api_key):
