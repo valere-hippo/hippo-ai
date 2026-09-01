@@ -19,7 +19,6 @@ from app.services.chat_payloads import (
     looks_like_image_generation_request,
 )
 from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
-from app.services.embedding_context import build_embedding_context_for_request
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 import base64
@@ -40,6 +39,7 @@ class ChatResponse(BaseModel):
 
 @router.post("/", response_model=ChatResponse)
 async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends(get_current_user)) -> ChatResponse:
+    current_user_id = int(current_user.id)
     # verify project permission if provided
     conv_project = None
     if payload.project_id is not None:
@@ -69,7 +69,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     await db.execute(
         insert(ChatMessage).values(
             conversation_id=conv_id,
-            user_id=current_user.id,
+            user_id=current_user_id,
             role='user',
             content=stored_message_content,
         )
@@ -167,23 +167,6 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             )
         except Exception:
             pass
-
-    try:
-        embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=payload.project_id)
-        if embedding_context:
-            hippo_messages.insert(
-                1 if conv_project is None else 3,
-                {
-                    "role": "system",
-                    "content": (
-                        f"{embedding_context}\n\n"
-                        "Nutze diese Hinweise als ergänzende Faktenbasis und mische sie mit deinem Modellwissen. "
-                        "Wenn sie mit der aktuellen Frage zusammenhängen, ziehe sie vor; wenn nicht, ignoriere sie."
-                    ),
-                },
-            )
-    except Exception:
-        pass
 
     if payload.attachments:
         hippo_messages[-1]["content"] = stored_message_content
@@ -310,7 +293,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     await db.execute(
         insert(ChatMessage).values(
             conversation_id=conv_id,
-            user_id=current_user.id,
+            user_id=current_user_id,
             role='assistant',
             content=reply_text,
         )
@@ -322,13 +305,14 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
 
 @router.get('/conversations')
 async def list_conversations(db: DbSession, current_user: User = Depends(get_current_user)):
+    current_user_id = int(current_user.id)
     # list conversations the user participated in or project-less owned
     q = (
         select(Conversation)
         .where(
             Conversation.id.in_(
                 select(ChatMessage.conversation_id)
-                .where(ChatMessage.user_id == current_user.id)
+                .where(ChatMessage.user_id == current_user_id)
                 .distinct()
             )
         )
@@ -379,13 +363,14 @@ async def get_conversation(conv_id: int, db: DbSession, current_user: User = Dep
 
 @router.delete('/conversations/{conv_id}')
 async def delete_conversation(conv_id: int, db: DbSession, current_user: User = Depends(get_current_user)):
+    current_user_id = int(current_user.id)
     # only allow deletion if user has participated or admin
     msgs = await db.execute(select(ChatMessage).where(ChatMessage.conversation_id == conv_id))
     msgs = msgs.scalars().all()
     if not msgs:
         raise HTTPException(status_code=404, detail='Nicht gefunden.')
     participant_ids = set(m.user_id for m in msgs)
-    if current_user.role != UserRole.ADMIN and current_user.id not in participant_ids:
+    if current_user.role != UserRole.ADMIN and current_user_id not in participant_ids:
         raise HTTPException(status_code=403, detail='Zugriff verweigert.')
     await db.execute(ChatMessage.__table__.delete().where(ChatMessage.conversation_id == conv_id))
     await db.execute(Conversation.__table__.delete().where(Conversation.id == conv_id))

@@ -40,6 +40,7 @@ class ChatResponse(BaseModel):
 
 @router.post('/', response_model=ChatResponse)
 async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User = Depends(get_current_user)) -> ChatResponse:
+    current_user_id = int(current_user.id)
     # basic project permission checks
     conv_project = None
     if payload.project_id is not None:
@@ -69,7 +70,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     await db.execute(
         insert(ChatMessage).values(
             conversation_id=conv_id,
-            user_id=current_user.id,
+            user_id=current_user_id,
             role='user',
             content=stored_message_content,
         )
@@ -163,22 +164,23 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             pass
 
-    try:
-        embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=payload.project_id)
-        if embedding_context:
-            hippo_messages.insert(
-                1 if conv_project is None else 3,
-                {
-                    "role": "system",
-                    "content": (
-                        f"{embedding_context}\n\n"
-                        "Verwende diese Hinweise als ergänzende Faktenbasis und mische sie mit deinen eigenen Schlussfolgerungen. "
-                        "Wenn sie zur aktuellen Frage passen, gewichte sie hoch; andernfalls ignoriere sie."
-                    ),
-                },
-            )
-    except Exception:
-        pass
+    if payload.project_id is not None:
+        try:
+            embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=payload.project_id)
+            if embedding_context:
+                hippo_messages.insert(
+                    1 if conv_project is None else 3,
+                    {
+                        "role": "system",
+                        "content": (
+                            f"{embedding_context}\n\n"
+                            "Verwende diese Hinweise als ergänzende Faktenbasis und mische sie mit deinen eigenen Schlussfolgerungen. "
+                            "Wenn sie zur aktuellen Frage passen, gewichte sie hoch; andernfalls ignoriere sie."
+                        ),
+                    },
+                )
+        except Exception:
+            pass
 
     # call Hippo chat completions
     if not (settings.hippo_api_url and settings.hippo_api_key):
@@ -296,7 +298,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     elif generated_files:
         reply_text = "Datei wurde erstellt."
 
-    await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user.id, role='assistant', content=reply_text))
+    await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user_id, role='assistant', content=reply_text))
     await db.commit()
 
     return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files)
