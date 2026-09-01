@@ -67,3 +67,13 @@ def test_build_generated_png_falls_back_without_pillow(monkeypatch):
     assert mime_type == "image/png"
     assert filename.endswith(".png")
     assert data.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_build_generated_png_for_detector_prompt_returns_png():
+    data, mime_type = build_generated_file_bytes(
+        "bat_detector.png",
+        "Erstelle ein Bild zum Thema Fledermaus Detektor mit dunklem Hintergrund, Gerät und Ultraschallwellen.",
+    )
+
+    assert mime_type == "image/png"
+    assert data.startswith(b"\x89PNG\r\n\x1a\n")

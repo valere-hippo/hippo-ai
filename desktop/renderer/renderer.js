@@ -377,6 +377,11 @@ function deriveConversationTitle(message, attachments = []) {
   return firstAttachment?.filename || 'Neuer Chat'
 }
 
+function looksLikeImageGenerationRequest(message) {
+  const text = String(message || '').toLowerCase()
+  return /(?:erstell|generier|male|zeichne|render|bild|png|jpg|jpeg|photo|foto|illustration|grafik|logo|icon|karte|map)/i.test(text)
+}
+
 function formatFileSize(bytes) {
   const value = Number(bytes || 0)
   if (!Number.isFinite(value) || value <= 0) return '0 B'
@@ -2597,7 +2602,7 @@ async function sendChat() {
   renderMessage('user', message || 'Anhang', { attachments: state.draftAttachments })
   resetComposer()
 
-  showThinkingIndicator('Hippo denkt nach…')
+  showThinkingIndicator(looksLikeImageGenerationRequest(message) ? 'Bild wird erstellt…' : 'Hippo denkt nach…')
   try {
     const response = await apiJson('/chat-enhanced/', {
       method: 'POST',

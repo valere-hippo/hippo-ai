@@ -8,6 +8,7 @@ import struct
 import re
 import html
 import mimetypes
+import math
 import textwrap
 import unicodedata
 import zlib
@@ -757,52 +758,200 @@ def _wrap_text(draw: "ImageDraw.ImageDraw", text: str, font, max_width: int) -> 
     return lines or [""]
 
 
+def _load_font(size: int, bold: bool = False):
+    if ImageFont is None:
+        return None
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+    ]
+    for candidate in candidates:
+        try:
+            return ImageFont.truetype(candidate, size=size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def _topic_key(title: str, body: str) -> str:
+    normalized = _normalize_ascii(f"{title}\n{body}").upper()
+    if "FLEDERMAUS" in normalized or ("BAT" in normalized and "DETECTOR" in normalized):
+        return "bat_detector"
+    if any(keyword in normalized for keyword in ("KARTE", "MAP", "POLYGON", "GEODATA", "GEO", "GIS")):
+        return "map"
+    return "generic"
+
+
+def _draw_glow(draw, cx: int, cy: int, radius: int, color: tuple[int, int, int], alpha: int) -> None:
+    for step in range(radius, 0, -1):
+        current_alpha = int(alpha * (step / radius) ** 2)
+        draw.ellipse((cx - step, cy - step, cx + step, cy + step), fill=(*color, max(0, min(255, current_alpha))))
+
+
+def _draw_bat_scene(draw, width: int, height: int, title_text: str, body_text: str, title_font, body_font) -> None:
+    draw.rectangle((0, 0, width, height), fill=(6, 11, 17, 255))
+    for y in range(height):
+        ratio = y / max(1, height - 1)
+        r = int(8 + ratio * 18)
+        g = int(15 + ratio * 24)
+        b = int(24 + ratio * 34)
+        draw.line((0, y, width, y), fill=(r, g, b, 255))
+
+    _draw_glow(draw, int(width * 0.28), int(height * 0.26), 180, (94, 149, 255), 110)
+    _draw_glow(draw, int(width * 0.78), int(height * 0.18), 200, (99, 215, 191), 92)
+    _draw_glow(draw, int(width * 0.58), int(height * 0.48), 260, (255, 194, 92), 100)
+
+    draw.rounded_rectangle((36, 36, width - 36, height - 36), radius=34, outline=(255, 255, 255, 28), width=2)
+    draw.rounded_rectangle((64, 64, 360, 138), radius=24, fill=(99, 215, 191, 210))
+    draw.text((90, 90), "Hippo AI", fill=(9, 18, 24, 255), font=body_font)
+
+    headline = title_text.strip() or "FLEDERMAUS DETEKTOR"
+    draw.text((64, 165), headline.upper(), fill=(243, 247, 252, 255), font=title_font)
+    subtitle = "Ultraschall hören. Fledermäuse schützen."
+    draw.text((64, 240), subtitle, fill=(211, 226, 240, 255), font=body_font)
+
+    # Left panel with feature steps.
+    panel = (64, 300, 505, 640)
+    draw.rounded_rectangle(panel, radius=26, fill=(11, 19, 28, 190), outline=(255, 255, 255, 24), width=1)
+    steps = [
+        "1  Fledermäuse senden Ultraschallrufe aus.",
+        "2  Der Detektor nimmt die Signale mit dem Mikrofon auf.",
+        "3  Die Signale werden als hörbare Töne oder Spektrogramm dargestellt.",
+    ]
+    y = 326
+    for index, step in enumerate(steps):
+        circle_x = 92
+        circle_y = y + 14
+        draw.ellipse((circle_x - 14, circle_y - 14, circle_x + 14, circle_y + 14), fill=(122, 186, 68, 255))
+        draw.text((circle_x - 6, circle_y - 9), str(index + 1), fill=(10, 16, 13, 255), font=body_font)
+        wrapped = _wrap_text(draw, step, body_font, 360)
+        text_y = y
+        for line in wrapped:
+            draw.text((124, text_y), line, fill=(233, 240, 248, 255), font=body_font)
+            text_y += 26
+        y = text_y + 26
+
+    # Central detector device.
+    body_box = (530, 190, 860, 620)
+    draw.rounded_rectangle(body_box, radius=28, fill=(14, 18, 25, 255), outline=(255, 255, 255, 26), width=2)
+    draw.rounded_rectangle((620, 160, 770, 200), radius=12, fill=(31, 42, 56, 255))
+    draw.rectangle((692, 96, 698, 190), fill=(76, 84, 96, 255))
+    draw.ellipse((674, 82, 716, 124), fill=(30, 36, 44, 255), outline=(255, 255, 255, 40))
+    draw.ellipse((689, 101, 701, 113), fill=(99, 215, 191, 255))
+    draw.text((596, 232), "BAT DETECTOR", fill=(242, 248, 253, 255), font=body_font)
+    draw.text((625, 290), "STATUS", fill=(150, 164, 180, 255), font=body_font)
+    draw.ellipse((678, 324, 694, 340), fill=(99, 215, 191, 255))
+    draw.rounded_rectangle((585, 360, 805, 520), radius=18, fill=(24, 30, 41, 255), outline=(255, 255, 255, 24), width=1)
+    draw.text((610, 548), "ULTRASCHALL DETEKTOR", fill=(211, 222, 233, 255), font=body_font)
+    wing_left = [(595, 454), (528, 420), (478, 385), (455, 350), (474, 334), (545, 365), (587, 396), (620, 434)]
+    wing_right = [(745, 454), (812, 420), (862, 385), (885, 350), (866, 334), (795, 365), (753, 396), (720, 434)]
+    draw.polygon(wing_left, fill=(84, 89, 97, 255))
+    draw.polygon(wing_right, fill=(84, 89, 97, 255))
+    draw.ellipse((620, 425, 745, 495), fill=(71, 76, 84, 255))
+    draw.line((640, 425, 630, 398), fill=(103, 109, 118, 255), width=3)
+    draw.line((720, 425, 730, 398), fill=(103, 109, 118, 255), width=3)
+
+    # Right side smartphone with spectrogram.
+    phone = (920, 235, 1140, 585)
+    draw.rounded_rectangle(phone, radius=30, fill=(8, 11, 15, 255), outline=(255, 255, 255, 26), width=2)
+    draw.rounded_rectangle((945, 264, 1115, 540), radius=18, fill=(18, 12, 28, 255))
+    for idx in range(0, 13):
+        x = 960 + idx * 10
+        for y2 in range(300, 524):
+            intensity = max(0, 255 - abs((y2 - 410) * 2) - idx * 9)
+            if intensity > 40:
+                draw.point((x, y2), fill=(255, 70 + idx * 8, 115, intensity))
+    draw.text((972, 280), "LIVE - Ultraschall", fill=(122, 215, 115, 255), font=body_font)
+    draw.text((972, 555), "Analyse", fill=(191, 201, 213, 255), font=body_font)
+
+    # Sound waves and bat silhouette.
+    for wave in range(5):
+        start = 815 + wave * 28
+        draw.arc((760, 150, 995 + wave * 20, 420), start=220, end=320, fill=(160, 181, 204, 130), width=3)
+
+    bat_center = (1110, 175)
+    draw.ellipse((bat_center[0] - 28, bat_center[1] - 18, bat_center[0] + 28, bat_center[1] + 18), fill=(43, 32, 28, 255))
+    left_wing = [(bat_center[0] - 20, bat_center[1]), (bat_center[0] - 150, bat_center[1] - 90), (bat_center[0] - 220, bat_center[1] - 20), (bat_center[0] - 150, bat_center[1] + 10)]
+    right_wing = [(bat_center[0] + 20, bat_center[1]), (bat_center[0] + 150, bat_center[1] - 90), (bat_center[0] + 220, bat_center[1] - 20), (bat_center[0] + 150, bat_center[1] + 10)]
+    draw.polygon(left_wing, fill=(33, 24, 22, 255))
+    draw.polygon(right_wing, fill=(33, 24, 22, 255))
+    draw.text((978, 612), "Warum ist das wichtig?", fill=(122, 186, 68, 255), font=body_font)
+    draw.text((978, 648), "Viele Fledermausarten sind bedroht.", fill=(233, 240, 248, 255), font=body_font)
+    draw.text((978, 674), "Mit einem Detektor kannst du sie beobachten und schützen.", fill=(233, 240, 248, 255), font=body_font)
+
+    # Bottom feature strip.
+    strip = (64, 666, 1140, 820)
+    draw.rounded_rectangle(strip, radius=24, fill=(11, 19, 28, 196), outline=(255, 255, 255, 24), width=1)
+    mini_cards = [
+        ("20-120 kHz", "Erkennt Ultraschallrufe"),
+        ("Spektrogramm", "Live Analyse"),
+        ("Speichern", "Aufnahmen sichern"),
+        ("Mobil", "Ideal für unterwegs"),
+    ]
+    card_x = 84
+    for label, desc in mini_cards:
+        draw.rounded_rectangle((card_x, 690, card_x + 230, 796), radius=18, fill=(18, 27, 39, 230))
+        draw.text((card_x + 16, 706), label, fill=(122, 186, 68, 255), font=body_font)
+        wrapped = _wrap_text(draw, desc, body_font, 180)
+        text_y = 735
+        for line in wrapped[:3]:
+            draw.text((card_x + 16, text_y), line, fill=(233, 240, 248, 255), font=body_font)
+            text_y += 24
+        card_x += 250
+
+
 def build_raster_image_bytes(title: str, body: str, format_name: str) -> bytes:
     if Image is None or ImageDraw is None or ImageFont is None:
         return _build_fallback_png_bytes(title, body)
 
     width, height = 1400, 900
-    img = Image.new("RGB", (width, height), "#0a1016")
-    draw = ImageDraw.Draw(img)
-
-    for y in range(height):
-        ratio = y / max(1, height - 1)
-        r = int(10 + ratio * 16)
-        g = int(16 + ratio * 22)
-        b = int(22 + ratio * 26)
-        draw.line((0, y, width, y), fill=(r, g, b))
-
-    for box, color in (
-        ((40, 40, width - 40, height - 40), (24, 35, 49)),
-        ((70, 70, 400, 140), (99, 215, 191)),
-    ):
-        draw.rounded_rectangle(box, radius=28, fill=color)
-
-    draw.rounded_rectangle((40, 40, width - 40, height - 40), radius=36, outline=(255, 255, 255), width=2)
-
-    title_font = ImageFont.load_default()
-    body_font = ImageFont.load_default()
+    img = Image.new("RGBA", (width, height), (10, 16, 22, 255))
+    draw = ImageDraw.Draw(img, "RGBA")
 
     title_text = (title or "Hippo AI").strip()
     body_text = (body or "").strip()
-    header_color = "#081118"
-    draw.text((98, 92), "Hippo AI", fill=header_color, font=title_font)
+    title_font = _load_font(64, bold=True)
+    body_font = _load_font(26, bold=False)
 
-    wrapped_title = _wrap_text(draw, title_text, title_font, 1200)
-    y = 180
-    for line in wrapped_title[:4]:
-        draw.text((96, y), line, fill="#edf4fb", font=title_font)
-        y += 28
+    topic = _topic_key(title_text, body_text)
+    if topic == "bat_detector":
+        _draw_bat_scene(draw, width, height, title_text, body_text, title_font, body_font)
+    else:
+        for y in range(height):
+            ratio = y / max(1, height - 1)
+            r = int(10 + ratio * 16)
+            g = int(16 + ratio * 22)
+            b = int(22 + ratio * 26)
+            draw.line((0, y, width, y), fill=(r, g, b, 255))
 
-    if body_text:
-        y += 24
-        wrapped_body = _wrap_text(draw, body_text, body_font, 1240)
-        for line in wrapped_body[:26]:
-            draw.text((96, y), line, fill="#c9d7e6", font=body_font)
-            y += 22
+        draw.rounded_rectangle((40, 40, width - 40, height - 40), radius=36, fill=(18, 27, 39, 245), outline=(255, 255, 255, 70), width=2)
+        draw.rounded_rectangle((70, 70, 400, 140), radius=28, fill=(99, 215, 191, 220))
+        draw.text((98, 92), "Hippo AI", fill=(8, 17, 24, 255), font=body_font)
 
-    footer = f"Generated by Hippo AI · {format_name.upper()}"
-    draw.text((96, height - 72), footer, fill="#63d7bf", font=body_font)
+        wrapped_title = _wrap_text(draw, title_text, title_font, 1160)
+        y = 170
+        for line in wrapped_title[:4]:
+            draw.text((96, y), line, fill=(237, 244, 251, 255), font=title_font)
+            y += 74
+
+        if body_text:
+            y += 12
+            wrapped_body = _wrap_text(draw, body_text, body_font, 1210)
+            for line in wrapped_body[:18]:
+                draw.text((96, y), line, fill=(201, 215, 230, 255), font=body_font)
+                y += 34
+
+        # Add a small abstract visual cluster so the image is not text-only.
+        draw.ellipse((900, 180, 1180, 460), fill=(44, 66, 92, 255), outline=(99, 215, 191, 120), width=3)
+        draw.ellipse((965, 245, 1115, 395), fill=(99, 215, 191, 180))
+        for idx in range(6):
+            angle = math.radians(40 + idx * 18)
+            x1 = 1040 + int(math.cos(angle) * 160)
+            y1 = 320 + int(math.sin(angle) * 160)
+            draw.line((1040, 320, x1, y1), fill=(154, 178, 255, 180), width=5)
+
+        footer = f"Generated by Hippo AI · {format_name.upper()}"
+        draw.text((96, height - 72), footer, fill=(99, 215, 191, 255), font=body_font)
 
     buffer = BytesIO()
     save_format = "JPEG" if format_name.lower() in {"jpg", "jpeg"} else "PNG"
