@@ -228,8 +228,16 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 reply_text = data['choices'][0]['message']['content']
             else:
                 reply_text = str(data)
-        except httpx.HTTPStatusError:
-            raise
+        except httpx.HTTPStatusError as exc:
+            body = ""
+            try:
+                body = exc.response.text[:500]
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=502,
+                detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
+            )
         except Exception as e:
             raise HTTPException(status_code=502, detail=f'Fehler der Hippo-API: {e}')
 
