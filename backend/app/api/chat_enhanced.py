@@ -160,7 +160,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                         "role": "system",
                         "content": (
                             f"{project_skills_context}\n\n"
-                            "Diese Skills sind projektbezogene Arbeitsanweisungen. Befolge sie, wenn sie zur Frage passen, und nutze sie als bevorzugte Leitlinie für die Antwortstruktur."
+                            "Diese Skills gelten für jeden Chat dieses Projekts. Behandle sie als verbindliche Projektrichtlinien und priorisiere sie vor allgemeinen Formulierungen, solange sie der Benutzeranfrage nicht widersprechen."
                         ),
                     },
                 )
