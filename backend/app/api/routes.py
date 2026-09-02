@@ -8,6 +8,11 @@ api_router.include_router(admin_users.router)
 api_router.include_router(users.router)
 api_router.include_router(projects.router)
 api_router.include_router(project_folders.router)
+try:
+    from app.api import skills
+    api_router.include_router(skills.router)
+except Exception:
+    pass
 api_router.include_router(chat.router)
 api_router.include_router(files.router)
 api_router.include_router(permissions.router)

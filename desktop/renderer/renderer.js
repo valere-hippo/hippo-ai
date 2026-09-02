@@ -49,6 +49,7 @@ const els = {
   logoutBtn: document.getElementById('logout-btn'),
   profileBtn: document.getElementById('profile-btn'),
   projectEmbedBtn: document.getElementById('project-embed-btn'),
+  projectSkillsBtn: document.getElementById('project-skills-btn'),
   pageTitle: document.getElementById('page-title'),
   selectedInfo: document.getElementById('selected-info'),
   projectPill: document.getElementById('project-pill'),
@@ -641,6 +642,9 @@ function renderContext() {
   els.projectPill.textContent = project ? project.name : 'Global'
   if (els.projectEmbedBtn) {
     els.projectEmbedBtn.disabled = !project
+  }
+  if (els.projectSkillsBtn) {
+    els.projectSkillsBtn.disabled = !project
   }
   if (state.currentConversationId) {
     const conversation = state.conversations.find((item) => item.id === state.currentConversationId)
@@ -2438,6 +2442,293 @@ async function openEmbeddingModal() {
   }
 }
 
+function buildSkillManagerContent(project) {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'modal-grid skill-manager'
+
+  const intro = document.createElement('div')
+  intro.className = 'muted-copy'
+  intro.textContent = 'Skills sind wiederverwendbare Projektanweisungen. Aktive Skills werden im Projekt-Chat priorisiert.'
+
+  const listSection = document.createElement('div')
+  listSection.className = 'skill-manager-section'
+
+  const listHeading = document.createElement('div')
+  listHeading.className = 'section-heading'
+  const listLabel = document.createElement('span')
+  listLabel.textContent = 'Vorhandene Skills'
+  const listCount = document.createElement('span')
+  listCount.className = 'section-count'
+  listCount.textContent = '0'
+  listHeading.append(listLabel, listCount)
+
+  const skillList = document.createElement('div')
+  skillList.className = 'skill-list'
+
+  const formSection = document.createElement('div')
+  formSection.className = 'skill-form'
+
+  const formHeading = document.createElement('div')
+  formHeading.className = 'section-heading'
+  const formLabel = document.createElement('span')
+  formLabel.textContent = 'Skill anlegen oder bearbeiten'
+  const formState = document.createElement('span')
+  formState.className = 'section-count'
+  formState.textContent = 'Neu'
+  formHeading.append(formLabel, formState)
+
+  const nameField = document.createElement('label')
+  nameField.className = 'field'
+  const nameLabel = document.createElement('span')
+  nameLabel.textContent = 'Name'
+  const nameInput = document.createElement('input')
+  nameInput.id = 'skill-name'
+  nameInput.className = 'text-input'
+  nameInput.placeholder = 'z. B. Grünlandanalyse'
+  nameField.append(nameLabel, nameInput)
+
+  const descriptionField = document.createElement('label')
+  descriptionField.className = 'field'
+  const descriptionLabel = document.createElement('span')
+  descriptionLabel.textContent = 'Kurzbeschreibung'
+  const descriptionInput = document.createElement('textarea')
+  descriptionInput.id = 'skill-description'
+  descriptionInput.className = 'composer-input'
+  descriptionInput.style.minHeight = '88px'
+  descriptionInput.placeholder = 'Wofür ist diese Skill gedacht?'
+  descriptionField.append(descriptionLabel, descriptionInput)
+
+  const instructionsField = document.createElement('label')
+  instructionsField.className = 'field'
+  const instructionsLabel = document.createElement('span')
+  instructionsLabel.textContent = 'Anweisungen'
+  const instructionsInput = document.createElement('textarea')
+  instructionsInput.id = 'skill-instructions'
+  instructionsInput.className = 'composer-input'
+  instructionsInput.style.minHeight = '160px'
+  instructionsInput.placeholder = 'Beschreibe hier den Ablauf, die Regeln und das gewünschte Verhalten.'
+  instructionsField.append(instructionsLabel, instructionsInput)
+
+  const enabledRow = document.createElement('label')
+  enabledRow.className = 'skill-enabled-row'
+  const enabledInput = document.createElement('input')
+  enabledInput.type = 'checkbox'
+  enabledInput.id = 'skill-enabled'
+  enabledInput.checked = true
+  const enabledLabel = document.createElement('span')
+  enabledLabel.textContent = 'Skill aktivieren'
+  enabledRow.append(enabledInput, enabledLabel)
+
+  const formActions = document.createElement('div')
+  formActions.className = 'skill-form-actions'
+  const resetButton = document.createElement('button')
+  resetButton.type = 'button'
+  resetButton.className = 'ghost-action'
+  resetButton.textContent = 'Neu starten'
+  const saveButton = document.createElement('button')
+  saveButton.type = 'button'
+  saveButton.className = 'primary-button'
+  saveButton.style.width = 'auto'
+  saveButton.textContent = 'Skill speichern'
+  formActions.append(resetButton, saveButton)
+
+  const formHint = document.createElement('div')
+  formHint.className = 'muted-copy'
+  formHint.textContent = 'Aktive Skills werden im Projekt-Chat automatisch als zusätzliche Leitlinie verwendet.'
+
+  formSection.append(formHeading, nameField, descriptionField, instructionsField, enabledRow, formActions, formHint)
+  listSection.append(listHeading, skillList)
+  wrapper.append(intro, listSection, formSection)
+
+  let skillCache = []
+  let editingSkillId = null
+
+  function resetForm() {
+    editingSkillId = null
+    formState.textContent = 'Neu'
+    nameInput.value = ''
+    descriptionInput.value = ''
+    instructionsInput.value = ''
+    enabledInput.checked = true
+    saveButton.textContent = 'Skill speichern'
+  }
+
+  function fillForm(skill) {
+    editingSkillId = skill.id
+    formState.textContent = 'Bearbeiten'
+    nameInput.value = skill.name || ''
+    descriptionInput.value = skill.description || ''
+    instructionsInput.value = skill.instructions || ''
+    enabledInput.checked = Boolean(skill.is_enabled)
+    saveButton.textContent = 'Änderungen speichern'
+    nameInput.focus()
+  }
+
+  function renderSkills() {
+    skillList.innerHTML = ''
+    listCount.textContent = String(skillCache.length)
+
+    if (!skillCache.length) {
+      const empty = document.createElement('div')
+      empty.className = 'muted-copy'
+      empty.style.padding = '8px 0'
+      empty.textContent = 'Noch keine Skills angelegt.'
+      skillList.appendChild(empty)
+      return
+    }
+
+    skillCache.forEach((skill) => {
+      const card = document.createElement('div')
+      card.className = `skill-card${skill.is_enabled ? ' active' : ''}`
+
+      const cardTop = document.createElement('div')
+      cardTop.className = 'skill-card-top'
+
+      const meta = document.createElement('div')
+      const title = document.createElement('div')
+      title.className = 'skill-card-title'
+      title.textContent = skill.name || 'Unbenannte Skill'
+      const subtitle = document.createElement('div')
+      subtitle.className = 'skill-card-subtitle'
+      subtitle.textContent = skill.description || 'Keine Beschreibung'
+      meta.append(title, subtitle)
+
+      const chip = document.createElement('span')
+      chip.className = `section-badge${skill.is_enabled ? '' : ' subtle'}`
+      chip.textContent = skill.is_enabled ? 'Aktiv' : 'Inaktiv'
+      cardTop.append(meta, chip)
+
+      const instructions = document.createElement('div')
+      instructions.className = 'skill-card-instructions'
+      instructions.textContent = skill.instructions || ''
+
+      const actions = document.createElement('div')
+      actions.className = 'skill-card-actions'
+
+      const editButton = document.createElement('button')
+      editButton.type = 'button'
+      editButton.className = 'ghost-action'
+      editButton.textContent = 'Bearbeiten'
+      editButton.addEventListener('click', () => fillForm(skill))
+
+      const toggleButton = document.createElement('button')
+      toggleButton.type = 'button'
+      toggleButton.className = 'ghost-action'
+      toggleButton.textContent = skill.is_enabled ? 'Deaktivieren' : 'Aktivieren'
+      toggleButton.addEventListener('click', async () => {
+        showLoader('Skill wird aktualisiert...')
+        try {
+          await apiJson(`/projects/${project.id}/skills/${skill.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_enabled: !skill.is_enabled }),
+          })
+          await refreshSkills()
+          showToast('Skill aktualisiert')
+        } catch (error) {
+          showToast(error.message || 'Skill konnte nicht aktualisiert werden', 'error')
+        } finally {
+          hideLoader()
+        }
+      })
+
+      const deleteButton = document.createElement('button')
+      deleteButton.type = 'button'
+      deleteButton.className = 'ghost-action danger'
+      deleteButton.textContent = 'Löschen'
+      deleteButton.addEventListener('click', async () => {
+        if (!window.confirm(`Skill "${skill.name}" wirklich löschen?`)) return
+        showLoader('Skill wird gelöscht...')
+        try {
+          await apiJson(`/projects/${project.id}/skills/${skill.id}`, { method: 'DELETE' })
+          if (editingSkillId === skill.id) {
+            resetForm()
+          }
+          await refreshSkills()
+          showToast('Skill gelöscht')
+        } catch (error) {
+          showToast(error.message || 'Skill konnte nicht gelöscht werden', 'error')
+        } finally {
+          hideLoader()
+        }
+      })
+
+      actions.append(editButton, toggleButton, deleteButton)
+      card.append(cardTop, instructions, actions)
+      skillList.appendChild(card)
+    })
+  }
+
+  async function refreshSkills() {
+    skillCache = await apiJson(`/projects/${project.id}/skills`)
+    renderSkills()
+  }
+
+  async function saveSkill() {
+    const name = nameInput.value.trim()
+    const description = descriptionInput.value.trim()
+    const instructions = instructionsInput.value.trim()
+
+    if (!name || !instructions) {
+      showToast('Name und Anweisungen sind erforderlich.', 'error')
+      return
+    }
+
+    const payload = {
+      name,
+      description: description || null,
+      instructions,
+      is_enabled: enabledInput.checked,
+    }
+
+    showLoader(editingSkillId ? 'Skill wird aktualisiert...' : 'Skill wird erstellt...')
+    try {
+      if (editingSkillId) {
+        await apiJson(`/projects/${project.id}/skills/${editingSkillId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        })
+      } else {
+        await apiJson(`/projects/${project.id}/skills`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+      }
+      resetForm()
+      await refreshSkills()
+      showToast('Skill gespeichert')
+    } catch (error) {
+      showToast(error.message || 'Skill konnte nicht gespeichert werden', 'error')
+    } finally {
+      hideLoader()
+    }
+  }
+
+  resetButton.addEventListener('click', resetForm)
+  saveButton.addEventListener('click', saveSkill)
+  refreshSkills().catch((error) => {
+    showToast(error.message || 'Skills konnten nicht geladen werden', 'error')
+  })
+
+  return wrapper
+}
+
+async function openProjectSkillsModal() {
+  const project = getContextProject()
+  if (!project) {
+    showToast('Wähle zuerst ein Projekt aus.', 'error')
+    return
+  }
+
+  const content = buildSkillManagerContent(project)
+  await openModal({
+    title: 'Skills verwalten',
+    copy: 'Lege projektbezogene Skills an, um wiederkehrende Arbeitsabläufe, Regeln oder Antwortstile zu speichern.',
+    content,
+    submitLabel: 'Schließen',
+    width: 'min(1100px, 100%)',
+  })
+}
+
 function openModal({ title, copy, content, submitLabel, extraActions = [], width = 'min(520px, 100%)' }) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div')
@@ -2896,6 +3187,7 @@ function bindSidebarEvents() {
   els.sidebarToggle?.addEventListener('click', toggleSidebarDrawer)
   els.sidebarBackdrop?.addEventListener('click', closeSidebarDrawer)
   els.projectEmbedBtn.addEventListener('click', openEmbeddingModal)
+  els.projectSkillsBtn.addEventListener('click', openProjectSkillsModal)
   els.profileBtn.addEventListener('click', openProfileModal)
   els.logoutBtn.addEventListener('click', logout)
 }

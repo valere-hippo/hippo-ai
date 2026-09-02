@@ -21,6 +21,7 @@ from app.services.chat_payloads import (
 from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.embedding_context import build_embedding_context_for_request
 from app.services.vision_analysis import build_vision_enriched_text
+from app.services.project_skills import build_project_skills_context
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 import base64
 
@@ -41,10 +42,14 @@ class ChatResponse(BaseModel):
 @router.post("/", response_model=ChatResponse)
 async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends(get_current_user)) -> ChatResponse:
     current_user_id = int(current_user.id)
+    resolved_project_id = payload.project_id
+    if resolved_project_id is None and payload.conversation_id is not None:
+        conv_result = await db.execute(select(Conversation.project_id).where(Conversation.id == payload.conversation_id))
+        resolved_project_id = conv_result.scalar_one_or_none()
     # verify project permission if provided
     conv_project = None
-    if payload.project_id is not None:
-        result = await db.execute(select(Project).where(Project.id == payload.project_id))
+    if resolved_project_id is not None:
+        result = await db.execute(select(Project).where(Project.id == resolved_project_id))
         proj = result.scalar_one_or_none()
         if proj is None:
             raise HTTPException(status_code=404, detail='Projekt nicht gefunden.')
@@ -152,9 +157,25 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 
         try:
+            project_skills_context = await build_project_skills_context(db, conv_project.id)
+            if project_skills_context:
+                hippo_messages.insert(
+                    2,
+                    {
+                        "role": "system",
+                        "content": (
+                            f"{project_skills_context}\n\n"
+                            "Diese Skills sind projektbezogene Arbeitsanweisungen. Befolge sie, wenn sie zur Frage passen, und nutze sie als bevorzugte Leitlinie für die Antwortstruktur."
+                        ),
+                    },
+                )
+        except Exception:
+            pass
+
+        try:
             project_files_context = await build_project_files_context(conv_project)
             hippo_messages.insert(
-                2,
+                3,
                 {
                     "role": "system",
                     "content": (
@@ -168,10 +189,10 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             pass
 
         try:
-            embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=payload.project_id)
+            embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=resolved_project_id)
             if embedding_context:
                 hippo_messages.insert(
-                    2,
+                    4,
                     {
                         "role": "system",
                         "content": (

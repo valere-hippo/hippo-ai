@@ -114,6 +114,7 @@ async def delete_project(project_id: int, db: DbSession, current_user=Depends(ge
     # delete related permissions, conversations, messages first to avoid FK violations
     from app.models.permission import ProjectPermission
     from app.models.chat import Conversation, ChatMessage
+    from app.models.skill import ProjectSkill
 
     # delete messages for conversations tied to this project
     convs = await db.execute(select(Conversation.id).where(Conversation.project_id == project_id))
@@ -121,6 +122,7 @@ async def delete_project(project_id: int, db: DbSession, current_user=Depends(ge
     if conv_ids:
         await db.execute(ChatMessage.__table__.delete().where(ChatMessage.conversation_id.in_(conv_ids)))
         await db.execute(Conversation.__table__.delete().where(Conversation.id.in_(conv_ids)))
+    await db.execute(ProjectSkill.__table__.delete().where(ProjectSkill.project_id == project_id))
     # delete project permissions
     await db.execute(ProjectPermission.__table__.delete().where(ProjectPermission.project_id == project_id))
     # finally delete project
