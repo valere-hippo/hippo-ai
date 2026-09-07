@@ -21,7 +21,7 @@ from app.services.chat_payloads import (
 from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.embedding_context import build_embedding_context_for_request
 from app.services.vision_analysis import build_vision_enriched_text
-from app.services.project_skills import build_project_skills_context
+from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 from app.services.model_registry import resolve_chat_max_tokens, resolve_chat_model_name
 import base64
@@ -153,7 +153,10 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 
         try:
-            project_skills_context = await build_project_skills_context(db, conv_project.id)
+            if conv_project is not None:
+                project_skills_context = await build_project_skills_context(db, conv_project.id, payload.message, limit=5)
+            else:
+                project_skills_context = await build_shared_skills_context(db, payload.message, limit=5)
             if project_skills_context:
                 hippo_messages.insert(
                     2,
@@ -185,7 +188,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             pass
 
     try:
-        embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=resolved_project_id)
+        embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=resolved_project_id, limit=5)
         if embedding_context:
             hippo_messages.insert(
                 1 if conv_project is None else 4,

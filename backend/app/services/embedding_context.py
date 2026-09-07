@@ -76,6 +76,7 @@ async def _search_remote_embedding_context(query: str, project_id: int, limit: i
                 "text": text_value,
                 "score": float(row.get("score") or row.get("similarity") or 0.0),
                 "metadata": row.get("metadata"),
+                "source": "remote",
             }
         )
     return normalized
@@ -101,7 +102,7 @@ async def _search_local_embedding_context(db: Any, query: str, project_id: int |
         + "ORDER BY embedding <=> (:vec)::vector LIMIT :k"
     )
 
-    params: dict[str, Any] = {"vec": embedding, "k": limit}
+    params: dict[str, Any] = {"vec": embedding, "k": max(limit * 2, limit)}
     if project_id is not None:
         params["project_id"] = project_id
 
@@ -121,23 +122,48 @@ async def _search_local_embedding_context(db: Any, query: str, project_id: int |
             "text": row[1],
             "score": float(row[3]),
             "metadata": row[2],
+            "source": "local",
         }
         for row in rows
     ]
 
 
+def _dedupe_embedding_items(items: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+
+    for item in items:
+        text_value = str(item.get("text") or "").strip()
+        if not text_value:
+            continue
+        key = str(item.get("id") or text_value).strip().lower()
+        existing = merged.get(key)
+        if existing is None:
+            merged[key] = item
+            order.append(key)
+            continue
+        if float(item.get("score") or 0.0) > float(existing.get("score") or 0.0):
+            merged[key] = item
+        if existing.get("source") == "remote" and item.get("source") == "local":
+            merged[key] = item
+
+    ranked = list(merged.values())
+    ranked.sort(key=lambda row: float(row.get("score") or 0.0), reverse=True)
+    return ranked[:limit]
+
+
 async def search_embedding_context(db: Any, query: str, project_id: int | None = None, limit: int = 5) -> list[dict[str, Any]]:
     if project_id is not None:
         local_items = await _search_local_embedding_context(db, query, project_id=project_id, limit=limit)
-        if local_items:
-            return local_items
-
+        remote_items: list[dict[str, Any]] = []
         try:
             remote_items = await _search_remote_embedding_context(query, project_id, limit)
-            if remote_items:
-                return remote_items
         except Exception:
-            pass
+            remote_items = []
+        merged = _dedupe_embedding_items(local_items + remote_items, limit=limit)
+        if merged:
+            return merged
+        return local_items or remote_items
 
     return await _search_local_embedding_context(db, query, project_id=project_id, limit=limit)
 
@@ -145,12 +171,17 @@ async def search_embedding_context(db: Any, query: str, project_id: int | None =
 def format_embedding_context(items: list[dict[str, Any]], title: str = "Gefundene Projekthinweise aus dem Embedding-Store") -> str:
     if not items:
         return ""
-    lines = [title + ":"]
-    for item in items:
+    lines = [title + ":", "Nutze diese Hinweise nur, wenn sie zur Anfrage passen. Bevorzuge die Hinweise mit höherer Relevanz."]
+    for item in items[:5]:
         text_value = str(item.get("text") or "").strip()
-        if text_value:
-            lines.append(f"- {text_value}")
-    if len(lines) == 1:
+        if not text_value:
+            continue
+        score = float(item.get("score") or 0.0)
+        metadata = item.get("metadata")
+        metadata_source = metadata.get("source") if isinstance(metadata, dict) else None
+        source = str(item.get("source") or metadata_source or "store")
+        lines.append(f"- [{score:.2f}] ({source}) {text_value}")
+    if len(lines) <= 2:
         return ""
     return "\n".join(lines)
 
