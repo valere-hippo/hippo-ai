@@ -1419,6 +1419,8 @@ textarea {
 .dashboard-overview-row span {
   color: var(--muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dashboard-project-row {

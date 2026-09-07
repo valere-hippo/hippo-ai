@@ -2161,6 +2161,7 @@ async function openUserDashboardModal(initialTab = 'profile') {
     const overviewBody = document.createElement('div')
     overviewBody.className = 'muted-copy'
     overviewBody.textContent = 'Lade Übersicht ...'
+    let overviewLoading = false
 
     const renderOverview = (overview) => {
       overviewGrid.innerHTML = ''
@@ -2225,12 +2226,20 @@ async function openUserDashboardModal(initialTab = 'profile') {
     }
 
     const loadOverview = async () => {
+      if (overviewLoading) return
+      overviewLoading = true
+      overviewRefresh.disabled = true
+      overviewGrid.innerHTML = ''
       overviewBody.textContent = 'Lade Übersicht ...'
       try {
         const overview = await apiJson('/admin/overview/')
         renderOverview(overview)
       } catch (error) {
+        overviewGrid.innerHTML = ''
         overviewBody.textContent = error.message || 'Übersicht konnte nicht geladen werden.'
+      } finally {
+        overviewLoading = false
+        overviewRefresh.disabled = false
       }
     }
 
