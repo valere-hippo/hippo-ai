@@ -50,6 +50,7 @@ const els = {
   profileBtn: document.getElementById('profile-btn'),
   projectEmbedBtn: document.getElementById('project-embed-btn'),
   projectSkillsBtn: document.getElementById('project-skills-btn'),
+  markdownImportBtn: document.getElementById('markdown-import-btn'),
   pageTitle: document.getElementById('page-title'),
   selectedInfo: document.getElementById('selected-info'),
   projectPill: document.getElementById('project-pill'),
@@ -2527,9 +2528,89 @@ function buildEmbeddingForm(project = null) {
   return wrapper
 }
 
+async function openMarkdownImportModal() {
+  const content = document.createElement('div')
+  content.className = 'modal-grid embedding-library-modal'
+
+  const targetField = document.createElement('label')
+  targetField.className = 'field'
+  const targetLabel = document.createElement('span')
+  targetLabel.textContent = 'Als was importieren?'
+  const targetSelect = document.createElement('select')
+  targetSelect.className = 'text-input'
+  targetSelect.id = 'markdown-target'
+  ;[
+    ['skill', 'Skill'],
+    ['embedding', 'Embedding'],
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = label
+    targetSelect.appendChild(option)
+  })
+  const targetHelp = document.createElement('div')
+  targetHelp.className = 'muted-copy'
+  targetHelp.textContent = 'Hippo importiert deine Markdown-Datei direkt als Skill oder als Embedding-Basis.'
+  targetField.append(targetLabel, targetSelect, targetHelp)
+
+  const uploadField = document.createElement('div')
+  uploadField.className = 'skill-manager-section'
+  const uploadHint = document.createElement('div')
+  uploadHint.className = 'muted-copy'
+  uploadHint.textContent = 'Wähle eine .md-Datei aus und Hippo speichert den Inhalt in der passenden Bibliothek.'
+  const uploadInput = document.createElement('input')
+  uploadInput.type = 'file'
+  uploadInput.accept = '.md'
+  uploadInput.className = 'hidden'
+  const uploadButton = document.createElement('button')
+  uploadButton.type = 'button'
+  uploadButton.className = 'primary-button'
+  uploadButton.style.width = 'auto'
+  uploadButton.textContent = 'Markdown auswählen'
+  uploadButton.addEventListener('click', () => uploadInput.click())
+  uploadField.append(uploadButton, uploadInput, uploadHint)
+
+  uploadInput.addEventListener('change', async () => {
+    const [file] = uploadInput.files || []
+    if (!file) return
+
+    const target = targetSelect.value === 'embedding' ? 'embedding' : 'skill'
+    const endpoint = target === 'embedding' ? '/embeddings/library/upload' : '/skills/library/upload'
+    const formData = new FormData()
+    formData.append('file', file, file.name)
+
+    showLoader(target === 'embedding' ? 'Embedding wird importiert...' : 'Skill wird importiert...')
+    try {
+      const response = await fetch(`${API}${endpoint}`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: formData,
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.detail || `HTTP ${response.status}`)
+      }
+      showToast(target === 'embedding' ? 'Markdown als Embedding gespeichert' : 'Markdown als Skill gespeichert')
+    } catch (error) {
+      showToast(error.message || 'Import konnte nicht gespeichert werden', 'error')
+    } finally {
+      uploadInput.value = ''
+      hideLoader()
+    }
+  })
+
+  content.append(targetField, uploadField)
+
+  await openModal({
+    title: '.md importieren',
+    copy: 'Du kannst denselben Markdown-Inhalt direkt als Skill oder als Embedding speichern.',
+    content,
+    submitLabel: 'Schließen',
+  })
+}
+
 async function openEmbeddingModal() {
-  const project = getContextProject()
-  const form = buildEmbeddingForm(project)
+  const form = buildEmbeddingForm(null)
   const content = document.createElement('div')
   content.className = 'modal-grid embedding-library-modal'
 
@@ -3438,6 +3519,9 @@ function bindSidebarEvents() {
   els.sidebarBackdrop?.addEventListener('click', closeSidebarDrawer)
   els.projectEmbedBtn.addEventListener('click', openEmbeddingModal)
   els.projectSkillsBtn.addEventListener('click', openProjectSkillsModal)
+  if (els.markdownImportBtn) {
+    els.markdownImportBtn.addEventListener('click', openMarkdownImportModal)
+  }
   els.profileBtn.addEventListener('click', openProfileModal)
   els.logoutBtn.addEventListener('click', logout)
 }
