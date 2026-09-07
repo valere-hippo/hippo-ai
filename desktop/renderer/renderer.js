@@ -2121,15 +2121,123 @@ async function openUserDashboardModal(initialTab = 'profile') {
     return button
   }
 
-  const activeTab = state.user.role === 'ADMIN' && initialTab === 'users'
-    ? 'users'
-    : initialTab === 'storage' || initialTab === 'profile'
-      ? initialTab
-      : 'profile'
+  const activeTab = state.user.role === 'ADMIN' && initialTab === 'overview'
+    ? 'overview'
+    : state.user.role === 'ADMIN' && initialTab === 'users'
+      ? 'users'
+      : initialTab === 'storage' || initialTab === 'profile'
+        ? initialTab
+        : 'profile'
+  if (state.user.role === 'ADMIN') {
+    createTabButton('overview', 'Überblick')
+  }
   createTabButton('profile', 'Profil')
   createTabButton('storage', 'Ordner / Dateien')
   if (state.user.role === 'ADMIN') {
     createTabButton('users', 'Benutzer')
+  }
+
+  const overviewPanel = document.createElement('section')
+  overviewPanel.className = 'dashboard-panel'
+  if (state.user.role === 'ADMIN') {
+    const overviewHeader = document.createElement('div')
+    overviewHeader.className = 'dashboard-panel-header'
+    const overviewHeaderCopy = document.createElement('div')
+    const overviewTitle = document.createElement('div')
+    overviewTitle.className = 'dashboard-panel-title'
+    overviewTitle.textContent = 'Datenbank-Überblick'
+    const overviewSubtitle = document.createElement('div')
+    overviewSubtitle.className = 'dashboard-panel-subtitle'
+    overviewSubtitle.textContent = 'Schnellansicht für Backend-, Skill- und Embedding-Inhalte.'
+    overviewHeaderCopy.append(overviewTitle, overviewSubtitle)
+    const overviewRefresh = document.createElement('button')
+    overviewRefresh.type = 'button'
+    overviewRefresh.className = 'ghost-action'
+    overviewRefresh.textContent = 'Aktualisieren'
+    overviewHeader.append(overviewHeaderCopy, overviewRefresh)
+
+    const overviewGrid = document.createElement('div')
+    overviewGrid.className = 'dashboard-overview-grid'
+    const overviewBody = document.createElement('div')
+    overviewBody.className = 'muted-copy'
+    overviewBody.textContent = 'Lade Übersicht ...'
+
+    const renderOverview = (overview) => {
+      overviewGrid.innerHTML = ''
+      const counts = overview?.counts || {}
+      const statItems = [
+        ['Benutzer', counts.users],
+        ['Projekte', counts.projects],
+        ['Skills', counts.shared_skills || 0],
+        ['Projekt-Skills', counts.project_skills || 0],
+        ['Embeddings', counts.embeddings],
+        ['Chats', counts.conversations],
+      ]
+      statItems.forEach(([label, value]) => {
+        const card = document.createElement('div')
+        card.className = 'overview-stat'
+        card.innerHTML = `<div class="overview-stat-label">${escapeHtml(label)}</div><div class="overview-stat-value">${escapeHtml(String(value ?? 0))}</div>`
+        overviewGrid.appendChild(card)
+      })
+
+      const recentProjects = Array.isArray(overview?.recent_projects) ? overview.recent_projects : []
+      const recentSkills = Array.isArray(overview?.recent_skills) ? overview.recent_skills : []
+      overviewBody.innerHTML = ''
+
+      const recentWrap = document.createElement('div')
+      recentWrap.className = 'dashboard-overview-columns'
+      const projectBox = document.createElement('div')
+      projectBox.className = 'dashboard-overview-box'
+      projectBox.innerHTML = '<div class="dashboard-overview-box-title">Aktuelle Projekte</div>'
+      const projectList = document.createElement('div')
+      projectList.className = 'dashboard-overview-list'
+      if (recentProjects.length) {
+        recentProjects.forEach((item) => {
+          const row = document.createElement('div')
+          row.className = 'dashboard-overview-row'
+          row.innerHTML = `<strong>${escapeHtml(item.name || '')}</strong><span>${escapeHtml(item.watched_folder || 'kein Ordner')}</span>`
+          projectList.appendChild(row)
+        })
+      } else {
+        projectList.textContent = 'Keine Projekte gefunden.'
+      }
+      projectBox.appendChild(projectList)
+
+      const skillBox = document.createElement('div')
+      skillBox.className = 'dashboard-overview-box'
+      skillBox.innerHTML = '<div class="dashboard-overview-box-title">Aktuelle Skills</div>'
+      const skillList = document.createElement('div')
+      skillList.className = 'dashboard-overview-list'
+      if (recentSkills.length) {
+        recentSkills.forEach((item) => {
+          const row = document.createElement('div')
+          row.className = 'dashboard-overview-row'
+          row.innerHTML = `<strong>${escapeHtml(item.name || '')}</strong><span>${item.project_id ? `Projekt ${escapeHtml(String(item.project_id))}` : 'Geteilt'}</span>`
+          skillList.appendChild(row)
+        })
+      } else {
+        skillList.textContent = 'Keine Skills gefunden.'
+      }
+      skillBox.appendChild(skillList)
+
+      recentWrap.append(projectBox, skillBox)
+      overviewBody.appendChild(recentWrap)
+    }
+
+    const loadOverview = async () => {
+      overviewBody.textContent = 'Lade Übersicht ...'
+      try {
+        const overview = await apiJson('/admin/overview/')
+        renderOverview(overview)
+      } catch (error) {
+        overviewBody.textContent = error.message || 'Übersicht konnte nicht geladen werden.'
+      }
+    }
+
+    overviewRefresh.addEventListener('click', loadOverview)
+    overviewPanel.append(overviewHeader, overviewGrid, overviewBody)
+    panels.set('overview', overviewPanel)
+    loadOverview()
   }
 
   const profilePanel = document.createElement('section')
@@ -2295,6 +2403,9 @@ async function openUserDashboardModal(initialTab = 'profile') {
 
   const panelsWrap = document.createElement('div')
   panelsWrap.className = 'dashboard-panels'
+  if (state.user.role === 'ADMIN') {
+    panelsWrap.append(overviewPanel)
+  }
   panelsWrap.append(profilePanel, storagePanel)
   if (state.user.role === 'ADMIN') {
     panelsWrap.append(usersPanel)

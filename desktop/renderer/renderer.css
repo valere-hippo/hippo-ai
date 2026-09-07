@@ -276,10 +276,10 @@ textarea {
 .user-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  min-height: 50px;
-  padding: 12px 14px;
+  min-height: 46px;
+  padding: 10px 12px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid transparent;
@@ -319,7 +319,7 @@ textarea {
 }
 
 .item-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -1300,8 +1300,8 @@ textarea {
 .dashboard-panel {
   display: grid;
   gap: 12px;
-  padding: 16px;
-  border-radius: 20px;
+  padding: 14px;
+  border-radius: 18px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
 }
@@ -1346,6 +1346,79 @@ textarea {
 .dashboard-panel-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.dashboard-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.overview-stat {
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.overview-stat-label {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.overview-stat-value {
+  margin-top: 6px;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dashboard-overview-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.dashboard-overview-box {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dashboard-overview-box-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.dashboard-overview-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-overview-row {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dashboard-overview-row strong {
+  font-size: 13px;
+}
+
+.dashboard-overview-row span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .dashboard-project-row {
