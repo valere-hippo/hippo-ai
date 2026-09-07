@@ -1443,7 +1443,10 @@ async function openCreateProjectModal() {
     submitLabel: 'Erstellen',
   })
 
-  if (!result) return
+  if (!result || !result.folder) {
+    showToast('Du musst einen gemeinsamen Ordner auf deinem Computer auswählen, bevor das Projekt erstellt wird.', 'error')
+    return
+  }
 
   showLoader('Projekt wird erstellt...')
   try {
@@ -1452,7 +1455,7 @@ async function openCreateProjectModal() {
       body: JSON.stringify({
         name: result.name,
         description: '',
-        watched_folder: result.folder || null,
+        watched_folder: result.folder,
       }),
     })
     await loadWorkspace()
@@ -1497,7 +1500,10 @@ async function openEditProjectModal(project) {
     ],
   })
 
-  if (!result) return
+  if (!result || !result.folder) {
+    showToast('Du musst beim Speichern einen gemeinsamen Ordner beibehalten oder auswählen.', 'error')
+    return
+  }
 
   showLoader('Projekt wird gespeichert...')
   try {
@@ -1506,7 +1512,7 @@ async function openEditProjectModal(project) {
       body: JSON.stringify({
         name: result.name,
         description: project.description || '',
-        watched_folder: result.folder || null,
+        watched_folder: result.folder,
       }),
     })
     await loadProjects()

@@ -19,6 +19,8 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 def _normalize_shared_folder(folder: str) -> str:
     path = Path(folder).expanduser()
+    if not path.is_absolute():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen absoluten Ordnerpfad auswählen.")
     try:
         resolved = path.resolve(strict=True)
     except FileNotFoundError as exc:
@@ -26,9 +28,6 @@ def _normalize_shared_folder(folder: str) -> str:
 
     if not resolved.is_dir():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen gültigen Ordner auswählen.")
-
-    if not resolved.exists():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Der angegebene Ordner existiert nicht.")
 
     return str(resolved)
 
