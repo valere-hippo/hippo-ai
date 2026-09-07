@@ -33,6 +33,7 @@
               <span>Projekte</span>
               <span class="section-count" id="project-count">0</span>
             </div>
+            <input id="project-search" class="text-input sidebar-search" type="search" placeholder="Projekte filtern" />
             <div id="project-list" class="stack-list"></div>
             <button id="project-embed-btn" class="ghost-action">Embedding-Bibliothek</button>
             <button id="project-skills-btn" class="ghost-action">Skill-Bibliothek</button>
@@ -44,12 +45,14 @@
               <span>Chats</span>
               <span class="section-count" id="chat-count">0</span>
             </div>
+            <input id="chat-search" class="text-input sidebar-search" type="search" placeholder="Chats filtern" />
             <div id="conversation-list" class="stack-list"></div>
           </div>
 
         </div>
 
         <div class="sidebar-footer">
+          <div id="db-status" class="db-status hidden"></div>
           <div class="account-card">
             <button id="profile-btn" class="account-main" type="button">
               <div class="account-avatar" id="account-avatar">H</div>

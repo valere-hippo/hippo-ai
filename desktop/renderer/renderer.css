@@ -271,6 +271,19 @@ textarea {
   flex: 0 0 auto;
 }
 
+.sidebar-search {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 14px;
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+
+.sidebar-search::placeholder {
+  color: rgba(147, 166, 184, 0.75);
+}
+
 .project-item,
 .conversation-item,
 .user-item {
@@ -383,6 +396,42 @@ textarea {
   flex: 0 0 auto;
 }
 
+.db-status {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.db-status-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.db-status-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.db-status-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.db-status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .account-card {
   border-radius: 22px;
   padding: 14px;
@@ -466,7 +515,7 @@ textarea {
 }
 
 .page-title {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.03em;
 }
@@ -512,7 +561,7 @@ textarea {
 .message-bubble {
   max-width: min(760px, 92%);
   border-radius: 22px;
-  padding: 15px 16px;
+  padding: 13px 14px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.04);
   box-shadow: 0 10px 30px rgba(2, 6, 10, 0.15);

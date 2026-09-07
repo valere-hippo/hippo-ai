@@ -27,6 +27,9 @@ const state = {
   recording: null,
   isRecording: false,
   projectConversationMemory: new Map(),
+  projectQuery: '',
+  chatQuery: '',
+  adminOverview: null,
   thinkingMessage: null,
 }
 
@@ -41,6 +44,9 @@ const els = {
   password: document.getElementById('password'),
   loginResult: document.getElementById('login-result'),
   sidebarNewChat: document.getElementById('sidebar-new-chat'),
+  projectSearch: document.getElementById('project-search'),
+  chatSearch: document.getElementById('chat-search'),
+  dbStatus: document.getElementById('db-status'),
   projectList: document.getElementById('project-list'),
   conversationList: document.getElementById('conversation-list'),
   accountAvatar: document.getElementById('account-avatar'),
@@ -665,7 +671,17 @@ function renderProjects() {
   els.projectList.innerHTML = ''
   els.projectList.appendChild(createProjectCreateCard())
 
-  state.projects.forEach((project) => {
+  const query = (state.projectQuery || '').trim().toLowerCase()
+  const projects = state.projects.filter((project) => {
+    if (!query) return true
+    const haystack = [project.name, project.description, project.watched_folder]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    return haystack.includes(query)
+  })
+
+  projects.forEach((project) => {
     const active = state.selectedProjectId === project.id
     const row = document.createElement('div')
     row.className = `project-item${active ? ' active' : ''}`
@@ -727,7 +743,7 @@ function renderProjects() {
     els.projectList.appendChild(row)
   })
 
-  q('project-count').textContent = String(state.projects.length)
+  q('project-count').textContent = String(projects.length)
 }
 
 function createProjectCreateCard() {
@@ -741,7 +757,18 @@ function createProjectCreateCard() {
 
 function renderConversations() {
   els.conversationList.innerHTML = ''
-  const conversations = [...state.conversations].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  const query = (state.chatQuery || '').trim().toLowerCase()
+  const conversations = [...state.conversations]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .filter((conversation) => {
+      if (!query) return true
+      const project = conversation.project_id ? state.projects.find((item) => item.id === conversation.project_id) : null
+      const haystack = [getConversationTitle(conversation), conversation.project_id ? project?.name : 'Global', conversation.created_at]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(query)
+    })
 
   const allLabel = document.createElement('div')
   allLabel.className = 'section-badge'
@@ -1147,8 +1174,54 @@ async function loadUsers() {
   state.users = await apiJson('/admin/users/')
 }
 
+async function loadAdminOverview() {
+  if (state.user?.role !== 'ADMIN') {
+    state.adminOverview = null
+    renderDbStatus()
+    return
+  }
+  try {
+    state.adminOverview = await apiJson('/admin/overview/')
+  } catch (error) {
+    console.warn('Failed to load admin overview', error)
+    state.adminOverview = null
+  }
+  renderDbStatus()
+}
+
+function renderDbStatus() {
+  if (!els.dbStatus) return
+  const overview = state.adminOverview
+  if (state.user?.role !== 'ADMIN' || !overview) {
+    els.dbStatus.classList.add('hidden')
+    els.dbStatus.innerHTML = ''
+    return
+  }
+
+  const counts = overview.counts || {}
+  els.dbStatus.classList.remove('hidden')
+  els.dbStatus.innerHTML = `
+    <div class="db-status-top">
+      <div>
+        <div class="db-status-title">Datenbank</div>
+        <div class="db-status-subtitle">AI & Backend in Echtzeit</div>
+      </div>
+      <button id="db-status-refresh" class="item-action-button" type="button" title="Aktualisieren">↻</button>
+    </div>
+    <div class="db-status-chips">
+      <span class="context-pill">U ${counts.users || 0}</span>
+      <span class="context-pill">P ${counts.projects || 0}</span>
+      <span class="context-pill">S ${counts.shared_skills || 0}</span>
+      <span class="context-pill">E ${counts.embeddings || 0}</span>
+    </div>
+  `
+  const refreshButton = document.getElementById('db-status-refresh')
+  refreshButton?.addEventListener('click', () => loadAdminOverview())
+}
+
 async function loadWorkspace() {
   await Promise.all([loadProjects(), loadConversations(), loadUsers()])
+  await loadAdminOverview()
   renderContext()
 }
 
@@ -3527,6 +3600,14 @@ function bindSidebarEvents() {
   if (els.markdownImportBtn) {
     els.markdownImportBtn.addEventListener('click', openMarkdownImportModal)
   }
+  els.projectSearch?.addEventListener('input', (event) => {
+    state.projectQuery = String(event.target.value || '')
+    renderProjects()
+  })
+  els.chatSearch?.addEventListener('input', (event) => {
+    state.chatQuery = String(event.target.value || '')
+    renderConversations()
+  })
   els.profileBtn.addEventListener('click', openProfileModal)
   els.logoutBtn.addEventListener('click', logout)
 }
