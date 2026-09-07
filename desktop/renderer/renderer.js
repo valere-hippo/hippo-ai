@@ -2591,6 +2591,11 @@ async function openMarkdownImportModal() {
         throw new Error(data?.detail || `HTTP ${response.status}`)
       }
       showToast(target === 'embedding' ? 'Markdown als Embedding gespeichert' : 'Markdown als Skill gespeichert')
+      if (target === 'embedding') {
+        await openEmbeddingModal()
+      } else {
+        await openProjectSkillsModal()
+      }
     } catch (error) {
       showToast(error.message || 'Import konnte nicht gespeichert werden', 'error')
     } finally {
