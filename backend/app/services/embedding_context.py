@@ -93,7 +93,11 @@ async def _search_local_embedding_context(db: Any, query: str, project_id: int |
     sql = text(
         "SELECT id, text, metadata, 1 - (embedding <=> (:vec)::vector) AS similarity "
         f"FROM {EMBEDDINGS_TABLE} "
-        + ("WHERE project_id = :project_id " if project_id is not None else "")
+        + (
+            "WHERE (project_id = :project_id OR project_id IS NULL) "
+            if project_id is not None
+            else "WHERE project_id IS NULL "
+        )
         + "ORDER BY embedding <=> (:vec)::vector LIMIT :k"
     )
 
@@ -124,6 +128,10 @@ async def _search_local_embedding_context(db: Any, query: str, project_id: int |
 
 async def search_embedding_context(db: Any, query: str, project_id: int | None = None, limit: int = 5) -> list[dict[str, Any]]:
     if project_id is not None:
+        local_items = await _search_local_embedding_context(db, query, project_id=project_id, limit=limit)
+        if local_items:
+            return local_items
+
         try:
             remote_items = await _search_remote_embedding_context(query, project_id, limit)
             if remote_items:

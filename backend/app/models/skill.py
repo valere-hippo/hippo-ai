@@ -10,7 +10,7 @@ class ProjectSkill(Base):
     __tablename__ = "ai_project_skills"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("hippoai.ai_projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("hippoai.ai_projects.id", ondelete="CASCADE"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     instructions: Mapped[str] = mapped_column(Text, nullable=False)

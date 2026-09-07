@@ -78,7 +78,8 @@ def has_s3_storage() -> bool:
 
 
 def can_use_s3_storage() -> bool:
-    return has_s3_storage() and boto3 is not None
+    # Shared-folder mode uses the local project directory as the single source of truth.
+    return False
 
 
 def s3_client():
@@ -126,6 +127,9 @@ def ensure_project_bucket(project: Any) -> str | None:
 
 
 def delete_project_bucket(project: Any) -> None:
+    if getattr(project, "watched_folder", None):
+        return
+
     client = s3_client()
     if client is None:
         return
@@ -144,6 +148,9 @@ def delete_project_bucket(project: Any) -> None:
 
 
 def clear_project_storage(project: Any) -> dict[str, int]:
+    if getattr(project, "watched_folder", None):
+        return {"deleted_remote": 0, "deleted_local": 0}
+
     deleted_remote = 0
     deleted_local = 0
 
@@ -185,6 +192,14 @@ def _local_project_dir(project: Any) -> Path:
     project_id = getattr(project, "id", None)
     if project_id is None:
         raise ValueError("project.id is required")
+
+    folder = str(getattr(project, "watched_folder", "") or "").strip()
+    if folder:
+        path = Path(folder).expanduser()
+        if not path.exists() or not path.is_dir():
+            raise FileNotFoundError(folder)
+        return path
+
     path = LOCAL_STORAGE_ROOT / str(project_id)
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -301,7 +316,7 @@ def delete_project_file(project: Any, filename: str) -> dict[str, int | str]:
                 pass
 
     project_id = getattr(project, "id", None)
-    local_path = LOCAL_STORAGE_ROOT / str(project_id) / safe_filename if project_id is not None else None
+    local_path = _local_project_dir(project) / safe_filename if project_id is not None else None
     try:
         if local_path is not None and local_path.exists() and local_path.is_file():
             local_path.unlink()
@@ -1053,7 +1068,7 @@ async def build_project_files_context(project: Any, max_files: int = 12) -> str:
     if not files:
         return (
             "Im gemeinsamen Ordner des Projekts sind aktuell keine Dateien sichtbar.\n"
-            "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Bucket leer ist oder die Synchronisierung noch nicht abgeschlossen wurde."
+            "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Ordner leer ist oder die Synchronisierung noch nicht abgeschlossen wurde."
         )
 
     files_by_name = {item.filename: item for item in files}

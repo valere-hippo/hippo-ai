@@ -8,10 +8,12 @@ from app.models.skill import ProjectSkill
 
 
 async def load_project_skills(db: Any, project_id: int, enabled_only: bool = False) -> list[ProjectSkill]:
-    stmt = select(ProjectSkill).where(ProjectSkill.project_id == project_id)
+    stmt = select(ProjectSkill).where(
+        (ProjectSkill.project_id == project_id) | (ProjectSkill.project_id.is_(None))
+    )
     if enabled_only:
         stmt = stmt.where(ProjectSkill.is_enabled.is_(True))
-    stmt = stmt.order_by(ProjectSkill.created_at.asc())
+    stmt = stmt.order_by(ProjectSkill.project_id.is_(None).desc(), ProjectSkill.created_at.asc())
     result = await db.execute(stmt)
     return result.scalars().all()
 
@@ -22,12 +24,13 @@ def format_project_skills_context(skills: list[ProjectSkill]) -> str:
         return ""
 
     lines = [
-        "Aktive Projektskills:",
-        "Die folgenden Skills sind projektbezogene Arbeitsanweisungen. Befolge sie, wenn die Benutzerfrage passt.",
+        "Aktive Projektskills und geteilte Skills:",
+        "Die folgenden Skills sind Arbeitsanweisungen. Befolge sie, wenn die Benutzerfrage passt.",
     ]
 
     for skill in active_skills:
-        lines.append(f"- Skill: {skill.name}")
+        scope = "Geteilt" if getattr(skill, "project_id", None) is None else f"Projekt {skill.project_id}"
+        lines.append(f"- Skill: {skill.name} ({scope})")
         description = (skill.description or "").strip()
         if description:
             lines.append(f"  Beschreibung: {description}")

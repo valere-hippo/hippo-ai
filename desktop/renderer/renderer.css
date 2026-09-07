@@ -75,7 +75,7 @@ textarea {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   width: 100%;
   height: 100vh;
   overflow: hidden;
@@ -84,8 +84,8 @@ textarea {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px 14px 10px;
+  gap: 10px;
+  padding: 16px 12px 8px;
   background: linear-gradient(180deg, rgba(11, 18, 26, 0.96), rgba(11, 18, 26, 0.9));
   border-right: 1px solid var(--line);
   backdrop-filter: blur(16px);
@@ -157,7 +157,7 @@ textarea {
 }
 
 .brand-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
@@ -458,8 +458,8 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px 22px 16px;
+  gap: 14px;
+  padding: 16px 20px 14px;
   border-bottom: 1px solid var(--line);
   background: rgba(11, 18, 26, 0.74);
   backdrop-filter: blur(12px);

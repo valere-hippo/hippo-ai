@@ -11,6 +11,7 @@ api_router.include_router(project_folders.router)
 try:
     from app.api import skills
     api_router.include_router(skills.router)
+    api_router.include_router(skills.library_router)
 except Exception:
     pass
 api_router.include_router(chat.router)
@@ -18,13 +19,22 @@ api_router.include_router(files.router)
 api_router.include_router(permissions.router)
 # Add additional routers
 api_router.include_router(audio.router)
-# keep legacy embeddings endpoints and also add proxy endpoints that forward to external embedding service
+try:
+    from app.api import admin_overview
+    api_router.include_router(admin_overview.router)
+except Exception:
+    pass
+# keep legacy embeddings endpoints and also add library endpoints that store in the backend DB
 try:
     from app.api import embeddings_proxy
     api_router.include_router(embeddings_proxy.router)
 except Exception:
     pass
 api_router.include_router(embeddings.router)
+try:
+    api_router.include_router(embeddings.library_router)
+except Exception:
+    pass
 api_router.include_router(search.router)
 # enhanced chat that consults embeddings first
 try:

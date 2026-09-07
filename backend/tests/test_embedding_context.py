@@ -1,14 +1,31 @@
 import asyncio
+from types import SimpleNamespace
 
 from app.services import embedding_context as ec
+from app.services.project_skills import format_project_skills_context
 
 
-def test_search_embedding_context_prefers_remote_results(monkeypatch):
+def test_format_project_skills_context_includes_shared_and_project_skills():
+    skills = [
+        SimpleNamespace(name="Shared", description="Global", instructions="Do global", is_enabled=True, project_id=None),
+        SimpleNamespace(name="Project", description="Local", instructions="Do local", is_enabled=True, project_id=12),
+        SimpleNamespace(name="Off", description="Ignored", instructions="Ignore", is_enabled=False, project_id=None),
+    ]
+
+    result = format_project_skills_context(skills)
+
+    assert "Aktive Projektskills und geteilte Skills" in result
+    assert "Shared" in result
+    assert "Project" in result
+    assert "Off" not in result
+
+
+def test_search_embedding_context_prefers_local_results(monkeypatch):
     calls: list[str] = []
 
     async def fake_remote(query: str, project_id: int, limit: int):
         calls.append("remote")
-        return [{"id": 1, "text": "Grünlandkartierung Arte", "score": 0.97, "metadata": {"source": "store"}}]
+        return [{"id": 1, "text": "Remote result", "score": 0.97, "metadata": {"source": "store"}}]
 
     async def fake_local(db, query: str, project_id=None, limit: int = 5):
         calls.append("local")
@@ -19,11 +36,11 @@ def test_search_embedding_context_prefers_remote_results(monkeypatch):
 
     result = asyncio.run(ec.search_embedding_context(object(), "Kannst du nochmal suchen?", project_id=12, limit=5))
 
-    assert result and result[0]["text"] == "Grünlandkartierung Arte"
-    assert calls == ["remote"]
+    assert result and result[0]["text"] == "Remote result"
+    assert calls == ["local", "remote"]
 
 
-def test_search_embedding_context_falls_back_to_local_results(monkeypatch):
+def test_search_embedding_context_returns_local_results_without_remote(monkeypatch):
     calls: list[str] = []
 
     async def fake_remote(query: str, project_id: int, limit: int):
@@ -40,7 +57,7 @@ def test_search_embedding_context_falls_back_to_local_results(monkeypatch):
     result = asyncio.run(ec.search_embedding_context(object(), "Kannst du nochmal suchen?", project_id=12, limit=5))
 
     assert result and result[0]["text"] == "Lokaler Projekt-Hinweis"
-    assert calls == ["remote", "local"]
+    assert calls == ["local"]
 
 
 def test_build_embedding_context_for_request_returns_empty_without_project():

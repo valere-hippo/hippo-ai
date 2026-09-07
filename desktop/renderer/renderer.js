@@ -2127,7 +2127,7 @@ async function openUserDashboardModal(initialTab = 'profile') {
       ? initialTab
       : 'profile'
   createTabButton('profile', 'Profil')
-  createTabButton('storage', 'S3 / Dateien')
+  createTabButton('storage', 'Ordner / Dateien')
   if (state.user.role === 'ADMIN') {
     createTabButton('users', 'Benutzer')
   }
@@ -2182,8 +2182,9 @@ async function openUserDashboardModal(initialTab = 'profile') {
   const clearStorageButton = document.createElement('button')
   clearStorageButton.type = 'button'
   clearStorageButton.className = 'ghost-action'
-  clearStorageButton.textContent = 'Speicher leeren'
-  clearStorageButton.title = 'Alle Projektdateien löschen'
+  clearStorageButton.textContent = 'Ordner löschen gesperrt'
+  clearStorageButton.title = 'Der gemeinsame Projektordner wird nicht von Hippo geleert.'
+  clearStorageButton.disabled = true
   clearStorageButton.dataset.clearStorageBtn = 'true'
 
   const uploadInput = document.createElement('input')
@@ -2394,7 +2395,7 @@ function buildEmbeddingForm(project = null) {
 
   const hint = document.createElement('div')
   hint.className = 'muted-copy'
-  hint.textContent = project ? `Projekt-ID: ${project.id}` : 'Wähle zuerst ein Projekt.'
+  hint.textContent = project ? `Das speichert den Inhalt in der geteilten Embedding-Bibliothek. Projekt-ID: ${project.id}` : 'Das speichert den Inhalt in der geteilten Embedding-Bibliothek.'
 
   wrapper.append(textField, sourceField, typeField, hint)
   return wrapper
@@ -2402,15 +2403,45 @@ function buildEmbeddingForm(project = null) {
 
 async function openEmbeddingModal() {
   const project = getContextProject()
-  if (!project) {
-    showToast('Wähle zuerst ein Projekt aus.', 'error')
-    return
-  }
-
   const form = buildEmbeddingForm(project)
+  const uploadInput = document.createElement('input')
+  uploadInput.type = 'file'
+  uploadInput.accept = '.md'
+  uploadInput.className = 'hidden'
+  const uploadButton = document.createElement('button')
+  uploadButton.type = 'button'
+  uploadButton.className = 'ghost-action'
+  uploadButton.textContent = 'Markdown hochladen'
+  uploadButton.addEventListener('click', () => uploadInput.click())
+  uploadInput.addEventListener('change', async () => {
+    const [file] = uploadInput.files || []
+    if (!file) return
+    const formData = new FormData()
+    formData.append('file', file, file.name)
+    showLoader('Embedding aus Markdown wird gespeichert...')
+    try {
+      const response = await fetch(`${API}/embeddings/library/upload`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: formData,
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.detail || `HTTP ${response.status}`)
+      }
+      showToast('Markdown als Embedding gespeichert')
+    } catch (error) {
+      showToast(error.message || 'Embedding konnte nicht gespeichert werden', 'error')
+    } finally {
+      uploadInput.value = ''
+      hideLoader()
+    }
+  })
+  form.append(uploadButton, uploadInput)
+
   const result = await openModal({
     title: 'In Embedding speichern',
-    copy: 'Diese Information wird im Embedding-Store des aktuellen Projekts abgelegt.',
+    copy: 'Diese Information wird in der geteilten Embedding-Bibliothek abgelegt.',
     content: form,
     submitLabel: 'Speichern',
   })
@@ -2419,19 +2450,14 @@ async function openEmbeddingModal() {
 
   showLoader('Embedding wird aktualisiert...')
   try {
-    await apiJson('/embeddings-proxy/store', {
+    await apiJson('/embeddings/library', {
       method: 'POST',
       body: JSON.stringify({
-        project_id: project.id,
-        items: [
-          {
-            text: result.text,
-            metadata: {
-              source: result.source || 'desktop',
-              type: result.type || 'note',
-            },
-          },
-        ],
+        text: result.text,
+        metadata: {
+          source: result.source || 'desktop',
+          type: result.type || 'note',
+        },
       }),
     })
     showToast('Informationen ins Embedding gespeichert')
@@ -2532,11 +2558,51 @@ function buildSkillManagerContent(project) {
   saveButton.textContent = 'Skill speichern'
   formActions.append(resetButton, saveButton)
 
+  const uploadRow = document.createElement('div')
+  uploadRow.className = 'skill-upload-row'
+  const uploadInput = document.createElement('input')
+  uploadInput.type = 'file'
+  uploadInput.accept = '.md'
+  uploadInput.className = 'hidden'
+  const uploadButton = document.createElement('button')
+  uploadButton.type = 'button'
+  uploadButton.className = 'ghost-action'
+  uploadButton.textContent = 'Markdown hochladen'
+  uploadButton.addEventListener('click', () => uploadInput.click())
+  uploadInput.addEventListener('change', async () => {
+    const [file] = uploadInput.files || []
+    if (!file) return
+    const formData = new FormData()
+    formData.append('file', file, file.name)
+    showLoader('Skill aus Markdown wird geladen...')
+    try {
+      await fetch(`${API}/skills/library/upload`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: formData,
+      }).then(async (response) => {
+        if (!response.ok) {
+          const data = await response.json().catch(() => null)
+          throw new Error(data?.detail || `HTTP ${response.status}`)
+        }
+        return response.json()
+      })
+      await refreshSkills()
+      showToast('Markdown als Skill gespeichert')
+    } catch (error) {
+      showToast(error.message || 'Markdown konnte nicht gespeichert werden', 'error')
+    } finally {
+      uploadInput.value = ''
+      hideLoader()
+    }
+  })
+  uploadRow.append(uploadButton, uploadInput)
+
   const formHint = document.createElement('div')
   formHint.className = 'muted-copy'
-  formHint.textContent = 'Aktive Skills werden im Projekt-Chat automatisch als zusätzliche Leitlinie verwendet.'
+  formHint.textContent = 'Geteilte Skills sind für alle Projekte sichtbar und werden im Chat automatisch priorisiert.'
 
-  formSection.append(formHeading, nameField, descriptionField, instructionsField, enabledRow, formActions, formHint)
+  formSection.append(formHeading, nameField, descriptionField, instructionsField, enabledRow, formActions, uploadRow, formHint)
   listSection.append(listHeading, skillList)
   wrapper.append(intro, listSection, formSection)
 
@@ -2618,7 +2684,7 @@ function buildSkillManagerContent(project) {
       toggleButton.addEventListener('click', async () => {
         showLoader('Skill wird aktualisiert...')
         try {
-          await apiJson(`/projects/${project.id}/skills/${skill.id}`, {
+          await apiJson(`/skills/library/${skill.id}`, {
             method: 'PATCH',
             body: JSON.stringify({ is_enabled: !skill.is_enabled }),
           })
@@ -2639,7 +2705,7 @@ function buildSkillManagerContent(project) {
         if (!window.confirm(`Skill "${skill.name}" wirklich löschen?`)) return
         showLoader('Skill wird gelöscht...')
         try {
-          await apiJson(`/projects/${project.id}/skills/${skill.id}`, { method: 'DELETE' })
+          await apiJson(`/skills/library/${skill.id}`, { method: 'DELETE' })
           if (editingSkillId === skill.id) {
             resetForm()
           }
@@ -2659,7 +2725,7 @@ function buildSkillManagerContent(project) {
   }
 
   async function refreshSkills() {
-    skillCache = await apiJson(`/projects/${project.id}/skills`)
+    skillCache = await apiJson('/skills/library')
     renderSkills()
   }
 
@@ -2683,12 +2749,12 @@ function buildSkillManagerContent(project) {
     showLoader(editingSkillId ? 'Skill wird aktualisiert...' : 'Skill wird erstellt...')
     try {
       if (editingSkillId) {
-        await apiJson(`/projects/${project.id}/skills/${editingSkillId}`, {
+        await apiJson(`/skills/library/${editingSkillId}`, {
           method: 'PATCH',
           body: JSON.stringify(payload),
         })
       } else {
-        await apiJson(`/projects/${project.id}/skills`, {
+        await apiJson('/skills/library', {
           method: 'POST',
           body: JSON.stringify(payload),
         })
@@ -2713,16 +2779,10 @@ function buildSkillManagerContent(project) {
 }
 
 async function openProjectSkillsModal() {
-  const project = getContextProject()
-  if (!project) {
-    showToast('Wähle zuerst ein Projekt aus.', 'error')
-    return
-  }
-
-  const content = buildSkillManagerContent(project)
+  const content = buildSkillManagerContent()
   await openModal({
     title: 'Skills verwalten',
-    copy: 'Lege projektbezogene Skills an, um wiederkehrende Arbeitsabläufe, Regeln oder Antwortstile zu speichern.',
+    copy: 'Hier verwaltest du die geteilte Skill-Bibliothek. Alle Projekte können diese Skills nutzen.',
     content,
     submitLabel: 'Schließen',
     width: 'min(1100px, 100%)',

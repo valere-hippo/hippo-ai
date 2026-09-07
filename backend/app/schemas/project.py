@@ -6,7 +6,7 @@ from datetime import datetime
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
-    watched_folder: str | None = None
+    watched_folder: str = Field(min_length=1, max_length=1000)
 
 
 class ProjectResponse(BaseModel):

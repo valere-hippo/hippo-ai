@@ -21,7 +21,7 @@ class ProjectSkillResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    project_id: int
+    project_id: int | None
     name: str
     description: str | None
     instructions: str
