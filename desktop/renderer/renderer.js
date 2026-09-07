@@ -2524,6 +2524,66 @@ function buildEmbeddingForm(project = null) {
 async function openEmbeddingModal() {
   const project = getContextProject()
   const form = buildEmbeddingForm(project)
+  const content = document.createElement('div')
+  content.className = 'modal-grid embedding-library-modal'
+
+  const listSection = document.createElement('div')
+  listSection.className = 'skill-manager-section'
+  const listHeading = document.createElement('div')
+  listHeading.className = 'section-heading'
+  const listLabel = document.createElement('span')
+  listLabel.textContent = 'Geteilte Embeddings'
+  const listCount = document.createElement('span')
+  listCount.className = 'section-count'
+  listCount.textContent = '0'
+  listHeading.append(listLabel, listCount)
+  const embeddingList = document.createElement('div')
+  embeddingList.className = 'skill-list'
+  listSection.append(listHeading, embeddingList)
+
+  const renderLibrary = (items) => {
+    const rows = Array.isArray(items) ? items : []
+    listCount.textContent = String(rows.length)
+    embeddingList.innerHTML = ''
+    if (!rows.length) {
+      const empty = document.createElement('div')
+      empty.className = 'muted-copy'
+      empty.style.padding = '8px 0'
+      empty.textContent = 'Noch keine geteilten Embeddings gespeichert.'
+      embeddingList.appendChild(empty)
+      return
+    }
+
+    rows.forEach((item) => {
+      const card = document.createElement('div')
+      card.className = 'skill-card'
+      const title = document.createElement('div')
+      title.className = 'skill-card-title'
+      title.textContent = item.metadata?.type ? `${item.metadata.type}` : 'Embedding'
+      const subtitle = document.createElement('div')
+      subtitle.className = 'skill-card-subtitle'
+      subtitle.textContent = item.metadata?.source ? `${item.metadata.source} · ${item.created_at || ''}` : (item.created_at || '')
+      const instructions = document.createElement('div')
+      instructions.className = 'skill-card-instructions'
+      instructions.textContent = item.text || ''
+      card.append(title, subtitle, instructions)
+      embeddingList.appendChild(card)
+    })
+  }
+
+  const loadLibrary = async () => {
+    try {
+      const items = await apiJson('/embeddings/library')
+      renderLibrary(items)
+    } catch (error) {
+      embeddingList.innerHTML = ''
+      const errorNode = document.createElement('div')
+      errorNode.className = 'muted-copy'
+      errorNode.textContent = error.message || 'Embedding-Bibliothek konnte nicht geladen werden.'
+      embeddingList.appendChild(errorNode)
+    }
+  }
+
   const uploadInput = document.createElement('input')
   uploadInput.type = 'file'
   uploadInput.accept = '.md'
@@ -2549,6 +2609,7 @@ async function openEmbeddingModal() {
         const data = await response.json().catch(() => null)
         throw new Error(data?.detail || `HTTP ${response.status}`)
       }
+      await loadLibrary()
       showToast('Markdown als Embedding gespeichert')
     } catch (error) {
       showToast(error.message || 'Embedding konnte nicht gespeichert werden', 'error')
@@ -2558,11 +2619,13 @@ async function openEmbeddingModal() {
     }
   })
   form.append(uploadButton, uploadInput)
+  content.append(listSection, form)
+  loadLibrary()
 
   const result = await openModal({
     title: 'In Embedding speichern',
     copy: 'Diese Information wird in der geteilten Embedding-Bibliothek abgelegt.',
-    content: form,
+    content,
     submitLabel: 'Speichern',
   })
 
@@ -2580,6 +2643,7 @@ async function openEmbeddingModal() {
         },
       }),
     })
+    await loadLibrary()
     showToast('Informationen ins Embedding gespeichert')
   } catch (error) {
     showToast(error.message || 'Embedding konnte nicht gespeichert werden', 'error')

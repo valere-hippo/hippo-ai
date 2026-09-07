@@ -34,6 +34,14 @@ class EmbeddingStoreRequest(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class EmbeddingLibraryItem(BaseModel):
+    id: int
+    project_id: int | None
+    text: str
+    metadata: dict[str, Any] | None
+    created_at: str
+
+
 async def _embedding_vector(text: str) -> list[float]:
     if not settings.hippo_embedding_url:
         raise HTTPException(status_code=503, detail="Der Embedding-Dienst ist nicht konfiguriert.")
@@ -107,6 +115,35 @@ async def create_embeddings(payload: EmbeddingRequest, current_user=Depends(get_
             raise HTTPException(status_code=502, detail='Unerwartete Antwort des Embedding-Dienstes.')
     except Exception as e:
         raise HTTPException(status_code=502, detail=f'Fehler des Embedding-Dienstes: {e}')
+
+
+@library_router.get("/library", response_model=list[EmbeddingLibraryItem])
+async def list_embedding_library(db: DbSession, current_user=Depends(get_current_user)):
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+
+    sql = sql_text(
+        f"SELECT id, project_id, text, metadata, created_at "
+        f"FROM {EMBEDDINGS_TABLE} "
+        "WHERE project_id IS NULL "
+        "ORDER BY created_at DESC "
+        "LIMIT 100"
+    )
+    result = await db.execute(sql)
+    rows = result.mappings().all()
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        created_at = row.get("created_at")
+        items.append(
+            {
+                "id": int(row.get("id") or 0),
+                "project_id": row.get("project_id"),
+                "text": str(row.get("text") or ""),
+                "metadata": row.get("metadata"),
+                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at or ""),
+            }
+        )
+    return items
 
 
 @library_router.post("/library")

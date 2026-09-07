@@ -60,6 +60,14 @@ def test_search_embedding_context_returns_local_results_without_remote(monkeypat
     assert calls == ["local"]
 
 
-def test_build_embedding_context_for_request_returns_empty_without_project():
+def test_build_embedding_context_for_request_returns_shared_results_without_project(monkeypatch):
+    async def fake_search(db, query: str, project_id=None, limit: int = 5):
+        assert project_id is None
+        return [{"id": 9, "text": "Gemeinsame Wissensbasis", "score": 0.88, "metadata": {"source": "shared"}}]
+
+    monkeypatch.setattr(ec, "search_embedding_context", fake_search)
+
     result = asyncio.run(ec.build_embedding_context_for_request(object(), "irrelevant", project_id=None, limit=5))
-    assert result == ""
+
+    assert "Geteilte Hinweise aus dem Embedding-Store" in result
+    assert "Gemeinsame Wissensbasis" in result

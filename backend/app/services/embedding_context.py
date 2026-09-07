@@ -156,8 +156,9 @@ def format_embedding_context(items: list[dict[str, Any]], title: str = "Gefunden
 
 
 async def build_embedding_context_for_request(db: Any, query: str, project_id: int | None = None, limit: int = 5) -> str:
-    if project_id is None:
+    scoped_items = await search_embedding_context(db, query, project_id=project_id, limit=limit)
+    if not scoped_items:
         return ""
 
-    scoped_items = await search_embedding_context(db, query, project_id=project_id, limit=limit)
-    return format_embedding_context(scoped_items, "Projektspezifische Hinweise aus dem Embedding-Store")
+    title = "Projektspezifische Hinweise aus dem Embedding-Store" if project_id is not None else "Geteilte Hinweise aus dem Embedding-Store"
+    return format_embedding_context(scoped_items, title)

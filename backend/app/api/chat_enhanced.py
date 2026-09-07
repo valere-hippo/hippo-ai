@@ -183,24 +183,23 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             pass
 
-    if resolved_project_id is not None:
-        try:
-            embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=resolved_project_id)
-            if embedding_context:
-                hippo_messages.insert(
-                    1 if conv_project is None else 4,
-                    {
-                        "role": "system",
-                        "content": (
-                            f"{embedding_context}\n\n"
-                            "Verwende diese Hinweise als projektspezifische Primärquelle für Fakten aus dem Projekt. "
-                            "Wenn die Hinweise zur aktuellen Frage passen, antworte direkt daraus und formuliere sie sauber im Chat neu. "
-                            "Nur wenn sie nicht passen, ergänze mit deinen eigenen Schlussfolgerungen."
-                        ),
-                    },
-                )
-        except Exception:
-            pass
+    try:
+        embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=resolved_project_id)
+        if embedding_context:
+            hippo_messages.insert(
+                1 if conv_project is None else 4,
+                {
+                    "role": "system",
+                    "content": (
+                        f"{embedding_context}\n\n"
+                        "Verwende diese Hinweise als zusätzliche Wissensquelle für die aktuelle Unterhaltung. "
+                        "Wenn sie zur aktuellen Frage passen, antworte direkt daraus und formuliere sie sauber im Chat neu. "
+                        "Nur wenn sie nicht passen, ergänze mit deinen eigenen Schlussfolgerungen."
+                    ),
+                },
+            )
+    except Exception:
+        pass
 
     # call Hippo chat completions
     if not (settings.hippo_api_url and settings.hippo_api_key):
