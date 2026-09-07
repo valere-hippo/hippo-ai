@@ -1204,7 +1204,7 @@ function renderDbStatus() {
     <div class="db-status-top">
       <div>
         <div class="db-status-title">Datenbank</div>
-        <div class="db-status-subtitle">AI & Backend in Echtzeit</div>
+        <div class="db-status-subtitle">AI & Backend in Echtzeit · ${overview.generated_at ? new Date(overview.generated_at).toLocaleString() : '—'}</div>
       </div>
       <button id="db-status-refresh" class="item-action-button" type="button" title="Aktualisieren">↻</button>
     </div>
@@ -1213,6 +1213,8 @@ function renderDbStatus() {
       <span class="context-pill">P ${counts.projects || 0}</span>
       <span class="context-pill">S ${counts.shared_skills || 0}</span>
       <span class="context-pill">E ${counts.embeddings || 0}</span>
+      <span class="context-pill">M ${counts.model_registry || 0}</span>
+      <span class="context-pill">! ${counts.model_errors || 0}</span>
     </div>
   `
   const refreshButton = document.getElementById('db-status-refresh')
@@ -2253,6 +2255,8 @@ async function openUserDashboardModal(initialTab = 'profile') {
         ['Projekt-Skills', counts.project_skills || 0],
         ['Embeddings', counts.embeddings],
         ['Chats', counts.conversations],
+        ['Modelle', counts.model_registry || 0],
+        ['Fehler', counts.model_errors || 0],
       ]
       statItems.forEach(([label, value]) => {
         const card = document.createElement('div')
@@ -2263,6 +2267,7 @@ async function openUserDashboardModal(initialTab = 'profile') {
 
       const recentProjects = Array.isArray(overview?.recent_projects) ? overview.recent_projects : []
       const recentSkills = Array.isArray(overview?.recent_skills) ? overview.recent_skills : []
+      const recentModels = Array.isArray(overview?.recent_models) ? overview.recent_models : []
       overviewBody.innerHTML = ''
 
       const recentWrap = document.createElement('div')
@@ -2301,7 +2306,24 @@ async function openUserDashboardModal(initialTab = 'profile') {
       }
       skillBox.appendChild(skillList)
 
-      recentWrap.append(projectBox, skillBox)
+      const modelBox = document.createElement('div')
+      modelBox.className = 'dashboard-overview-box'
+      modelBox.innerHTML = '<div class="dashboard-overview-box-title">Aktuelle Modelle</div>'
+      const modelList = document.createElement('div')
+      modelList.className = 'dashboard-overview-list'
+      if (recentModels.length) {
+        recentModels.forEach((item) => {
+          const row = document.createElement('div')
+          row.className = 'dashboard-overview-row'
+          row.innerHTML = `<strong>${escapeHtml(item.model_id || '')}</strong><span>${escapeHtml(item.provider || '')} · ${escapeHtml(item.status || 'ok')} · ${escapeHtml(String(item.context_window || '—'))}</span>`
+          modelList.appendChild(row)
+        })
+      } else {
+        modelList.textContent = 'Keine Modelle gefunden.'
+      }
+      modelBox.appendChild(modelList)
+
+      recentWrap.append(projectBox, skillBox, modelBox)
       overviewBody.appendChild(recentWrap)
     }
 

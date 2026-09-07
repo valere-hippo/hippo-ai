@@ -23,6 +23,7 @@ from app.services.embedding_context import build_embedding_context_for_request
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
+from app.services.model_registry import resolve_chat_max_tokens, resolve_chat_model_name
 import base64
 
 router = APIRouter(prefix="/chat", tags=["chat"]) 
@@ -215,12 +216,14 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     if settings.hippo_api_url and settings.hippo_api_key:
         async with httpx.AsyncClient(timeout=60.0) as client:
             headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
-            model_name = settings.hippo_model
-            max_tokens = (
-                settings.hippo_response_max_tokens_long
-                if (payload.attachments or conv_project is not None)
-                else settings.hippo_response_max_tokens
+            model_name = await resolve_chat_model_name(db, settings.hippo_model)
+            max_tokens = await resolve_chat_max_tokens(
+                db,
+                settings.hippo_response_max_tokens,
+                settings.hippo_response_max_tokens_long,
             )
+            if payload.attachments or conv_project is not None:
+                max_tokens = min(max_tokens, settings.hippo_response_max_tokens_long)
             model_payload = {
                 "model": model_name,
                 "messages": hippo_messages,
