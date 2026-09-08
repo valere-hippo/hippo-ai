@@ -99,7 +99,9 @@ textarea {
   flex-direction: column;
   gap: 8px;
   padding: 12px 10px 10px;
-  background: linear-gradient(180deg, rgba(11, 18, 26, 0.96), rgba(11, 18, 26, 0.9));
+  background:
+    radial-gradient(circle at top left, rgba(99, 215, 191, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(11, 18, 26, 0.97), rgba(11, 18, 26, 0.92));
   border-right: 1px solid var(--line);
   backdrop-filter: blur(16px);
   overflow: hidden;
@@ -309,6 +311,8 @@ textarea {
   color: var(--text);
   cursor: pointer;
   text-align: left;
+  position: relative;
+  overflow: hidden;
 }
 
 .project-item:hover,
@@ -320,8 +324,21 @@ textarea {
 
 .project-item.active,
 .conversation-item.active {
-  background: linear-gradient(180deg, rgba(99, 215, 191, 0.13), rgba(99, 215, 191, 0.04));
-  border-color: rgba(99, 215, 191, 0.22);
+  background: linear-gradient(180deg, rgba(99, 215, 191, 0.16), rgba(99, 215, 191, 0.05));
+  border-color: rgba(99, 215, 191, 0.24);
+  box-shadow: 0 10px 20px rgba(99, 215, 191, 0.06);
+}
+
+.project-item.active::before,
+.conversation-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
 }
 
 .item-icon,
@@ -375,6 +392,7 @@ textarea {
   padding: 4px 10px;
   font-size: 11px;
   white-space: nowrap;
+  backdrop-filter: blur(10px);
 }
 
 .context-pill.subtle,
@@ -502,7 +520,10 @@ textarea {
   min-width: 0;
   height: 100vh;
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(12, 18, 25, 0.85), rgba(10, 16, 22, 0.96));
+  background:
+    radial-gradient(circle at top right, rgba(154, 178, 255, 0.08), transparent 26%),
+    radial-gradient(circle at bottom left, rgba(99, 215, 191, 0.06), transparent 24%),
+    linear-gradient(180deg, rgba(12, 18, 25, 0.88), rgba(10, 16, 22, 0.97));
 }
 
 .workspace-shell {
@@ -520,8 +541,9 @@ textarea {
   gap: 12px;
   padding: 14px 18px 12px;
   border-bottom: 1px solid var(--line);
-  background: rgba(11, 18, 26, 0.74);
-  backdrop-filter: blur(12px);
+  background: rgba(11, 18, 26, 0.78);
+  backdrop-filter: blur(16px);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .page-title {
@@ -551,6 +573,7 @@ textarea {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
+  box-shadow: 0 10px 20px rgba(2, 7, 13, 0.18);
 }
 
 .topbar-account .account-avatar {
@@ -558,6 +581,7 @@ textarea {
   height: 28px;
   border-radius: 10px;
   font-size: 11px;
+  box-shadow: 0 6px 14px rgba(99, 215, 191, 0.2);
 }
 
 .topbar-account-text {
@@ -579,6 +603,8 @@ textarea {
   width: 34px;
   height: 34px;
   flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--line);
 }
 
 .chat-stage {
@@ -610,23 +636,23 @@ textarea {
 }
 
 .message-bubble {
-  max-width: min(760px, 92%);
-  border-radius: 22px;
-  padding: 13px 14px;
+  max-width: min(720px, 92%);
+  border-radius: 20px;
+  padding: 12px 13px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: 0 10px 30px rgba(2, 6, 10, 0.15);
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: 0 12px 30px rgba(2, 6, 10, 0.16);
 }
 
 .message.user .message-bubble {
-  background: linear-gradient(180deg, rgba(99, 215, 191, 0.18), rgba(99, 215, 191, 0.06));
-  border-color: rgba(99, 215, 191, 0.22);
+  background: linear-gradient(180deg, rgba(99, 215, 191, 0.22), rgba(99, 215, 191, 0.08));
+  border-color: rgba(99, 215, 191, 0.24);
 }
 
 .message.system .message-bubble {
   border-style: dashed;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .message-role {
@@ -1566,12 +1592,25 @@ textarea {
   display: grid;
   place-items: center;
   padding: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(99, 215, 191, 0.08), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(154, 178, 255, 0.08), transparent 32%);
 }
 
 .login-card {
   width: min(460px, 100%);
   border-radius: 28px;
   padding: 30px;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(135deg, rgba(99, 215, 191, 0.08), transparent 42%, rgba(154, 178, 255, 0.08));
+  pointer-events: none;
 }
 
 .login-badge {
@@ -1590,7 +1629,7 @@ textarea {
 
 .login-card h1 {
   margin: 0;
-  font-size: 38px;
+  font-size: 34px;
   letter-spacing: -0.04em;
 }
 
