@@ -677,6 +677,32 @@ textarea {
   color: var(--text);
 }
 
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+.message-action {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.36rem 0.72rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.message-action:hover {
+  color: var(--text);
+  background: rgba(99, 215, 191, 0.12);
+  border-color: rgba(99, 215, 191, 0.26);
+}
+
+
 .rich-content {
   display: grid;
   gap: 0.7rem;

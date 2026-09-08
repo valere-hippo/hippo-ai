@@ -456,6 +456,21 @@ function normalizeMessage(value) {
   return String(value).trim()
 }
 
+function normalizeApiError(status, payload, rawText = '') {
+  const flattened = normalizeMessage(payload)
+  const raw = normalizeMessage(rawText)
+  const combined = [flattened, raw].filter(Boolean).join(' · ')
+  const looksLikeHtml = /<!doctype html|<html|<body|<head/i.test(combined)
+  if (status === 530 || status >= 500) {
+    return 'Der Server ist derzeit nicht erreichbar.'
+  }
+  if (looksLikeHtml) {
+    return 'Die Antwort des Servers konnte nicht gelesen werden.'
+  }
+  if (combined) return combined
+  return `HTTP ${status}`
+}
+
 function authHeaders(extra = {}) {
   const headers = { ...extra }
   if (state.token) {
@@ -481,7 +496,7 @@ async function apiJson(path, options = {}) {
   }
 
   if (!response.ok) {
-    const message = normalizeMessage(data?.detail || data?.error || data || `HTTP ${response.status}`) || `HTTP ${response.status}`
+    const message = normalizeApiError(response.status, data)
     throw new Error(message)
   }
 
@@ -495,7 +510,7 @@ async function apiBlob(path, options = {}) {
   })
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(text || `HTTP ${response.status}`)
+    throw new Error(normalizeApiError(response.status, null, text))
   }
   return response
 }
@@ -525,7 +540,7 @@ async function transcribeAudioBlob(blob) {
   }
 
   if (!response.ok) {
-    const message = normalizeMessage(data?.detail || data?.error || data || `HTTP ${response.status}`) || `HTTP ${response.status}`
+    const message = normalizeApiError(response.status, data)
     throw new Error(message)
   }
 
@@ -1004,6 +1019,42 @@ function renderMessage(role, content, extras = {}) {
     bubble.appendChild(text)
   }
 
+  const actions = document.createElement('div')
+  actions.className = 'message-actions'
+
+  const copyButton = document.createElement('button')
+  copyButton.type = 'button'
+  copyButton.className = 'message-action'
+  copyButton.textContent = 'Kopieren'
+  copyButton.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(String(content || ''))
+      showToast('Nachricht kopiert')
+    } catch (error) {
+      showToast('Nachricht konnte nicht kopiert werden', 'error')
+    }
+  })
+  actions.appendChild(copyButton)
+
+  if (extras.canEdit && extras.messageId) {
+    const editButton = document.createElement('button')
+    editButton.type = 'button'
+    editButton.className = 'message-action'
+    editButton.textContent = 'Bearbeiten'
+    editButton.addEventListener('click', async () => {
+      await openMessageEditModal({
+        id: extras.messageId,
+        content: String(content || ''),
+        role,
+      })
+    })
+    actions.appendChild(editButton)
+  }
+
+  if (actions.childElementCount) {
+    bubble.appendChild(actions)
+  }
+
   if (extras.generatedFiles?.length) {
     const artifacts = document.createElement('div')
     artifacts.className = 'generated-artifacts'
@@ -1116,6 +1167,52 @@ function renderMessage(role, content, extras = {}) {
   els.chatLog.scrollTop = els.chatLog.scrollHeight
 }
 
+async function openMessageEditModal(message) {
+  if (!message?.id) return
+
+  const form = document.createElement('div')
+  form.className = 'modal-grid'
+  const field = document.createElement('label')
+  field.className = 'field'
+  field.innerHTML = '<span>Nachricht bearbeiten</span>'
+  const textarea = document.createElement('textarea')
+  textarea.id = 'content'
+  textarea.className = 'text-input'
+  textarea.rows = 8
+  textarea.value = message.content || ''
+  textarea.style.resize = 'vertical'
+  field.appendChild(textarea)
+  form.appendChild(field)
+
+  const result = await openModal({
+    title: 'Nachricht bearbeiten',
+    copy: 'Passe deine Nachricht an und speichere die neue Version.',
+    content: form,
+    submitLabel: 'Speichern',
+    validate: (values) => Boolean(values.content?.trim()),
+  })
+
+  if (!result || !result.content?.trim()) return
+
+  showLoader('Nachricht wird gespeichert...')
+  try {
+    await apiJson(`/chat/messages/${message.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content: result.content }),
+    })
+    if (state.currentConversationId) {
+      await openConversationById(state.currentConversationId)
+    }
+    await loadConversations()
+    renderContext()
+    showToast('Nachricht gespeichert')
+  } catch (error) {
+    showToast(error.message || 'Nachricht konnte nicht gespeichert werden', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
 function renderConversationMessages(messages) {
   els.chatLog.innerHTML = ''
   if (!messages.length) {
@@ -1124,8 +1221,14 @@ function renderConversationMessages(messages) {
   }
 
   els.emptyState.classList.add('hidden')
-  messages.forEach((message) => renderMessage(message.role, message.content))
+  messages.forEach((message) =>
+    renderMessage(message.role, message.content, {
+      messageId: message.id,
+      canEdit: message.role === 'user' && state.user && Number(message.user_id) === Number(state.user.id),
+    }),
+  )
 }
+
 
 function resetComposer() {
   state.draftAttachments = []

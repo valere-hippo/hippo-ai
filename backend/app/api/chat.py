@@ -9,7 +9,7 @@ from app.models.chat import Conversation, ChatMessage
 from app.models.project import Project
 from app.models.permission import PermissionLevel
 from app.core.config import settings
-from sqlalchemy import select, insert
+from sqlalchemy import select, insert, update
 from app.schemas.chat import ChatAttachment
 from app.services.chat_payloads import (
     build_attachment_response_guidance,
@@ -38,6 +38,37 @@ class ChatResponse(BaseModel):
     reply: str
     conversation_id: int | None = None
     generated_files: list[dict[str, str]] = Field(default_factory=list)
+
+
+class ChatMessageResponse(BaseModel):
+    id: int
+    conversation_id: int
+    user_id: int
+    role: str
+    content: str
+    created_at: str
+
+
+class ConversationResponse(BaseModel):
+    id: int
+    title: str | None
+    created_at: str
+    messages: list[ChatMessageResponse] | None = None
+
+
+class ChatMessageEditRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=12000)
+
+
+def _serialize_message(message: ChatMessage) -> dict[str, object]:
+    return {
+        'id': message.id,
+        'conversation_id': message.conversation_id,
+        'user_id': message.user_id,
+        'role': message.role,
+        'content': message.content,
+        'created_at': message.created_at.isoformat() if message.created_at else None,
+    }
 
 
 @router.post("/", response_model=ChatResponse)
@@ -410,7 +441,50 @@ async def get_conversation(conv_id: int, db: DbSession, current_user: User = Dep
             raise HTTPException(status_code=403, detail='Zugriff verweigert.')
     # fetch messages
     msgs = await db.execute(select(ChatMessage).where(ChatMessage.conversation_id == conv_id).order_by(ChatMessage.created_at))
-    return { 'conversation': conv, 'messages': msgs.scalars().all() }
+    messages = [_serialize_message(message) for message in msgs.scalars().all()]
+    return {
+        'conversation': {
+            'id': conv.id,
+            'title': conv.title,
+            'project_id': conv.project_id,
+            'created_at': conv.created_at.isoformat() if conv.created_at else None,
+        },
+        'messages': messages,
+    }
+
+
+@router.patch('/messages/{message_id}')
+async def edit_message(message_id: int, payload: ChatMessageEditRequest, db: DbSession, current_user: User = Depends(get_current_user)):
+    result = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
+    message = result.scalar_one_or_none()
+    if message is None:
+        raise HTTPException(status_code=404, detail='Nachricht nicht gefunden.')
+    if current_user.role != UserRole.ADMIN and int(message.user_id) != int(current_user.id):
+        raise HTTPException(status_code=403, detail='Zugriff verweigert.')
+    if message.role != 'user' and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=400, detail='Nur eigene Nachrichten können bearbeitet werden.')
+
+    cleaned = (payload.content or '').strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail='Nachricht darf nicht leer sein.')
+
+    await db.execute(
+        update(ChatMessage).where(ChatMessage.id == message_id).values(content=cleaned)
+    )
+    await db.commit()
+
+    first_msg = await db.execute(
+        select(ChatMessage.id).where(ChatMessage.conversation_id == message.conversation_id).order_by(ChatMessage.created_at.asc()).limit(1)
+    )
+    if first_msg.scalar_one_or_none() == message_id:
+        conv_title = derive_conversation_title(cleaned, None)
+        await db.execute(
+            update(Conversation).where(Conversation.id == message.conversation_id).values(title=conv_title)
+        )
+        await db.commit()
+
+    refreshed = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
+    return _serialize_message(refreshed.scalar_one())
 
 
 @router.delete('/conversations/{conv_id}')
