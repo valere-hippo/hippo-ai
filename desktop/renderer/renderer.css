@@ -1,18 +1,18 @@
 :root {
-  --bg: #091018;
-  --bg-2: #0e1620;
-  --panel: #111b26;
-  --panel-2: #172432;
-  --line: rgba(255, 255, 255, 0.075);
+  --bg: #081018;
+  --bg-2: #0c1620;
+  --panel: #0f1923;
+  --panel-2: #142230;
+  --line: rgba(255, 255, 255, 0.07);
   --line-strong: rgba(255, 255, 255, 0.12);
-  --text: #edf4fb;
-  --muted: #93a6b8;
-  --muted-2: #74879b;
-  --accent: #5fbfe7;
-  --accent-2: #63d7bf;
-  --danger: #ff6b7a;
-  --shadow: 0 24px 60px rgba(2, 7, 13, 0.45);
-  --radius: 20px;
+  --text: #e9f1f8;
+  --muted: #8ea1b5;
+  --muted-2: #718395;
+  --accent: #59b7e4;
+  --accent-2: #55d0ba;
+  --danger: #ff6677;
+  --shadow: 0 20px 48px rgba(2, 7, 13, 0.42);
+  --radius: 18px;
 }
 
 * {
@@ -27,11 +27,13 @@ body {
   min-height: 100%;
   overflow: hidden;
   background:
-    radial-gradient(circle at top left, rgba(99, 215, 191, 0.14), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(154, 178, 255, 0.12), transparent 28%),
-    var(--bg);
+    radial-gradient(circle at top left, rgba(85, 208, 186, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(89, 183, 228, 0.1), transparent 26%),
+    linear-gradient(180deg, #071017 0%, #08131b 55%, #070d13 100%);
   color: var(--text);
-  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-family: Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  font-size: 12.75px;
+  letter-spacing: -0.01em;
 }
 
 html {
@@ -75,7 +77,7 @@ textarea {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 272px minmax(0, 1fr);
+  grid-template-columns: 256px minmax(0, 1fr);
   width: 100%;
   height: 100vh;
   overflow: hidden;
@@ -97,13 +99,13 @@ textarea {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 10px 9px 9px;
+  gap: 6px;
+  padding: 8px 8px 8px;
   background:
-    radial-gradient(circle at top left, rgba(95, 191, 231, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(10, 17, 24, 0.98), rgba(10, 17, 24, 0.93));
+    radial-gradient(circle at top left, rgba(85, 208, 186, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(8, 16, 23, 0.98), rgba(8, 16, 23, 0.94));
   border-right: 1px solid var(--line);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(18px);
   overflow: hidden;
   min-height: 0;
 }
@@ -145,21 +147,21 @@ textarea {
 }
 
 .brand-card {
-  border-radius: 20px;
-  padding: 10px 12px;
+  border-radius: 18px;
+  padding: 8px 10px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
 }
 
 .brand-mark {
-  width: 38px;
-  height: 38px;
-  border-radius: 13px;
-  background: linear-gradient(145deg, rgba(95, 191, 231, 0.92), rgba(99, 215, 191, 0.76));
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(89, 183, 228, 0.92), rgba(85, 208, 186, 0.8));
   position: relative;
   flex: 0 0 auto;
-  box-shadow: 0 12px 24px rgba(95, 191, 231, 0.18);
+  box-shadow: 0 10px 20px rgba(89, 183, 228, 0.16);
 }
 
 .brand-mark span {
@@ -173,9 +175,9 @@ textarea {
 }
 
 .brand-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
 }
 
 .brand-subtitle,
@@ -187,7 +189,7 @@ textarea {
 .section-count,
 .section-badge {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .primary-action,
@@ -207,11 +209,11 @@ textarea {
   align-items: center;
   gap: 8px;
   justify-content: center;
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 38px;
+  padding: 0 12px;
   color: var(--text);
-  background: linear-gradient(180deg, rgba(99, 215, 191, 0.16), rgba(99, 215, 191, 0.06));
-  border-color: rgba(99, 215, 191, 0.18);
+  background: linear-gradient(180deg, rgba(85, 208, 186, 0.16), rgba(85, 208, 186, 0.06));
+  border-color: rgba(85, 208, 186, 0.18);
   font-weight: 600;
 }
 
@@ -245,7 +247,7 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text);
   padding: 0 4px;
@@ -285,11 +287,11 @@ textarea {
 
 .sidebar-search {
   width: 100%;
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 13px;
+  min-height: 33px;
+  padding: 0 11px;
+  border-radius: 12px;
   margin-bottom: 1px;
-  font-size: 12.5px;
+  font-size: 11.5px;
   background: rgba(255, 255, 255, 0.035);
 }
 
@@ -304,9 +306,9 @@ textarea {
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
-  border-radius: 14px;
+  min-height: 36px;
+  padding: 7px 9px;
+  border-radius: 13px;
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid transparent;
   color: var(--text);
@@ -347,15 +349,15 @@ textarea {
 
 .item-icon,
 .item-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 11px;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .item-main {
@@ -364,7 +366,7 @@ textarea {
 }
 
 .item-title {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -446,7 +448,7 @@ textarea {
 }
 
 .db-status-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -455,7 +457,7 @@ textarea {
 
 .db-status-subtitle {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text);
 }
 
@@ -543,16 +545,16 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px 12px;
+  gap: 10px;
+  padding: 10px 14px 9px;
   border-bottom: 1px solid var(--line);
-  background: rgba(11, 18, 26, 0.78);
-  backdrop-filter: blur(16px);
+  background: rgba(9, 16, 23, 0.74);
+  backdrop-filter: blur(18px);
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .page-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.03em;
 }
@@ -573,20 +575,20 @@ textarea {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 6px 10px 6px 8px;
+  padding: 5px 9px 5px 7px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
-  box-shadow: 0 10px 18px rgba(2, 7, 13, 0.14);
+  box-shadow: 0 8px 16px rgba(2, 7, 13, 0.12);
 }
 
 .topbar-account .account-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  font-size: 11px;
-  box-shadow: 0 6px 14px rgba(99, 215, 191, 0.2);
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  font-size: 10px;
+  box-shadow: 0 6px 12px rgba(89, 183, 228, 0.18);
 }
 
 .topbar-account-text {
@@ -597,7 +599,7 @@ textarea {
 }
 
 .topbar-account .account-name {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .topbar-account .account-meta {
@@ -641,12 +643,12 @@ textarea {
 }
 
 .message-bubble {
-  max-width: min(680px, 92%);
+  max-width: min(640px, 92%);
   border-radius: 18px;
-  padding: 11px 12px;
+  padding: 10px 11px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.045);
-  box-shadow: 0 10px 24px rgba(2, 6, 10, 0.14);
+  box-shadow: 0 8px 20px rgba(2, 6, 10, 0.14);
 }
 
 .message.user .message-bubble {
@@ -664,16 +666,16 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 10.5px;
+  font-size: 9.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 8px;
+  margin-bottom: 7px;
 }
 
 .message-text {
-  line-height: 1.62;
-  font-size: 14.5px;
+  line-height: 1.58;
+  font-size: 13px;
   color: var(--text);
 }
 
@@ -890,7 +892,7 @@ textarea {
 }
 
 .generated-artifact-meta {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -1004,7 +1006,7 @@ textarea {
 
 .image-chip .caption {
   padding: 8px 10px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
 }
 
@@ -1164,7 +1166,7 @@ textarea {
 }
 
 .attachment-label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text);
   max-width: 180px;
   white-space: nowrap;
@@ -1411,7 +1413,7 @@ textarea {
 .dashboard-meta {
   margin-top: 4px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .dashboard-avatar {
@@ -1478,7 +1480,7 @@ textarea {
 .dashboard-panel-subtitle {
   margin-top: 4px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -1548,7 +1550,7 @@ textarea {
 }
 
 .dashboard-overview-box-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1575,7 +1577,7 @@ textarea {
 
 .dashboard-overview-row span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -1609,12 +1611,12 @@ textarea {
 
 .storage-summary-line span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .storage-summary-line strong {
   color: var(--text);
-  font-size: 12px;
+  font-size: 11px;
   text-align: right;
 }
 
@@ -1652,7 +1654,7 @@ textarea {
   background: rgba(99, 215, 191, 0.08);
   color: var(--accent);
   margin-bottom: 18px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1743,13 +1745,14 @@ select.text-input option {
 
 .modal-card h3 {
   margin: 0 0 10px;
-  font-size: 22px;
+  font-size: 18px;
 }
 
 .modal-copy {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   color: var(--muted);
   line-height: 1.5;
+  font-size: 12.5px;
 }
 
 .modal-body {
@@ -1799,8 +1802,8 @@ select.text-input option {
 }
 
 .loader-card {
-  padding: 16px 18px;
-  border-radius: 18px;
+  padding: 14px 16px;
+  border-radius: 16px;
   background: rgba(16, 24, 33, 0.94);
   border: 1px solid var(--line);
   color: var(--text);
@@ -1809,11 +1812,11 @@ select.text-input option {
 
 .toast {
   position: fixed;
-  right: 22px;
-  bottom: 22px;
+  right: 20px;
+  bottom: 20px;
   z-index: 40;
-  padding: 12px 14px;
-  border-radius: 16px;
+  padding: 10px 12px;
+  border-radius: 14px;
   background: rgba(16, 24, 33, 0.96);
   color: var(--text);
   border: 1px solid var(--line);

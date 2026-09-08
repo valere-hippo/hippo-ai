@@ -1028,9 +1028,22 @@ function renderMessage(role, content, extras = {}) {
   copyButton.textContent = 'Kopieren'
   copyButton.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(String(content || ''))
+      const text = String(content || '')
+      const result = window.electron?.copyText ? await window.electron.copyText(text) : null
+      if (result && result.ok === false) {
+        throw new Error(result.error || 'copy failed')
+      }
+      if (!window.electron?.copyText) {
+        await navigator.clipboard.writeText(text)
+      }
       showToast('Nachricht kopiert')
     } catch (error) {
+      try {
+        const text = String(content || '')
+        await navigator.clipboard.writeText(text)
+        showToast('Nachricht kopiert')
+        return
+      } catch (fallbackError) {}
       showToast('Nachricht konnte nicht kopiert werden', 'error')
     }
   })

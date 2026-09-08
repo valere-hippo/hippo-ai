@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog, clipboard } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const Tesseract = require('tesseract.js')
@@ -91,6 +91,15 @@ ipcMain.handle('select-folder', async () => {
   const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
   if (result.canceled) return null
   return result.filePaths[0]
+})
+
+ipcMain.handle('copy-to-clipboard', async (event, text) => {
+  try {
+    clipboard.writeText(String(text || ''))
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: error.message }
+  }
 })
 
 ipcMain.handle('save-file', async (event, { folder, filename, data }) => {

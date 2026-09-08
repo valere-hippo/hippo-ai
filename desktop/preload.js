@@ -13,6 +13,7 @@ try {
 contextBridge.exposeInMainWorld('electron', {
   selectFolder: () => ipcRenderer.invoke('select-folder'),
   logError: (msg) => ipcRenderer.send('renderer-log', msg),
+  copyText: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   saveFile: (args) => ipcRenderer.invoke('save-file', args),
   ocrImage: (args) => ipcRenderer.invoke('ocr-image', args),
   runtimeConfig,
