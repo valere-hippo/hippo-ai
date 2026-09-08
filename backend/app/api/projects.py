@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import insert, select
@@ -17,18 +17,15 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 def _normalize_shared_folder(folder: str) -> str:
-    path = Path(folder).expanduser()
-    if not path.is_absolute():
+    raw = (folder or '').strip()
+    if not raw:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen Ordnerpfad auswählen.")
+
+    path = Path(raw).expanduser()
+    if not (path.is_absolute() or PureWindowsPath(raw).is_absolute()):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen absoluten Ordnerpfad auswählen.")
-    try:
-        resolved = path.resolve(strict=True)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Der angegebene Ordner existiert nicht.") from exc
 
-    if not resolved.is_dir():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen gültigen Ordner auswählen.")
-
-    return str(resolved)
+    return str(path)
 
 
 async def _load_project(db: DbSession, project_id: int) -> Project:
