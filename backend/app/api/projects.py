@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import insert, select
@@ -41,7 +40,7 @@ async def _load_project(db: DbSession, project_id: int) -> Project:
 
 
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
-async def create_project(payload: ProjectCreate, db: Any, current_user=Depends(get_current_user)):
+async def create_project(payload: ProjectCreate, db: DbSession, current_user=Depends(get_current_user)):
     watched_folder = _normalize_shared_folder(payload.watched_folder)
 
     stmt = insert(Project).values(
@@ -76,7 +75,7 @@ async def create_project(payload: ProjectCreate, db: Any, current_user=Depends(g
 
 
 @router.get("/", response_model=list[ProjectResponse])
-async def list_projects(db: Any, current_user=Depends(get_current_user)):
+async def list_projects(db: DbSession, current_user=Depends(get_current_user)):
     if current_user.role == UserRole.ADMIN:
         stmt = select(Project)
     else:
@@ -94,7 +93,7 @@ async def list_projects(db: Any, current_user=Depends(get_current_user)):
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-async def get_project(project_id: int, db: Any, current_user=Depends(get_current_user)):
+async def get_project(project_id: int, db: DbSession, current_user=Depends(get_current_user)):
     project = await _load_project(db, project_id)
     if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
@@ -102,7 +101,7 @@ async def get_project(project_id: int, db: Any, current_user=Depends(get_current
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
-async def update_project(project_id: int, payload: ProjectCreate, db: Any, current_user=Depends(get_current_user)):
+async def update_project(project_id: int, payload: ProjectCreate, db: DbSession, current_user=Depends(get_current_user)):
     project = await _load_project(db, project_id)
     if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
@@ -121,7 +120,7 @@ async def update_project(project_id: int, payload: ProjectCreate, db: Any, curre
 
 
 @router.delete("/{project_id}")
-async def delete_project(project_id: int, db: Any, current_user=Depends(get_current_user)):
+async def delete_project(project_id: int, db: DbSession, current_user=Depends(get_current_user)):
     project = await _load_project(db, project_id)
     if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
