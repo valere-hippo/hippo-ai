@@ -75,7 +75,7 @@ textarea {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 272px minmax(0, 1fr);
   width: 100%;
   height: 100vh;
   overflow: hidden;
@@ -97,11 +97,11 @@ textarea {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 10px 10px;
+  gap: 7px;
+  padding: 10px 9px 9px;
   background:
-    radial-gradient(circle at top left, rgba(95, 191, 231, 0.09), transparent 26%),
-    linear-gradient(180deg, rgba(10, 17, 24, 0.97), rgba(10, 17, 24, 0.92));
+    radial-gradient(circle at top left, rgba(95, 191, 231, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(10, 17, 24, 0.98), rgba(10, 17, 24, 0.93));
   border-right: 1px solid var(--line);
   backdrop-filter: blur(16px);
   overflow: hidden;
@@ -129,9 +129,9 @@ textarea {
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
   overflow: auto;
-  padding-right: 4px;
+  padding-right: 3px;
   scrollbar-gutter: stable;
 }
 
@@ -145,21 +145,21 @@ textarea {
 }
 
 .brand-card {
-  border-radius: 22px;
-  padding: 12px 14px;
+  border-radius: 20px;
+  padding: 10px 12px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .brand-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  background: linear-gradient(145deg, rgba(99, 215, 191, 0.9), rgba(154, 178, 255, 0.78));
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgba(95, 191, 231, 0.92), rgba(99, 215, 191, 0.76));
   position: relative;
   flex: 0 0 auto;
-  box-shadow: 0 14px 30px rgba(99, 215, 191, 0.22);
+  box-shadow: 0 12px 24px rgba(95, 191, 231, 0.18);
 }
 
 .brand-mark span {
@@ -285,15 +285,16 @@ textarea {
 
 .sidebar-search {
   width: 100%;
-  min-height: 38px;
+  min-height: 36px;
   padding: 0 12px;
-  border-radius: 14px;
-  margin-bottom: 2px;
-  font-size: 13px;
+  border-radius: 13px;
+  margin-bottom: 1px;
+  font-size: 12.5px;
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .sidebar-search::placeholder {
-  color: rgba(147, 166, 184, 0.75);
+  color: rgba(147, 166, 184, 0.65);
 }
 
 .project-item,
@@ -326,9 +327,9 @@ textarea {
 
 .project-item.active,
 .conversation-item.active {
-  background: linear-gradient(180deg, rgba(99, 215, 191, 0.16), rgba(99, 215, 191, 0.05));
-  border-color: rgba(99, 215, 191, 0.24);
-  box-shadow: 0 10px 20px rgba(99, 215, 191, 0.06);
+  background: linear-gradient(180deg, rgba(95, 191, 231, 0.16), rgba(99, 215, 191, 0.06));
+  border-color: rgba(95, 191, 231, 0.22);
+  box-shadow: 0 10px 20px rgba(95, 191, 231, 0.06);
 }
 
 .project-item.active::before,
@@ -341,6 +342,7 @@ textarea {
   width: 3px;
   border-radius: 999px;
   background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .item-icon,
