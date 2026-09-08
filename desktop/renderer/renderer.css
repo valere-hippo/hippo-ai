@@ -84,8 +84,8 @@ textarea {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 12px 8px;
+  gap: 8px;
+  padding: 12px 10px 10px;
   background: linear-gradient(180deg, rgba(11, 18, 26, 0.96), rgba(11, 18, 26, 0.9));
   border-right: 1px solid var(--line);
   backdrop-filter: blur(16px);
@@ -114,9 +114,10 @@ textarea {
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  gap: 12px;
-  overflow: hidden;
+  gap: 10px;
+  overflow: auto;
   padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .brand-card,
@@ -129,17 +130,17 @@ textarea {
 }
 
 .brand-card {
-  border-radius: 24px;
-  padding: 16px;
+  border-radius: 22px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .brand-mark {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
   background: linear-gradient(145deg, rgba(99, 215, 191, 0.9), rgba(154, 178, 255, 0.78));
   position: relative;
   flex: 0 0 auto;
@@ -157,9 +158,9 @@ textarea {
 }
 
 .brand-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
 }
 
 .brand-subtitle,
@@ -189,10 +190,10 @@ textarea {
 .primary-action {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   justify-content: center;
-  min-height: 48px;
-  padding: 0 16px;
+  min-height: 42px;
+  padding: 0 14px;
   color: var(--text);
   background: linear-gradient(180deg, rgba(99, 215, 191, 0.16), rgba(99, 215, 191, 0.06));
   border-color: rgba(99, 215, 191, 0.18);
@@ -220,20 +221,19 @@ textarea {
 .sidebar-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
-  flex: 1 1 0;
-  overflow: hidden;
+  flex: 0 0 auto;
 }
 
 .section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text);
-  padding: 0 6px;
+  padding: 0 4px;
 }
 
 .section-badge {
@@ -248,21 +248,18 @@ textarea {
 .stack-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   padding-right: 2px;
   min-height: 0;
-  flex: 1 1 auto;
-  overflow: auto;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 .stack-list.compact {
   max-height: none;
 }
 
-#project-list {
-  min-height: 0;
-}
-
+#project-list,
 #conversation-list {
   min-height: 0;
 }
@@ -289,11 +286,11 @@ textarea {
 .user-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  min-height: 46px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid transparent;
   color: var(--text);
@@ -433,11 +430,11 @@ textarea {
 }
 
 .account-card {
-  border-radius: 22px;
-  padding: 14px;
+  border-radius: 18px;
+  padding: 10px 12px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .account-main {
@@ -455,9 +452,9 @@ textarea {
 }
 
 .account-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   background: linear-gradient(145deg, rgba(99, 215, 191, 0.82), rgba(154, 178, 255, 0.72));
@@ -472,7 +469,7 @@ textarea {
 
 .account-name {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
