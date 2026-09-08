@@ -51,16 +51,6 @@
 
           <div class="sidebar-footer">
             <div id="db-status" class="db-status hidden"></div>
-            <div class="account-card">
-              <button id="profile-btn" class="account-main" type="button">
-                <div class="account-avatar" id="account-avatar">H</div>
-                <div class="account-copy">
-                  <div id="account-name" class="account-name">Nicht verbunden</div>
-                  <div id="account-meta" class="account-meta">Bitte anmelden</div>
-                </div>
-              </button>
-              <button id="logout-btn" class="icon-button" title="Abmelden" type="button">⎋</button>
-            </div>
           </div>
         </div>
       </aside>
@@ -98,6 +88,14 @@
             <div class="topbar-actions">
               <span class="context-pill" id="project-pill">Global</span>
               <span class="context-pill subtle" id="role-pill">Benutzer</span>
+              <button id="profile-btn" class="topbar-account" type="button">
+                <span class="account-avatar" id="account-avatar">H</span>
+                <span class="topbar-account-text">
+                  <span id="account-name" class="account-name">Nicht verbunden</span>
+                  <span id="account-meta" class="account-meta">Bitte anmelden</span>
+                </span>
+              </button>
+              <button id="logout-btn" class="icon-button topbar-logout" title="Abmelden" type="button">⎋</button>
             </div>
           </header>
 

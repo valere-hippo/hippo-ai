@@ -616,6 +616,8 @@ function showThinkingIndicator(text = 'Hippo denkt nach…') {
 function setScreen(loggedIn) {
   els.loginScreen.classList.toggle('hidden', loggedIn)
   els.workspaceShell.classList.toggle('hidden', !loggedIn)
+  els.appShell.classList.toggle('logged-in', loggedIn)
+  els.appShell.classList.toggle('logged-out', !loggedIn)
   if (!loggedIn) {
     closeSidebarDrawer()
   }
@@ -1643,6 +1645,7 @@ async function deleteProject(project) {
     await loadConversations()
     renderContext()
     clearChatLog()
+    closeSidebarDrawer()
     showToast('Projekt gelöscht')
   } catch (error) {
     showToast(error.message || 'Projekt konnte nicht gelöscht werden', 'error')
@@ -1670,6 +1673,7 @@ async function deleteConversation(conversation) {
     await loadConversations()
     renderContext()
     clearChatLog()
+    closeSidebarDrawer()
     showToast('Chat gelöscht')
   } catch (error) {
     showToast(error.message || 'Chat konnte nicht gelöscht werden', 'error')

@@ -75,11 +75,24 @@ textarea {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
   width: 100%;
   height: 100vh;
   overflow: hidden;
 }
+
+.app-shell.logged-out .sidebar {
+  display: none;
+}
+
+.app-shell.logged-out {
+  grid-template-columns: 1fr;
+}
+
+.app-shell.logged-in .sidebar {
+  display: flex;
+}
+
 
 .sidebar {
   display: flex;
@@ -504,8 +517,8 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 16px 20px 14px;
+  gap: 12px;
+  padding: 14px 18px 12px;
   border-bottom: 1px solid var(--line);
   background: rgba(11, 18, 26, 0.74);
   backdrop-filter: blur(12px);
@@ -524,7 +537,48 @@ textarea {
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.topbar-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 10px 6px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.topbar-account .account-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.topbar-account-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.1;
+}
+
+.topbar-account .account-name {
+  font-size: 12px;
+}
+
+.topbar-account .account-meta {
+  font-size: 10px;
+}
+
+.topbar-logout {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
 }
 
 .chat-stage {
