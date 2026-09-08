@@ -1,15 +1,15 @@
 :root {
-  --bg: #0a1016;
-  --bg-2: #0f1620;
-  --panel: #111a25;
-  --panel-2: #182331;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.14);
+  --bg: #091018;
+  --bg-2: #0e1620;
+  --panel: #111b26;
+  --panel-2: #172432;
+  --line: rgba(255, 255, 255, 0.075);
+  --line-strong: rgba(255, 255, 255, 0.12);
   --text: #edf4fb;
   --muted: #93a6b8;
   --muted-2: #74879b;
-  --accent: #63d7bf;
-  --accent-2: #9ab2ff;
+  --accent: #5fbfe7;
+  --accent-2: #63d7bf;
   --danger: #ff6b7a;
   --shadow: 0 24px 60px rgba(2, 7, 13, 0.45);
   --radius: 20px;
@@ -100,8 +100,8 @@ textarea {
   gap: 8px;
   padding: 12px 10px 10px;
   background:
-    radial-gradient(circle at top left, rgba(99, 215, 191, 0.08), transparent 26%),
-    linear-gradient(180deg, rgba(11, 18, 26, 0.97), rgba(11, 18, 26, 0.92));
+    radial-gradient(circle at top left, rgba(95, 191, 231, 0.09), transparent 26%),
+    linear-gradient(180deg, rgba(10, 17, 24, 0.97), rgba(10, 17, 24, 0.92));
   border-right: 1px solid var(--line);
   backdrop-filter: blur(16px);
   overflow: hidden;
@@ -524,9 +524,9 @@ textarea {
   height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(circle at top right, rgba(154, 178, 255, 0.08), transparent 26%),
-    radial-gradient(circle at bottom left, rgba(99, 215, 191, 0.06), transparent 24%),
-    linear-gradient(180deg, rgba(12, 18, 25, 0.88), rgba(10, 16, 22, 0.97));
+    radial-gradient(circle at top right, rgba(95, 191, 231, 0.08), transparent 26%),
+    radial-gradient(circle at bottom left, rgba(99, 215, 191, 0.05), transparent 24%),
+    linear-gradient(180deg, rgba(11, 17, 24, 0.88), rgba(9, 15, 21, 0.97));
 }
 
 .workspace-shell {
