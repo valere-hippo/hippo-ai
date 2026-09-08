@@ -437,6 +437,25 @@ function getAttachmentStatusLabel(attachment) {
         : 'OCR läuft'
 }
 
+function normalizeMessage(value) {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    return value.map(normalizeMessage).filter(Boolean).join(', ')
+  }
+  if (typeof value === 'object') {
+    if (typeof value.message === 'string' && value.message.trim()) return value.message.trim()
+    if (typeof value.detail === 'string' && value.detail.trim()) return value.detail.trim()
+    if (Array.isArray(value.detail)) return value.detail.map(normalizeMessage).filter(Boolean).join(', ')
+    const entries = Object.entries(value)
+      .map(([key, item]) => `${key}: ${normalizeMessage(item)}`.trim())
+      .filter((entry) => !entry.endsWith(':'))
+    return entries.join(' · ')
+  }
+  return String(value).trim()
+}
+
 function authHeaders(extra = {}) {
   const headers = { ...extra }
   if (state.token) {
@@ -462,7 +481,7 @@ async function apiJson(path, options = {}) {
   }
 
   if (!response.ok) {
-    const message = data?.detail || data?.error || `HTTP ${response.status}`
+    const message = normalizeMessage(data?.detail || data?.error || data || `HTTP ${response.status}`) || `HTTP ${response.status}`
     throw new Error(message)
   }
 
@@ -506,7 +525,8 @@ async function transcribeAudioBlob(blob) {
   }
 
   if (!response.ok) {
-    throw new Error(data?.detail || data?.error || `HTTP ${response.status}`)
+    const message = normalizeMessage(data?.detail || data?.error || data || `HTTP ${response.status}`) || `HTTP ${response.status}`
+    throw new Error(message)
   }
 
   return String(data?.text || '').trim()
@@ -517,7 +537,7 @@ function showToast(message, type = 'success') {
   if (!root) return
   const toast = document.createElement('div')
   toast.className = `toast ${type}`
-  toast.textContent = message
+  toast.textContent = normalizeMessage(message) || '—'
   root.appendChild(toast)
   requestAnimationFrame(() => toast.classList.add('show'))
   setTimeout(() => {
@@ -1497,6 +1517,8 @@ function buildProjectForm(defaults = {}) {
     const selected = await window.electron.selectFolder()
     if (selected) {
       folderInput.value = selected
+      folderInput.dispatchEvent(new Event('input', { bubbles: true }))
+      folderInput.dispatchEvent(new Event('change', { bubbles: true }))
     }
   })
   folderRow.append(folderInput, folderButton)
@@ -1517,6 +1539,7 @@ async function openCreateProjectModal() {
     copy: 'Wähle einen gemeinsamen Ordner über den Dateidialog aus, statt ihn von Hand einzugeben.',
     content: form,
     submitLabel: 'Erstellen',
+    validate: (values) => Boolean(values.name?.trim() && values.folder?.trim()),
   })
 
   if (!result || !result.folder) {
@@ -3160,7 +3183,7 @@ async function openProjectSkillsModal() {
   })
 }
 
-function openModal({ title, copy, content, submitLabel, extraActions = [], width = 'min(520px, 100%)' }) {
+function openModal({ title, copy, content, submitLabel, extraActions = [], width = 'min(520px, 100%)', validate = null }) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div')
     overlay.className = 'modal-overlay'
@@ -3192,6 +3215,25 @@ function openModal({ title, copy, content, submitLabel, extraActions = [], width
     confirm.className = 'primary-button'
     confirm.style.width = 'auto'
     confirm.textContent = submitLabel
+    const updateConfirmState = () => {
+      if (typeof validate !== 'function') {
+        confirm.disabled = false
+        return
+      }
+      const values = {}
+      const inputs = content.querySelectorAll('input, select, textarea')
+      inputs.forEach((input) => {
+        values[input.id] = input.value.trim()
+      })
+      confirm.disabled = !validate(values)
+    }
+
+    updateConfirmState()
+    const modalInputs = content.querySelectorAll('input, select, textarea')
+    modalInputs.forEach((input) => {
+      input.addEventListener('input', updateConfirmState)
+      input.addEventListener('change', updateConfirmState)
+    })
 
     cancel.addEventListener('click', () => {
       overlay.remove()
