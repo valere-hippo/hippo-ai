@@ -1,4 +1,5 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog, clipboard } = require('electron')
+const { spawn, spawnSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 const Tesseract = require('tesseract.js')
@@ -127,6 +128,119 @@ ipcMain.handle('ocr-image', async (event, { dataUrl }) => {
     return { ok: true, text }
   } catch (e) {
     return { ok: false, error: e.message }
+  }
+})
+
+function hasXdotool() {
+  if (process.platform !== 'linux') return false
+  const result = spawnSync('bash', ['-lc', 'command -v xdotool'], { encoding: 'utf8' })
+  return result.status === 0 && Boolean(String(result.stdout || '').trim())
+}
+
+function spawnDetached(command, args = [], options = {}) {
+  const child = spawn(command, args, {
+    detached: true,
+    stdio: 'ignore',
+    shell: false,
+    ...options,
+  })
+  child.unref()
+  return child.pid
+}
+
+ipcMain.handle('desktop-control', async (event, payload = {}) => {
+  const action = String(payload.action || '').trim()
+  if (!action) return { ok: false, error: 'Missing action' }
+
+  if (action === 'status') {
+    return {
+      ok: true,
+      platform: process.platform,
+      xdotool: hasXdotool(),
+      guiControl: process.platform === 'linux' ? hasXdotool() : process.platform === 'darwin',
+      launchSupported: true,
+      shellSupported: true,
+    }
+  }
+
+  if (action === 'launch') {
+    const command = String(payload.command || '').trim()
+    const argsText = String(payload.args || '').trim()
+    const cwd = String(payload.cwd || '').trim() || undefined
+    if (!command) return { ok: false, error: 'Please provide a program or command to launch.' }
+    const fullCommand = [command, argsText].filter(Boolean).join(' ')
+    const pid = spawnDetached(fullCommand, [], { cwd, shell: true, env: process.env })
+    return { ok: true, pid, launched: command, args: argsText }
+  }
+
+  if (action === 'command') {
+    const command = String(payload.command || '').trim()
+    const cwd = String(payload.cwd || '').trim() || undefined
+    if (!command) return { ok: false, error: 'Please provide a shell command.' }
+    const pid = spawnDetached(command, [], { cwd, shell: true, env: process.env })
+    return { ok: true, pid }
+  }
+
+  if (!hasXdotool()) {
+    return { ok: false, error: 'Für Maus- und Tastatursteuerung benötigst du unter Linux xdotool.' }
+  }
+
+  const runXdotool = (...args) => {
+    const result = spawnSync('xdotool', args, { encoding: 'utf8' })
+    if (result.status !== 0) {
+      throw new Error(String(result.stderr || result.stdout || 'xdotool failed').trim())
+    }
+    return result.stdout || ''
+  }
+
+  try {
+    if (action === 'key') {
+      const keys = String(payload.keys || '').trim()
+      if (!keys) return { ok: false, error: 'Please provide keys.' }
+      runXdotool('key', keys)
+      return { ok: true }
+    }
+
+    if (action === 'type') {
+      const text = String(payload.text || '')
+      if (!text) return { ok: false, error: 'Please provide text.' }
+      runXdotool('type', '--delay', '1', text)
+      return { ok: true }
+    }
+
+    if (action === 'click') {
+      const button = String(payload.button || '1').trim()
+      const x = payload.x
+      const y = payload.y
+      if (Number.isFinite(Number(x)) && Number.isFinite(Number(y))) {
+        runXdotool('mousemove', String(Number(x)), String(Number(y)), 'click', button)
+      } else {
+        runXdotool('click', button)
+      }
+      return { ok: true }
+    }
+
+    if (action === 'scroll') {
+      const direction = String(payload.direction || 'down').toLowerCase()
+      const amount = Math.max(1, Math.min(20, Number(payload.amount || 1)))
+      const button = direction === 'up' ? '4' : direction === 'left' ? '6' : direction === 'right' ? '7' : '5'
+      for (let index = 0; index < amount; index += 1) {
+        runXdotool('click', button)
+      }
+      return { ok: true }
+    }
+
+    if (action === 'move') {
+      const x = Number(payload.x)
+      const y = Number(payload.y)
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return { ok: false, error: 'Please provide coordinates.' }
+      runXdotool('mousemove', String(x), String(y))
+      return { ok: true }
+    }
+
+    return { ok: false, error: `Unsupported action: ${action}` }
+  } catch (error) {
+    return { ok: false, error: error.message }
   }
 })
 

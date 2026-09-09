@@ -570,6 +570,24 @@ textarea {
   margin-left: auto;
 }
 
+.topbar-utility {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.topbar-utility:hover {
+  background: rgba(85, 208, 186, 0.12);
+  border-color: rgba(85, 208, 186, 0.22);
+}
+
 .topbar-account {
   display: inline-flex;
   align-items: center;
@@ -1676,8 +1694,8 @@ textarea {
 
 .field {
   display: grid;
-  gap: 8px;
-  margin-bottom: 14px;
+  gap: 7px;
+  color: var(--text);
 }
 
 .field span {

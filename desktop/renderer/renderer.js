@@ -61,6 +61,7 @@ const els = {
   selectedInfo: document.getElementById('selected-info'),
   projectPill: document.getElementById('project-pill'),
   rolePill: document.getElementById('role-pill'),
+  desktopControlBtn: document.getElementById('desktop-control-btn'),
   chatLog: document.getElementById('chat-log'),
   emptyState: document.getElementById('empty-state'),
   attachmentPreview: document.getElementById('attachment-preview'),
@@ -2766,6 +2767,266 @@ function buildEmbeddingForm(project = null) {
   return wrapper
 }
 
+async function openDesktopControlModal() {
+  const content = document.createElement('div')
+  content.className = 'modal-grid desktop-control-modal'
+
+  const statusBox = document.createElement('div')
+  statusBox.className = 'skill-card'
+  const statusTitle = document.createElement('div')
+  statusTitle.className = 'skill-card-title'
+  statusTitle.textContent = 'Lokale PC-Steuerung'
+  const statusText = document.createElement('div')
+  statusText.className = 'muted-copy'
+  statusText.textContent = 'Prüfe lokale Steuerungsmöglichkeiten...'
+  statusBox.append(statusTitle, statusText)
+
+  const modeField = document.createElement('label')
+  modeField.className = 'field'
+  const modeLabel = document.createElement('span')
+  modeLabel.textContent = 'Aktion'
+  const modeSelect = document.createElement('select')
+  modeSelect.className = 'text-input'
+  modeSelect.id = 'desktop-mode'
+  ;[
+    ['launch', 'Programm starten'],
+    ['command', 'Shell-Befehl ausführen'],
+    ['key', 'Tastenkombination senden'],
+    ['type', 'Text tippen'],
+    ['click', 'Mausklick ausführen'],
+    ['scroll', 'Scrollen'],
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = label
+    modeSelect.appendChild(option)
+  })
+  const modeHelp = document.createElement('div')
+  modeHelp.className = 'muted-copy'
+  modeHelp.textContent = 'Für volle GUI-Steuerung unter Linux ist xdotool nötig. Starten und Shell-Befehle funktionieren unabhängig davon.'
+  modeField.append(modeLabel, modeSelect, modeHelp)
+
+  const launchGroup = document.createElement('div')
+  launchGroup.className = 'modal-grid'
+  const launchPath = document.createElement('label')
+  launchPath.className = 'field'
+  launchPath.innerHTML = '<span>Programm oder Pfad</span>'
+  const launchPathInput = document.createElement('input')
+  launchPathInput.id = 'desktop-launch-command'
+  launchPathInput.className = 'text-input'
+  launchPathInput.placeholder = 'z. B. qgis oder /usr/bin/qgis'
+  launchPath.appendChild(launchPathInput)
+  const launchArgs = document.createElement('label')
+  launchArgs.className = 'field'
+  launchArgs.innerHTML = '<span>Argumente</span>'
+  const launchArgsInput = document.createElement('input')
+  launchArgsInput.id = 'desktop-launch-args'
+  launchArgsInput.className = 'text-input'
+  launchArgsInput.placeholder = '--project /pfad/zur/datei.qgz'
+  launchArgs.appendChild(launchArgsInput)
+  const launchCwd = document.createElement('label')
+  launchCwd.className = 'field'
+  launchCwd.innerHTML = '<span>Arbeitsordner</span>'
+  const launchCwdInput = document.createElement('input')
+  launchCwdInput.id = 'desktop-launch-cwd'
+  launchCwdInput.className = 'text-input'
+  launchCwdInput.placeholder = '/home/user/projekt'
+  launchCwd.appendChild(launchCwdInput)
+  launchGroup.append(launchPath, launchArgs, launchCwd)
+
+  const shellGroup = document.createElement('div')
+  shellGroup.className = 'modal-grid hidden'
+  const shellCommand = document.createElement('label')
+  shellCommand.className = 'field'
+  shellCommand.innerHTML = '<span>Shell-Befehl</span>'
+  const shellCommandInput = document.createElement('input')
+  shellCommandInput.id = 'desktop-shell-command'
+  shellCommandInput.className = 'text-input'
+  shellCommandInput.placeholder = 'echo "Hallo"'
+  shellCommand.appendChild(shellCommandInput)
+  const shellCwd = document.createElement('label')
+  shellCwd.className = 'field'
+  shellCwd.innerHTML = '<span>Arbeitsordner</span>'
+  const shellCwdInput = document.createElement('input')
+  shellCwdInput.id = 'desktop-shell-cwd'
+  shellCwdInput.className = 'text-input'
+  shellCwdInput.placeholder = '/home/user/projekt'
+  shellCwd.appendChild(shellCwdInput)
+  shellGroup.append(shellCommand, shellCwd)
+
+  const keyGroup = document.createElement('div')
+  keyGroup.className = 'modal-grid hidden'
+  const keyField = document.createElement('label')
+  keyField.className = 'field'
+  keyField.innerHTML = '<span>Tastenkombination</span>'
+  const keyInput = document.createElement('input')
+  keyInput.id = 'desktop-key-keys'
+  keyInput.className = 'text-input'
+  keyInput.placeholder = 'ctrl+shift+s'
+  keyField.appendChild(keyInput)
+  keyGroup.append(keyField)
+
+  const typeGroup = document.createElement('div')
+  typeGroup.className = 'modal-grid hidden'
+  const typeField = document.createElement('label')
+  typeField.className = 'field'
+  typeField.innerHTML = '<span>Text</span>'
+  const typeInput = document.createElement('textarea')
+  typeInput.id = 'desktop-type-text'
+  typeInput.className = 'text-input'
+  typeInput.rows = 5
+  typeInput.placeholder = 'Text, der in das aktive Fenster geschrieben werden soll'
+  typeField.appendChild(typeInput)
+  typeGroup.append(typeField)
+
+  const clickGroup = document.createElement('div')
+  clickGroup.className = 'modal-grid hidden'
+  const clickButton = document.createElement('label')
+  clickButton.className = 'field'
+  clickButton.innerHTML = '<span>Mausbutton</span>'
+  const clickButtonInput = document.createElement('input')
+  clickButtonInput.id = 'desktop-click-button'
+  clickButtonInput.className = 'text-input'
+  clickButtonInput.placeholder = '1 = links, 2 = mittig, 3 = rechts'
+  clickButton.appendChild(clickButtonInput)
+  const clickCoords = document.createElement('div')
+  clickCoords.className = 'modal-grid'
+  const clickXField = document.createElement('label')
+  clickXField.className = 'field'
+  clickXField.innerHTML = '<span>X</span>'
+  const clickXInput = document.createElement('input')
+  clickXInput.id = 'desktop-click-x'
+  clickXInput.className = 'text-input'
+  clickXInput.placeholder = 'optional'
+  clickXField.appendChild(clickXInput)
+  const clickYField = document.createElement('label')
+  clickYField.className = 'field'
+  clickYField.innerHTML = '<span>Y</span>'
+  const clickYInput = document.createElement('input')
+  clickYInput.id = 'desktop-click-y'
+  clickYInput.className = 'text-input'
+  clickYInput.placeholder = 'optional'
+  clickYField.appendChild(clickYInput)
+  clickCoords.append(clickXField, clickYField)
+  clickGroup.append(clickButton, clickCoords)
+
+  const scrollGroup = document.createElement('div')
+  scrollGroup.className = 'modal-grid hidden'
+  const scrollDirection = document.createElement('label')
+  scrollDirection.className = 'field'
+  scrollDirection.innerHTML = '<span>Richtung</span>'
+  const scrollDirectionInput = document.createElement('select')
+  scrollDirectionInput.id = 'desktop-scroll-direction'
+  scrollDirectionInput.className = 'text-input'
+  ;[
+    ['down', 'Nach unten'],
+    ['up', 'Nach oben'],
+    ['left', 'Nach links'],
+    ['right', 'Nach rechts'],
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = label
+    scrollDirectionInput.appendChild(option)
+  })
+  scrollDirection.appendChild(scrollDirectionInput)
+  const scrollAmount = document.createElement('label')
+  scrollAmount.className = 'field'
+  scrollAmount.innerHTML = '<span>Intensität</span>'
+  const scrollAmountInput = document.createElement('input')
+  scrollAmountInput.id = 'desktop-scroll-amount'
+  scrollAmountInput.className = 'text-input'
+  scrollAmountInput.type = 'number'
+  scrollAmountInput.min = '1'
+  scrollAmountInput.max = '20'
+  scrollAmountInput.value = '1'
+  scrollAmount.appendChild(scrollAmountInput)
+  scrollGroup.append(scrollDirection, scrollAmount)
+
+  const groups = {
+    launch: launchGroup,
+    command: shellGroup,
+    key: keyGroup,
+    type: typeGroup,
+    click: clickGroup,
+    scroll: scrollGroup,
+  }
+
+  const syncVisibility = () => {
+    Object.entries(groups).forEach(([mode, node]) => {
+      node.classList.toggle('hidden', modeSelect.value !== mode)
+    })
+  }
+  modeSelect.addEventListener('change', syncVisibility)
+  syncVisibility()
+
+  content.append(statusBox, modeField, launchGroup, shellGroup, keyGroup, typeGroup, clickGroup, scrollGroup)
+  const status = await window.electron.desktopControl({ action: 'status' }).catch(() => null)
+  if (status?.ok) {
+    statusText.textContent = status.xdotool
+      ? 'GUI-Steuerung bereit. Launch, Shell, Tastatur, Maus und Scrollen sind verfügbar.'
+      : 'Launch und Shell sind verfügbar. Für Maus/Tastatur unter Linux bitte xdotool installieren.'
+  } else {
+    statusText.textContent = 'Lokale Steuerung nicht erreichbar.'
+  }
+
+  const result = await openModal({
+    title: 'PC steuern',
+    copy: 'Hier kannst du Programme starten oder den lokalen Desktop steuern. Für vollständige GUI-Steuerung braucht es unter Linux xdotool.',
+    content,
+    submitLabel: 'Ausführen',
+    width: 'min(720px, 100%)',
+    validate: (values) => {
+      const mode = values['desktop-mode']
+      if (mode === 'launch') return Boolean(values['desktop-launch-command'])
+      if (mode === 'command') return Boolean(values['desktop-shell-command'])
+      if (mode === 'key') return Boolean(values['desktop-key-keys'])
+      if (mode === 'type') return Boolean(values['desktop-type-text'])
+      if (mode === 'click') return Boolean(values['desktop-click-button'])
+      if (mode === 'scroll') return Boolean(values['desktop-scroll-direction'])
+      return false
+    },
+  })
+
+  if (!result) return
+  const action = result['desktop-mode']
+  const payload = { action }
+  if (action === 'launch') {
+    payload.command = result['desktop-launch-command']
+    payload.args = result['desktop-launch-args'] || ''
+    payload.cwd = result['desktop-launch-cwd'] || ''
+  } else if (action === 'command') {
+    payload.command = result['desktop-shell-command']
+    payload.cwd = result['desktop-shell-cwd'] || ''
+  } else if (action === 'key') {
+    payload.keys = result['desktop-key-keys']
+  } else if (action === 'type') {
+    payload.text = result['desktop-type-text']
+  } else if (action === 'click') {
+    payload.button = result['desktop-click-button'] || '1'
+    if (result['desktop-click-x'] && result['desktop-click-y']) {
+      payload.x = Number(result['desktop-click-x'])
+      payload.y = Number(result['desktop-click-y'])
+    }
+  } else if (action === 'scroll') {
+    payload.direction = result['desktop-scroll-direction']
+    payload.amount = Number(result['desktop-scroll-amount'] || 1)
+  }
+
+  showLoader('Desktop-Steuerung wird ausgeführt...')
+  try {
+    const outcome = await window.electron.desktopControl(payload)
+    if (!outcome?.ok) {
+      throw new Error(outcome?.error || 'Desktop-Steuerung fehlgeschlagen')
+    }
+    showToast(action === 'launch' ? 'Programm gestartet' : 'Aktion ausgeführt')
+  } catch (error) {
+    showToast(error.message || 'Desktop-Steuerung fehlgeschlagen', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
 async function openMarkdownImportModal() {
   const content = document.createElement('div')
   content.className = 'modal-grid embedding-library-modal'
@@ -3783,6 +4044,9 @@ function bindSidebarEvents() {
   els.projectSkillsBtn.addEventListener('click', openProjectSkillsModal)
   if (els.markdownImportBtn) {
     els.markdownImportBtn.addEventListener('click', openMarkdownImportModal)
+  }
+  if (els.desktopControlBtn) {
+    els.desktopControlBtn.addEventListener('click', openDesktopControlModal)
   }
   els.projectSearch?.addEventListener('input', (event) => {
     state.projectQuery = String(event.target.value || '')
