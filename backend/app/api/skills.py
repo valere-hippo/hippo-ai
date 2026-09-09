@@ -189,20 +189,36 @@ async def upload_skill_markdown(db: DbSession, file: UploadFile = File(...), cur
     if len(lines) > 1:
         description = lines[1][:240]
 
+    skill_name = title or Path(file.filename or "skill.md").stem.replace("_", " ").strip()
+    existing = await db.execute(
+        select(ProjectSkill).where(ProjectSkill.project_id.is_(None), ProjectSkill.name == skill_name)
+    )
+    skill = existing.scalar_one_or_none()
+    if skill is not None:
+        await db.execute(
+            ProjectSkill.__table__.update()
+            .where(ProjectSkill.id == skill.id)
+            .values(
+                description=description,
+                instructions=text,
+                is_enabled=True,
+                updated_at=datetime.utcnow(),
+            )
+        )
+        await db.commit()
+        refreshed = await db.execute(select(ProjectSkill).where(ProjectSkill.id == skill.id))
+        return refreshed.scalar_one()
+
     stmt = insert(ProjectSkill).values(
         project_id=None,
-        name=title or Path(file.filename or "skill.md").stem.replace("_", " ").strip(),
+        name=skill_name,
         description=description,
         instructions=text,
         is_enabled=True,
     ).returning(ProjectSkill)
-    try:
-        result = await db.execute(stmt)
-        await db.commit()
-        return result.scalar_one()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Eine Skill mit diesem Namen existiert bereits.")
+    result = await db.execute(stmt)
+    await db.commit()
+    return result.scalar_one()
 
 
 @library_router.patch("/library/{skill_id}", response_model=ProjectSkillResponse)

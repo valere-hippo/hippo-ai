@@ -32,7 +32,7 @@ body {
     linear-gradient(180deg, #071017 0%, #08131b 55%, #070d13 100%);
   color: var(--text);
   font-family: Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
-  font-size: 12.75px;
+  font-size: 12.25px;
   letter-spacing: -0.01em;
 }
 
@@ -528,9 +528,9 @@ textarea {
   height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(circle at top right, rgba(95, 191, 231, 0.08), transparent 26%),
-    radial-gradient(circle at bottom left, rgba(99, 215, 191, 0.05), transparent 24%),
-    linear-gradient(180deg, rgba(11, 17, 24, 0.88), rgba(9, 15, 21, 0.97));
+    radial-gradient(circle at top right, rgba(89, 183, 228, 0.08), transparent 26%),
+    radial-gradient(circle at bottom left, rgba(85, 208, 186, 0.06), transparent 24%),
+    linear-gradient(180deg, rgba(11, 17, 24, 0.86), rgba(8, 14, 20, 0.98));
 }
 
 .workspace-shell {
@@ -760,8 +760,8 @@ textarea {
 .rich-content p,
 .rich-content li,
 .rich-content blockquote {
-  font-size: 15px;
-  line-height: 1.66;
+  font-size: 13px;
+  line-height: 1.58;
   overflow-wrap: anywhere;
 }
 
@@ -1188,24 +1188,25 @@ textarea {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 12px;
-  border-radius: 26px;
-  border: 1px solid var(--line-strong);
-  background: rgba(16, 24, 34, 0.94);
-  box-shadow: 0 18px 44px rgba(2, 8, 15, 0.36);
+  padding: 11px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: linear-gradient(180deg, rgba(17, 26, 37, 0.94), rgba(13, 21, 30, 0.96));
+  box-shadow: 0 16px 38px rgba(2, 8, 15, 0.32);
 }
 
 .composer-input {
   width: 100%;
-  min-height: 48px;
+  min-height: 44px;
   max-height: 180px;
   resize: none;
-  padding: 12px 8px 10px;
+  padding: 11px 8px 9px;
   border: 0;
   outline: none;
   color: var(--text);
   background: transparent;
-  line-height: 1.45;
+  line-height: 1.42;
+  font-size: 12.5px;
 }
 
 .composer-input::placeholder {
@@ -1222,12 +1223,12 @@ textarea {
 }
 
 .send-button {
-  min-height: 42px;
-  padding: 0 18px;
+  min-height: 40px;
+  padding: 0 16px;
   color: #071118;
   font-weight: 700;
-  background: linear-gradient(180deg, rgba(99, 215, 191, 0.98), rgba(99, 215, 191, 0.82));
-  border-color: rgba(99, 215, 191, 0.22);
+  background: linear-gradient(180deg, rgba(85, 208, 186, 0.98), rgba(85, 208, 186, 0.82));
+  border-color: rgba(85, 208, 186, 0.22);
 }
 
 .composer-meta {
@@ -1290,10 +1291,11 @@ textarea {
 .skill-card {
   display: grid;
   gap: 10px;
-  padding: 14px;
+  padding: 13px;
   border-radius: 18px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02));
+  backdrop-filter: blur(12px);
 }
 
 .skill-card.active {
@@ -1733,11 +1735,13 @@ select.text-input option {
 .modal-card {
   width: min(520px, 100%);
   max-height: min(88vh, 920px);
-  border-radius: 24px;
-  background: linear-gradient(180deg, rgba(25, 35, 47, 0.98), rgba(16, 24, 33, 0.98));
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  padding: 22px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(85, 208, 186, 0.06), transparent 26%),
+    linear-gradient(180deg, rgba(20, 30, 41, 0.98), rgba(13, 20, 29, 0.99));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 56px rgba(2, 8, 15, 0.46);
+  padding: 20px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1751,8 +1755,8 @@ select.text-input option {
 .modal-copy {
   margin-bottom: 16px;
   color: var(--muted);
-  line-height: 1.5;
-  font-size: 12.5px;
+  line-height: 1.48;
+  font-size: 11.5px;
 }
 
 .modal-body {
