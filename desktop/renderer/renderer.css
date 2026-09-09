@@ -588,6 +588,12 @@ textarea {
   border-color: rgba(85, 208, 186, 0.22);
 }
 
+.topbar-utility.active {
+  background: rgba(85, 208, 186, 0.16);
+  border-color: rgba(85, 208, 186, 0.3);
+  color: var(--text);
+}
+
 .topbar-account {
   display: inline-flex;
   align-items: center;

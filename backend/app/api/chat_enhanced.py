@@ -25,6 +25,7 @@ from app.services.project_skills import build_project_skills_context, build_shar
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 from app.services.model_registry import resolve_chat_max_tokens, resolve_chat_model_name
 import base64
+import json
 
 router = APIRouter(prefix="/chat-enhanced", tags=["chat-enhanced"]) 
 
@@ -33,11 +34,70 @@ class ChatRequest(BaseModel):
     project_id: int | None = None
     message: str
     attachments: list[ChatAttachment] | None = None
+    desktop_agent: bool = False
+    desktop_result: str | None = None
+
+
+class DesktopAction(BaseModel):
+    action: str
+    command: str | None = None
+    args: str | None = None
+    cwd: str | None = None
+    keys: str | None = None
+    text: str | None = None
+    button: str | None = None
+    x: float | None = None
+    y: float | None = None
+    direction: str | None = None
+    amount: int | None = None
+    wait_seconds: float | None = None
+
 
 class ChatResponse(BaseModel):
     reply: str
     conversation_id: int | None = None
     generated_files: list[dict[str, str]] = Field(default_factory=list)
+    desktop_actions: list[DesktopAction] = Field(default_factory=list)
+
+
+def _extract_json_object(text: str) -> dict | None:
+    source = (text or '').strip()
+    if not source:
+        return None
+    if source.startswith('{') and source.endswith('}'):
+        try:
+            parsed = json.loads(source)
+            return parsed if isinstance(parsed, dict) else None
+        except Exception:
+            pass
+    start = source.find('{')
+    end = source.rfind('}')
+    if start >= 0 and end > start:
+        candidate = source[start:end + 1]
+        try:
+            parsed = json.loads(candidate)
+            return parsed if isinstance(parsed, dict) else None
+        except Exception:
+            return None
+    return None
+
+
+def _parse_desktop_actions(reply_text: str) -> tuple[str, list[DesktopAction]]:
+    payload = _extract_json_object(reply_text)
+    if not payload:
+        return reply_text, []
+    reply = str(payload.get('reply') or '').strip()
+    raw_actions = payload.get('desktop_actions') or []
+    actions: list[DesktopAction] = []
+    if isinstance(raw_actions, list):
+        for item in raw_actions:
+            if not isinstance(item, dict):
+                continue
+            try:
+                actions.append(DesktopAction.model_validate(item))
+            except Exception:
+                continue
+    return reply or reply_text, actions
 
 
 @router.post('/', response_model=ChatResponse)
@@ -126,7 +186,40 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         "Schreibe Berichte mit sauberen Überschriften, Absätzen und Listen. Vermeide dekorative Markdown-Formate wie ###** oder **###.\n"
         "Nutze Tabellen nur, wenn sie wirklich klarer sind als Listen.\n"
     )
-    hippo_messages.insert(0, {"role": "system", "content": global_sys})
+    if payload.desktop_agent:
+        agent_sys = (
+            "Desktop-Agent-Modus ist aktiv. Der Benutzer möchte Programme auf dem eigenen PC steuern.\n"
+            "Antworte in *gültigem JSON* und *nur* als JSON-Objekt ohne Markdown, ohne Codeblock und ohne Zusatztext.\n"
+            "Schema:\n"
+            "{\n"
+            '  "reply": "kurze menschliche Erklärung",\n'
+            '  "desktop_actions": [\n'
+            "    {\n"
+            '      "action": "launch|command|key|type|click|scroll|move|wait",\n'
+            '      "command": "...",\n'
+            '      "args": "...",\n'
+            '      "cwd": "...",\n'
+            '      "keys": "...",\n'
+            '      "text": "...",\n'
+            '      "button": "1",\n'
+            '      "x": 0,\n'
+            '      "y": 0,\n'
+            '      "direction": "up|down|left|right",\n'
+            '      "amount": 1,\n'
+            '      "wait_seconds": 1\n'
+            "    }\n"
+            "  ]\n"
+            "}\n"
+            "Regeln:\n"
+            "- Nutze desktop_actions nur für echte PC-Steuerung.\n"
+            "- Wenn der Benutzer ein Programm starten will, verwende launch.\n"
+            "- Wenn eine GUI bedient werden muss, plane mehrere kleine Aktionen statt einer großen.\n"
+            "- Für QGIS, Desktop-Programme und Dateibrowser darfst du launch, click, key und type kombinieren.\n"
+            "- Halte reply kurz und sag, was du tust.\n"
+            "- Wenn du mehr Kontext brauchst, lege mit reply eine Rückfrage und desktop_actions leer.\n"
+        )
+        hippo_messages.insert(0, {"role": "system", "content": agent_sys})
+
 
     if conv_project is not None:
         project_sys = (
@@ -252,6 +345,11 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     except Exception:
         pass
 
+    desktop_actions: list[DesktopAction] = []
+    if payload.desktop_agent:
+        parsed_reply, desktop_actions = _parse_desktop_actions(reply_text)
+        reply_text = parsed_reply
+
     generated_files, cleaned_reply = extract_generated_files(reply_text)
     image_request = looks_like_image_generation_request(payload.message, payload.attachments)
     geodata_visual_request = looks_like_geodata_visual_request(payload.message, payload.attachments)
@@ -334,4 +432,4 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user_id, role='assistant', content=reply_text))
     await db.commit()
 
-    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files)
+    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, desktop_actions=desktop_actions)

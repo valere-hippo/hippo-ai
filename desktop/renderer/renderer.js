@@ -31,6 +31,7 @@ const state = {
   chatQuery: '',
   adminOverview: null,
   thinkingMessage: null,
+  desktopAgentMode: false,
 }
 
 const els = {
@@ -62,6 +63,7 @@ const els = {
   projectPill: document.getElementById('project-pill'),
   rolePill: document.getElementById('role-pill'),
   desktopControlBtn: document.getElementById('desktop-control-btn'),
+  desktopAgentBtn: document.getElementById('desktop-agent-btn'),
   chatLog: document.getElementById('chat-log'),
   emptyState: document.getElementById('empty-state'),
   attachmentPreview: document.getElementById('attachment-preview'),
@@ -2767,6 +2769,37 @@ function buildEmbeddingForm(project = null) {
   return wrapper
 }
 
+async function executeDesktopActions(actions = []) {
+  const queue = Array.isArray(actions) ? actions : []
+  if (!queue.length) return { ok: true, results: [] }
+
+  const results = []
+  for (const step of queue) {
+    if (!step?.action) continue
+    if (step.action === 'wait') {
+      const seconds = Math.max(0, Math.min(30, Number(step.wait_seconds || 1)))
+      await new Promise((resolve) => setTimeout(resolve, seconds * 1000))
+      results.push({ action: 'wait', ok: true, waited: seconds })
+      continue
+    }
+
+    const result = await window.electron.desktopControl(step)
+    results.push({ action: step.action, ...result })
+    if (!result?.ok) {
+      return { ok: false, results }
+    }
+  }
+  return { ok: true, results }
+}
+
+function setDesktopAgentMode(enabled) {
+  state.desktopAgentMode = Boolean(enabled)
+  if (els.desktopAgentBtn) {
+    els.desktopAgentBtn.classList.toggle('active', state.desktopAgentMode)
+    els.desktopAgentBtn.textContent = state.desktopAgentMode ? 'PC-Agent: an' : 'PC-Agent'
+  }
+}
+
 async function openDesktopControlModal() {
   const content = document.createElement('div')
   content.className = 'modal-grid desktop-control-modal'
@@ -3756,6 +3789,7 @@ async function sendChat() {
         project_id: state.selectedProjectId,
         message,
         attachments,
+        desktop_agent: state.desktopAgentMode,
       }),
     })
 
@@ -3776,6 +3810,14 @@ async function sendChat() {
     renderContext()
 
     const savedArtifacts = await saveGeneratedArtifacts(response.generated_files, project?.watched_folder || null)
+    if (response.desktop_actions?.length) {
+      showLoader('Hippo steuert den PC...')
+      const actionResult = await executeDesktopActions(response.desktop_actions)
+      hideLoader()
+      if (!actionResult.ok) {
+        showToast('Ein Schritt der PC-Steuerung ist fehlgeschlagen', 'error')
+      }
+    }
     if (response.reply) {
       renderMessage('assistant', response.reply, { generatedFiles: response.generated_files })
     } else if (response.generated_files?.length) {
@@ -4047,6 +4089,10 @@ function bindSidebarEvents() {
   }
   if (els.desktopControlBtn) {
     els.desktopControlBtn.addEventListener('click', openDesktopControlModal)
+  }
+  if (els.desktopAgentBtn) {
+    setDesktopAgentMode(state.desktopAgentMode)
+    els.desktopAgentBtn.addEventListener('click', () => setDesktopAgentMode(!state.desktopAgentMode))
   }
   els.projectSearch?.addEventListener('input', (event) => {
     state.projectQuery = String(event.target.value || '')
