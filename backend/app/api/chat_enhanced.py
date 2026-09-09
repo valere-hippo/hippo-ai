@@ -198,7 +198,14 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         }.get(profile, 'Allgemeiner Desktop-Agent')
         profile_details = {
             'generic': 'Nutze diesen Modus für allgemeine Desktop-Aufgaben.',
-            'qgis': 'Nutze QGIS für Karten, Layer, GeoPackages, Filter, Auswertungen und Exporte.',
+            'qgis': (
+                'Nutze QGIS für Karten, Layer, GeoPackages, Filter, Auswertungen und Exporte. ' 
+                'Bei geographischen Beobachtungsdaten analysiere immer species by species, ' 
+                'prüfe Koordinaten, Kontakthäufigkeit, Beobachtungsdaten und vorhandene Geo-Metadaten, ' 
+                'erkenne Konzentrationen / Hotspots, leite mögliche Brutreviere oder Territorien ab, ' 
+                'beziehe artspezifische Eigenschaften, Saison und Lebensraum mit ein und erweitere die Analyse ' 
+                'bei Bedarf um weitere Kennzahlen, wenn der Benutzer mehr verlangt.'
+            ),
             'fledermaus': 'Nutze das Fledermaus-Programm für Lautdateien, Spektrogramme, Klassifikation und Auswertung.',
             'bioacoustics': 'Nutze das akustische Analyseprogramm für Bat-Calls, Spektrogramme und Bestimmung.',
             'custom': 'Folge der vom Benutzer beschriebenen Desktop-Routine und frage nach, wenn ein Schritt unsicher ist.',
@@ -232,6 +239,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "- Wenn der Benutzer ein Programm starten will, verwende launch.\n"
             "- Wenn eine GUI bedient werden muss, plane mehrere kleine Aktionen statt einer großen.\n"
             "- Für QGIS, Desktop-Programme und Dateibrowser darfst du launch, click, key und type kombinieren.\n"
+            "- Beim QGIS-Profil solltest du Geodaten immer artweise auswerten, Koordinaten und Kontakte prüfen, Cluster und mögliche Brutreviere erkennen und den Nutzer bei Bedarf nach weiteren Kennzahlen fragen.\n"
             "- Halte reply kurz und sag, was du tust.\n"
             "- Wenn du mehr Kontext brauchst, lege mit reply eine Rückfrage und desktop_actions leer.\n"
             "- Wenn ein Schritt riskant oder unklar ist, frage statt zu raten.\n"
@@ -258,7 +266,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "For shared-folder questions, respond with a detailed structure: overview, visible files, file-by-file details, and conclusion.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
             "If an image, screenshot, or document is attached, rely on the supplied vision summary and any locally extracted text; do not claim that you cannot read attachments.\n"
-            "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, and spatial clusters.\n"
+            "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, spatial clusters, species-specific patterns, and possible territories / breeding areas. If the user wants more depth, extend the analysis with additional metrics, maps, or statistical summaries.\n"
             f"{build_attachment_response_guidance()}"
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
