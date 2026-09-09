@@ -2860,7 +2860,7 @@ async function openDesktopControlModal() {
   })
   const modeHelp = document.createElement('div')
   modeHelp.className = 'muted-copy'
-  modeHelp.textContent = 'Für volle GUI-Steuerung unter Linux ist xdotool nötig. Starten und Shell-Befehle funktionieren unabhängig davon.'
+  modeHelp.textContent = 'Für volle GUI-Steuerung braucht das System einen passenden Desktop-Zugriff: Linux mit xdotool, macOS mit AppleScript/Automation, Windows mit PowerShell/UI-Tools.'
   modeField.append(modeLabel, modeSelect, modeHelp)
 
   const launchGroup = document.createElement('div')
@@ -3020,9 +3020,9 @@ async function openDesktopControlModal() {
   content.append(statusBox, modeField, launchGroup, shellGroup, keyGroup, typeGroup, clickGroup, scrollGroup)
   const status = await window.electron.desktopControl({ action: 'status' }).catch(() => null)
   if (status?.ok) {
-    statusText.textContent = status.xdotool
+    statusText.textContent = status.supports?.linuxXdotool || status.supports?.macAutomation || status.supports?.windowsAutomation
       ? 'GUI-Steuerung bereit. Launch, Shell, Tastatur, Maus und Scrollen sind verfügbar.'
-      : 'Launch und Shell sind verfügbar. Für Maus/Tastatur unter Linux bitte xdotool installieren.'
+      : 'Launch und Shell sind verfügbar. Für Maus/Tastatur bitte die passende Desktop-Automation aktivieren.'
   } else {
     statusText.textContent = 'Lokale Steuerung nicht erreichbar.'
   }
