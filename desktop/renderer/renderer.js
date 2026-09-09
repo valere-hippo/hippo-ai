@@ -32,6 +32,7 @@ const state = {
   adminOverview: null,
   thinkingMessage: null,
   desktopAgentMode: false,
+  desktopAgentProfile: localStorage.getItem('hippo.desktop.profile') || 'generic',
 }
 
 const els = {
@@ -2783,7 +2784,7 @@ async function executeDesktopActions(actions = []) {
       continue
     }
 
-    const result = await window.electron.desktopControl(step)
+    const result = await window.electron.desktopControl({ ...step, profile: state.desktopAgentProfile })
     results.push({ action: step.action, ...result })
     if (!result?.ok) {
       return { ok: false, results }
@@ -2792,11 +2793,34 @@ async function executeDesktopActions(actions = []) {
   return { ok: true, results }
 }
 
+function setDesktopAgentProfile(profile) {
+  const next = String(profile || 'generic').trim().toLowerCase() || 'generic'
+  state.desktopAgentProfile = next
+  localStorage.setItem('hippo.desktop.profile', next)
+  if (els.desktopAgentBtn) {
+    const labels = {
+      generic: 'PC-Agent',
+      qgis: 'PC-Agent · QGIS',
+      fledermaus: 'PC-Agent · Fledermaus',
+      bioacoustics: 'PC-Agent · Akustik',
+      custom: 'PC-Agent · Custom',
+    }
+    els.desktopAgentBtn.textContent = labels[next] || 'PC-Agent'
+  }
+}
+
 function setDesktopAgentMode(enabled) {
   state.desktopAgentMode = Boolean(enabled)
   if (els.desktopAgentBtn) {
     els.desktopAgentBtn.classList.toggle('active', state.desktopAgentMode)
-    els.desktopAgentBtn.textContent = state.desktopAgentMode ? 'PC-Agent: an' : 'PC-Agent'
+    const labels = {
+      generic: 'PC-Agent',
+      qgis: 'PC-Agent · QGIS',
+      fledermaus: 'PC-Agent · Fledermaus',
+      bioacoustics: 'PC-Agent · Akustik',
+      custom: 'PC-Agent · Custom',
+    }
+    els.desktopAgentBtn.textContent = state.desktopAgentMode ? `${labels[state.desktopAgentProfile] || 'PC-Agent'}: an` : (labels[state.desktopAgentProfile] || 'PC-Agent')
   }
 }
 
@@ -3003,6 +3027,36 @@ async function openDesktopControlModal() {
     statusText.textContent = 'Lokale Steuerung nicht erreichbar.'
   }
 
+  const profileField = document.createElement('label')
+  profileField.className = 'field'
+  const profileLabel = document.createElement('span')
+  profileLabel.textContent = 'Workflow-Profil'
+  const profileSelect = document.createElement('select')
+  profileSelect.className = 'text-input'
+  profileSelect.id = 'desktop-profile'
+  ;[
+    ['generic', 'Allgemein'],
+    ['qgis', 'QGIS'],
+    ['fledermaus', 'Fledermaus'],
+    ['bioacoustics', 'Akustik / Fledermaus'],
+    ['custom', 'Custom'],
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = label
+    profileSelect.appendChild(option)
+  })
+  profileSelect.value = state.desktopAgentProfile || 'generic'
+  const profileHelp = document.createElement('div')
+  profileHelp.className = 'muted-copy'
+  profileHelp.textContent = 'Das Profil hilft Hippo, den richtigen Workflow und passende App-Schritte zu planen.'
+  profileField.append(profileLabel, profileSelect, profileHelp)
+  profileSelect.addEventListener('change', () => {
+    setDesktopAgentProfile(profileSelect.value)
+  })
+
+  content.insertBefore(profileField, modeField)
+
   const result = await openModal({
     title: 'PC steuern',
     copy: 'Hier kannst du Programme starten oder den lokalen Desktop steuern. Für vollständige GUI-Steuerung braucht es unter Linux xdotool.',
@@ -3028,9 +3082,11 @@ async function openDesktopControlModal() {
     payload.command = result['desktop-launch-command']
     payload.args = result['desktop-launch-args'] || ''
     payload.cwd = result['desktop-launch-cwd'] || ''
+    payload.profile = result['desktop-profile'] || state.desktopAgentProfile
   } else if (action === 'command') {
     payload.command = result['desktop-shell-command']
     payload.cwd = result['desktop-shell-cwd'] || ''
+    payload.profile = result['desktop-profile'] || state.desktopAgentProfile
   } else if (action === 'key') {
     payload.keys = result['desktop-key-keys']
   } else if (action === 'type') {
@@ -3790,6 +3846,7 @@ async function sendChat() {
         message,
         attachments,
         desktop_agent: state.desktopAgentMode,
+        desktop_profile: state.desktopAgentProfile,
       }),
     })
 
@@ -4091,6 +4148,7 @@ function bindSidebarEvents() {
     els.desktopControlBtn.addEventListener('click', openDesktopControlModal)
   }
   if (els.desktopAgentBtn) {
+    setDesktopAgentProfile(state.desktopAgentProfile)
     setDesktopAgentMode(state.desktopAgentMode)
     els.desktopAgentBtn.addEventListener('click', () => setDesktopAgentMode(!state.desktopAgentMode))
   }

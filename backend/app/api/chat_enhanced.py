@@ -35,6 +35,7 @@ class ChatRequest(BaseModel):
     message: str
     attachments: list[ChatAttachment] | None = None
     desktop_agent: bool = False
+    desktop_profile: str | None = None
     desktop_result: str | None = None
 
 
@@ -187,8 +188,24 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         "Nutze Tabellen nur, wenn sie wirklich klarer sind als Listen.\n"
     )
     if payload.desktop_agent:
+        profile = (payload.desktop_profile or 'generic').strip().lower()
+        profile_label = {
+            'generic': 'Allgemeiner Desktop-Agent',
+            'qgis': 'QGIS-Workflow',
+            'fledermaus': 'Fledermaus-Workflow',
+            'bioacoustics': 'Fledermaus-/Akustik-Workflow',
+            'custom': 'Benutzerdefinierter Workflow',
+        }.get(profile, 'Allgemeiner Desktop-Agent')
+        profile_details = {
+            'generic': 'Nutze diesen Modus für allgemeine Desktop-Aufgaben.',
+            'qgis': 'Nutze QGIS für Karten, Layer, GeoPackages, Filter, Auswertungen und Exporte.',
+            'fledermaus': 'Nutze das Fledermaus-Programm für Lautdateien, Spektrogramme, Klassifikation und Auswertung.',
+            'bioacoustics': 'Nutze das akustische Analyseprogramm für Bat-Calls, Spektrogramme und Bestimmung.',
+            'custom': 'Folge der vom Benutzer beschriebenen Desktop-Routine und frage nach, wenn ein Schritt unsicher ist.',
+        }.get(profile, 'Nutze diesen Modus für allgemeine Desktop-Aufgaben.')
         agent_sys = (
-            "Desktop-Agent-Modus ist aktiv. Der Benutzer möchte Programme auf dem eigenen PC steuern.\n"
+            "Desktop-Agent-Modus ist aktiv. Der Benutzer möchte Programme auf seinem PC steuern.\n"
+            f"Profil: {profile_label}. {profile_details}\n"
             "Antworte in *gültigem JSON* und *nur* als JSON-Objekt ohne Markdown, ohne Codeblock und ohne Zusatztext.\n"
             "Schema:\n"
             "{\n"
@@ -217,6 +234,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "- Für QGIS, Desktop-Programme und Dateibrowser darfst du launch, click, key und type kombinieren.\n"
             "- Halte reply kurz und sag, was du tust.\n"
             "- Wenn du mehr Kontext brauchst, lege mit reply eine Rückfrage und desktop_actions leer.\n"
+            "- Wenn ein Schritt riskant oder unklar ist, frage statt zu raten.\n"
         )
         hippo_messages.insert(0, {"role": "system", "content": agent_sys})
 

@@ -137,6 +137,19 @@ function hasXdotool() {
   return result.status === 0 && Boolean(String(result.stdout || '').trim())
 }
 
+function isCommandAllowedForProfile(profile, command) {
+  const normalizedProfile = String(profile || 'generic').trim().toLowerCase() || 'generic'
+  const text = String(command || '').toLowerCase()
+  if (normalizedProfile === 'generic' || normalizedProfile === 'custom') return true
+  const allowed = {
+    qgis: [/\bqgis\b/, /qgis-ltr/, /qgis-bin/, /ogr2ogr/, /gdal/, /python/, /bash/, /sh/],
+    fledermaus: [/fledermaus/, /bat/, /bioacoustics/, /python/, /bash/, /sh/],
+    bioacoustics: [/fledermaus/, /bat/, /bioacoustics/, /python/, /bash/, /sh/],
+  }
+  const rules = allowed[normalizedProfile] || []
+  return rules.some((rule) => rule.test(text))
+}
+
 function spawnDetached(command, args = [], options = {}) {
   const child = spawn(command, args, {
     detached: true,
@@ -167,7 +180,11 @@ ipcMain.handle('desktop-control', async (event, payload = {}) => {
     const command = String(payload.command || '').trim()
     const argsText = String(payload.args || '').trim()
     const cwd = String(payload.cwd || '').trim() || undefined
+    const profile = String(payload.profile || 'generic').trim().toLowerCase() || 'generic'
     if (!command) return { ok: false, error: 'Please provide a program or command to launch.' }
+    if (!isCommandAllowedForProfile(profile, command)) {
+      return { ok: false, error: `Der Befehl ist im Profil ${profile} nicht erlaubt.` }
+    }
     const fullCommand = [command, argsText].filter(Boolean).join(' ')
     const pid = spawnDetached(fullCommand, [], { cwd, shell: true, env: process.env })
     return { ok: true, pid, launched: command, args: argsText }
@@ -176,7 +193,11 @@ ipcMain.handle('desktop-control', async (event, payload = {}) => {
   if (action === 'command') {
     const command = String(payload.command || '').trim()
     const cwd = String(payload.cwd || '').trim() || undefined
+    const profile = String(payload.profile || 'generic').trim().toLowerCase() || 'generic'
     if (!command) return { ok: false, error: 'Please provide a shell command.' }
+    if (!isCommandAllowedForProfile(profile, command)) {
+      return { ok: false, error: `Der Befehl ist im Profil ${profile} nicht erlaubt.` }
+    }
     const pid = spawnDetached(command, [], { cwd, shell: true, env: process.env })
     return { ok: true, pid }
   }
