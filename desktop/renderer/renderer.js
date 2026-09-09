@@ -63,7 +63,6 @@ const els = {
   selectedInfo: document.getElementById('selected-info'),
   projectPill: document.getElementById('project-pill'),
   rolePill: document.getElementById('role-pill'),
-  desktopControlBtn: document.getElementById('desktop-control-btn'),
   desktopAgentBtn: document.getElementById('desktop-agent-btn'),
   chatLog: document.getElementById('chat-log'),
   emptyState: document.getElementById('empty-state'),
@@ -4143,9 +4142,6 @@ function bindSidebarEvents() {
   els.projectSkillsBtn.addEventListener('click', openProjectSkillsModal)
   if (els.markdownImportBtn) {
     els.markdownImportBtn.addEventListener('click', openMarkdownImportModal)
-  }
-  if (els.desktopControlBtn) {
-    els.desktopControlBtn.addEventListener('click', openDesktopControlModal)
   }
   if (els.desktopAgentBtn) {
     setDesktopAgentProfile(state.desktopAgentProfile)
