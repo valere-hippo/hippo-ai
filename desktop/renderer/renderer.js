@@ -28,6 +28,7 @@ const state = {
   isRecording: false,
   projectConversationMemory: new Map(),
   projectFolderContextCache: new Map(),
+  projectFolderScanState: new Map(),
   projectQuery: '',
   chatQuery: '',
   adminOverview: null,
@@ -400,18 +401,18 @@ async function requestProjectFolderConsent(project) {
     </div>
   `
 
-  const result = await openModal({
+  return openModal({
     title: 'Ordnerzugriff erlauben?',
     copy: 'Ohne deine Zustimmung liest Hippo AI den gemeinsamen Ordner nicht.',
     content: consentContent,
     submitLabel: 'Zugriff erlauben',
+  }).then((result) => {
+    const accepted = Boolean(result)
+    if (accepted) {
+      localStorage.setItem(projectFolderConsentKey(folder), '1')
+    }
+    return accepted
   })
-
-  const accepted = Boolean(result)
-  if (accepted) {
-    localStorage.setItem(projectFolderConsentKey(folder), '1')
-  }
-  return accepted
 }
 
 async function refreshProjectFolderContext(project, { force = false } = {}) {
@@ -420,12 +421,15 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
   if (cached && !force) return cached
   if (!project.watched_folder || !window.electron?.inspectProjectFolder) {
     state.projectFolderContextCache.set(project.id, '')
+    state.projectFolderScanState.set(project.id, 'idle')
     return ''
   }
-  if (!hasProjectFolderConsent(project.watched_folder)) {
+  if (!await requestProjectFolderConsent(project)) {
     state.projectFolderContextCache.set(project.id, '')
+    state.projectFolderScanState.set(project.id, 'consent')
     return ''
   }
+  state.projectFolderScanState.set(project.id, 'loading')
   try {
     const folderInfo = await window.electron.inspectProjectFolder({
       folder: project.watched_folder,
@@ -435,12 +439,24 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
     })
     const context = String(folderInfo?.context || '')
     state.projectFolderContextCache.set(project.id, context)
+    state.projectFolderScanState.set(project.id, folderInfo?.ok ? 'ready' : 'error')
     return context
   } catch (error) {
     const context = `Der lokale Ordner konnte nicht gelesen werden: ${error.message}`
     state.projectFolderContextCache.set(project.id, context)
+    state.projectFolderScanState.set(project.id, 'error')
     return context
   }
+}
+
+function queueProjectFolderRefresh(project) {
+  if (!project?.id || !project.watched_folder) return
+  if (state.projectFolderScanState.get(project.id) === 'loading') return
+  void refreshProjectFolderContext(project, { force: true }).then(() => {
+    if (state.selectedProjectId === project.id) {
+      renderContext()
+    }
+  })
 }
 
 function getConversationTitle(conversation) {
@@ -762,16 +778,26 @@ function renderContext() {
   if (els.projectSkillsBtn) {
     els.projectSkillsBtn.disabled = !project
   }
+  const scanState = project ? (state.projectFolderScanState.get(project.id) || 'idle') : 'idle'
+  const scanLabel = scanState === 'loading'
+    ? 'Ordneranalyse läuft…'
+    : scanState === 'ready'
+      ? 'Ordneranalyse bereit'
+      : scanState === 'consent'
+        ? 'Ordnerzugriff ausstehend'
+        : scanState === 'error'
+          ? 'Ordneranalyse fehlgeschlagen'
+          : ''
   if (state.currentConversationId) {
     const conversation = state.conversations.find((item) => item.id === state.currentConversationId)
     els.pageTitle.textContent = getConversationTitle(conversation)
     els.selectedInfo.textContent = project
-      ? `Projekt: ${project.name}${project.watched_folder ? ` · Ordner: ${project.watched_folder}` : ''}`
+      ? `Projekt: ${project.name}${project.watched_folder ? ` · Ordner: ${project.watched_folder}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}`
       : 'Globale Unterhaltung'
   } else {
     els.pageTitle.textContent = project ? `Neuer Chat in ${project.name}` : 'Neuer Chat'
     els.selectedInfo.textContent = project
-      ? `Projekt: ${project.name}${project.watched_folder ? ` · Ordner: ${project.watched_folder}` : ''}`
+      ? `Projekt: ${project.name}${project.watched_folder ? ` · Ordner: ${project.watched_folder}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}`
       : 'Kein Projekt gewählt'
   }
 }
@@ -1780,6 +1806,11 @@ async function selectProject(projectId) {
   renderContext()
   closeSidebarDrawer()
 
+  const project = getContextProject()
+  if (project) {
+    queueProjectFolderRefresh(project)
+  }
+
   if (state.currentConversationId) {
     await openConversationById(state.currentConversationId)
   } else {
@@ -1807,6 +1838,10 @@ async function openConversation(conversation) {
   renderConversations()
   renderContext()
   closeSidebarDrawer()
+  const project = getContextProject()
+  if (project) {
+    queueProjectFolderRefresh(project)
+  }
   await openConversationById(conversation.id)
 }
 
@@ -4445,6 +4480,9 @@ async function sendChat() {
   )
 
   const project = getContextProject()
+  if (project?.watched_folder) {
+    queueProjectFolderRefresh(project)
+  }
   const projectFolderContext = project ? (state.projectFolderContextCache.get(project.id) || '') : ''
   const attachments = state.draftAttachments.map((attachment) => ({
     filename: attachment.filename,
