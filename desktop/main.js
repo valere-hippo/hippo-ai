@@ -281,17 +281,108 @@ function runMacJavaScript(script) {
   return { ok: true, stdout: result.stdout || '' }
 }
 
-function isCommandAllowedForProfile(profile, command) {
-  const normalizedProfile = String(profile || 'generic').trim().toLowerCase() || 'generic'
-  const text = String(command || '').toLowerCase()
-  if (normalizedProfile === 'generic' || normalizedProfile === 'custom') return true
-  const allowed = {
-    qgis: [/\bqgis\b/, /qgis-ltr/, /qgis-bin/, /ogr2ogr/, /gdal/, /python/, /bash/, /sh/],
-    fledermaus: [/fledermaus/, /bat/, /bioacoustics/, /python/, /bash/, /sh/],
-    bioacoustics: [/fledermaus/, /bat/, /bioacoustics/, /python/, /bash/, /sh/],
+function getAppPreset(appKey) {
+  const key = String(appKey || '').trim().toLowerCase()
+  const presets = {
+    hipponalyze: {
+      windows: [process.env.HIPPONALYZE_WINDOWS_EXE || 'hipponalyze.exe', 'hipponalyze'],
+      macos: [process.env.HIPPONALYZE_MAC_APP || 'hipponalyze'],
+      linux: [process.env.HIPPONALYZE_LINUX_CMD || 'hipponalyze'],
+    },
+    qgis: {
+      windows: [process.env.QGIS_WINDOWS_EXE || 'QGIS.exe', process.env.QGIS_LTR_WINDOWS_EXE || 'qgis-ltr-bin.exe', 'qgis-bin.exe', 'qgis.exe', 'qgis'],
+      macos: [process.env.QGIS_MAC_APP || 'QGIS'],
+      linux: [process.env.QGIS_LINUX_CMD || 'qgis', 'qgis-ltr'],
+    },
+    word: {
+      windows: [process.env.WORD_WINDOWS_EXE || 'WINWORD.EXE', 'winword.exe'],
+      macos: [process.env.WORD_MAC_APP || 'Microsoft Word'],
+      linux: [process.env.LIBREOFFICE_CMD || 'libreoffice', 'soffice'],
+    },
+    excel: {
+      windows: [process.env.EXCEL_WINDOWS_EXE || 'EXCEL.EXE', 'excel.exe'],
+      macos: [process.env.EXCEL_MAC_APP || 'Microsoft Excel'],
+      linux: [process.env.LIBREOFFICE_CMD || 'libreoffice', 'soffice'],
+    },
+    libreoffice: {
+      windows: [process.env.LIBREOFFICE_WINDOWS_EXE || 'soffice.exe', 'libreoffice.exe'],
+      macos: [process.env.LIBREOFFICE_MAC_APP || 'LibreOffice'],
+      linux: [process.env.LIBREOFFICE_CMD || 'libreoffice', 'soffice'],
+    },
   }
-  const rules = allowed[normalizedProfile] || []
-  return rules.some((rule) => rule.test(text))
+  return presets[key] || null
+}
+
+function escapePowerShellSingleQuoted(value) {
+  return String(value || '').replace(/'/g, "''")
+}
+
+function windowsStartProcess(target, args = [], cwd) {
+  const argList = Array.isArray(args) && args.length
+    ? ` -ArgumentList @(${args.map((item) => `'${escapePowerShellSingleQuoted(item)}'`).join(', ')})`
+    : ''
+  const workDir = cwd ? ` -WorkingDirectory '${escapePowerShellSingleQuoted(cwd)}'` : ''
+  const script = `Start-Process -FilePath '${escapePowerShellSingleQuoted(target)}'${argList}${workDir}`
+  return runWindowsPowerShell(script)
+}
+
+function launchAppByPreset(appKey, options = {}) {
+  const preset = getAppPreset(appKey)
+  if (!preset) {
+    return { ok: false, error: `Unbekannte App: ${appKey}` }
+  }
+  const platformKey = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux'
+  const candidates = preset[platformKey] || []
+  const cwd = String(options.cwd || '').trim() || undefined
+  const extraArgs = Array.isArray(options.args) ? options.args.map((item) => String(item)) : []
+  const file = String(options.file || '').trim()
+
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    if (process.platform === 'win32') {
+      const launchArgs = []
+      if (file) launchArgs.push(file)
+      launchArgs.push(...extraArgs)
+      const result = windowsStartProcess(candidate, launchArgs, cwd)
+      if (result.ok) {
+        return { ok: true, launched: candidate, app: String(appKey), file: file || null }
+      }
+      continue
+    }
+
+    if (process.platform === 'darwin') {
+      const args = ['-a', candidate]
+      if (file) args.push(file)
+      if (extraArgs.length) args.push(...extraArgs)
+      const pid = spawnDetached('/usr/bin/open', args, { cwd, env: process.env })
+      return { ok: true, pid, launched: candidate, app: String(appKey), file: file || null }
+    }
+
+    const launchArgs = [...extraArgs]
+    if (file) launchArgs.push(file)
+    const pid = spawnDetached(candidate, launchArgs, { cwd, env: process.env })
+    return { ok: true, pid, launched: candidate, app: String(appKey), file: file || null }
+  }
+
+  return { ok: false, error: `Die App ${appKey} konnte nicht gestartet werden.` }
+}
+
+function openFileWithDefaultApp(filePath, cwd) {
+  const target = String(filePath || '').trim()
+  if (!target) return { ok: false, error: 'No file path provided.' }
+  if (process.platform === 'win32') {
+    return windowsStartProcess(target, [], cwd)
+  }
+  if (process.platform === 'darwin') {
+    const pid = spawnDetached('/usr/bin/open', [target], { cwd, env: process.env })
+    return { ok: true, pid, opened: target }
+  }
+  const pid = spawnDetached('xdg-open', [target], { cwd, env: process.env })
+  return { ok: true, pid, opened: target }
+}
+
+function canLaunchApp(appKey) {
+  return Boolean(getAppPreset(appKey))
 }
 
 function spawnDetached(command, args = [], options = {}) {
@@ -321,6 +412,22 @@ ipcMain.handle('desktop-control', async (event, payload = {}) => {
       launchSupported: true,
       shellSupported: true,
     }
+  }
+
+  if (action === 'launch_app') {
+    const appKey = String(payload.app || payload.command || '').trim()
+    if (!appKey) return { ok: false, error: 'Please provide an application name.' }
+    const cwd = String(payload.cwd || '').trim() || undefined
+    const args = Array.isArray(payload.args) ? payload.args.map((item) => String(item)) : []
+    const file = String(payload.file || '').trim()
+    const result = launchAppByPreset(appKey, { cwd, args, file })
+    return result
+  }
+
+  if (action === 'open_file') {
+    const filePath = String(payload.file || payload.path || '').trim()
+    const cwd = String(payload.cwd || '').trim() || undefined
+    return openFileWithDefaultApp(filePath, cwd)
   }
 
   if (action === 'launch' || action === 'command') {

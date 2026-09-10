@@ -205,7 +205,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             'custom': 'Benutzerdefinierter Workflow',
         }.get(profile, 'Allgemeiner Desktop-Agent')
         profile_details = {
-            'generic': 'Nutze diesen Modus für allgemeine Desktop-Aufgaben.',
+            'generic': 'Nutze diesen Modus für allgemeine Desktop-Aufgaben. Wenn passende Programme gestartet werden sollen, verwende hipponalyze, QGIS, Word, Excel oder LibreOffice über launch_app oder open_file.',
             'qgis': (
                 'Nutze QGIS für Karten, Layer, GeoPackages, Filter, Auswertungen und Exporte. ' 
                 'Bei geographischen Beobachtungsdaten analysiere immer species by species, ' 
@@ -227,10 +227,12 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             '  "reply": "kurze menschliche Erklärung",\n'
             '  "desktop_actions": [\n'
             "    {\n"
-            '      "action": "launch|command|key|type|click|scroll|move|wait",\n'
+            '      "action": "launch|launch_app|open_file|command|key|type|click|scroll|move|wait",\n'
             '      "command": "...",\n'
             '      "args": "...",\n'
             '      "cwd": "...",\n'
+            '      "app": "qgis|hipponalyze|word|excel|libreoffice",\n'
+            '      "file": "...",\n'
             '      "keys": "...",\n'
             '      "text": "...",\n'
             '      "button": "1",\n'
@@ -246,7 +248,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "- Nutze desktop_actions nur für echte PC-Steuerung.\n"
             "- Wenn der Benutzer ein Programm starten will, verwende launch.\n"
             "- Wenn eine GUI bedient werden muss, plane mehrere kleine Aktionen statt einer großen.\n"
-            "- Für QGIS, Desktop-Programme und Dateibrowser darfst du launch, click, key und type kombinieren.\n"
+            "- Für hipponalyze, QGIS, Word, Excel und LibreOffice nutze launch_app oder open_file statt generischer Shell-Befehle, wenn möglich.\n"
             "- Beim QGIS-Profil solltest du Geodaten immer artweise auswerten, Koordinaten und Kontakte prüfen, Cluster und mögliche Brutreviere erkennen und den Nutzer bei Bedarf nach weiteren Kennzahlen fragen.\n"
             "- Halte reply kurz und sag, was du tust.\n"
             "- Wenn du mehr Kontext brauchst, lege mit reply eine Rückfrage und desktop_actions leer.\n"
