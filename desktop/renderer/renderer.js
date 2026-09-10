@@ -1594,9 +1594,24 @@ function resetComposer() {
   renderAttachmentPreview()
 }
 
+function getLatestProjectConversation(projectId) {
+  const projectConversations = state.conversations
+    .filter((conversation) => conversation.project_id === projectId)
+    .slice()
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  return projectConversations[0] || null
+}
+
 function syncSelectedProjectConversation() {
-  if (state.selectedProjectId && state.projectConversationMemory.has(state.selectedProjectId)) {
+  if (!state.selectedProjectId) return
+  if (state.projectConversationMemory.has(state.selectedProjectId)) {
     state.currentConversationId = state.projectConversationMemory.get(state.selectedProjectId)
+    return
+  }
+  const latest = getLatestProjectConversation(state.selectedProjectId)
+  state.currentConversationId = latest ? latest.id : null
+  if (latest) {
+    state.projectConversationMemory.set(state.selectedProjectId, latest.id)
   }
 }
 
@@ -1759,7 +1774,7 @@ function logout() {
 
 async function selectProject(projectId) {
   state.selectedProjectId = projectId
-  state.currentConversationId = state.projectConversationMemory.get(projectId) || null
+  syncSelectedProjectConversation()
   renderProjects()
   renderConversations()
   renderContext()
