@@ -41,6 +41,24 @@ def _clean_markdown_text(content: str) -> tuple[str, str | None, str | None]:
     return text, title, description
 
 
+def _parse_json_dict(value: object) -> dict | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        try:
+            import json
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else None
+        except Exception:
+            return None
+    return None
+
+
 async def _load_tool(db: AsyncSession, tool_id: int) -> AITool:
     result = await db.execute(select(AITool).where(AITool.id == tool_id))
     tool = result.scalar_one_or_none()
@@ -67,8 +85,13 @@ async def create_tool(payload: AIToolCreate, db: AsyncSession, current_user=Depe
         instructions=payload.instructions.strip(),
         tool_type=payload.tool_type.strip(),
         command=payload.command.strip() if payload.command else None,
+        arguments=payload.arguments.strip() if payload.arguments else None,
+        working_directory=payload.working_directory.strip() if payload.working_directory else None,
         endpoint=payload.endpoint.strip() if payload.endpoint else None,
         method=payload.method.strip().upper() if payload.method else None,
+        platform=payload.platform.strip().lower() if payload.platform else None,
+        timeout_seconds=payload.timeout_seconds,
+        requires_confirmation=payload.requires_confirmation,
         parameters=payload.parameters or {},
         is_enabled=payload.is_enabled,
     ).returning(AITool)
@@ -114,6 +137,13 @@ async def upload_tool_markdown(db: AsyncSession, file: UploadFile = File(...), c
         description=description,
         instructions=text,
         tool_type="workflow",
+        arguments=None,
+        working_directory=None,
+        endpoint=None,
+        method=None,
+        platform=None,
+        timeout_seconds=None,
+        requires_confirmation=False,
         is_enabled=True,
     ).returning(AITool)
     result = await db.execute(stmt)
@@ -137,10 +167,20 @@ async def update_tool(tool_id: int, payload: AIToolUpdate, db: AsyncSession, cur
         updates["tool_type"] = payload.tool_type.strip()
     if payload.command is not None:
         updates["command"] = payload.command.strip()
+    if payload.arguments is not None:
+        updates["arguments"] = payload.arguments.strip()
+    if payload.working_directory is not None:
+        updates["working_directory"] = payload.working_directory.strip()
     if payload.endpoint is not None:
         updates["endpoint"] = payload.endpoint.strip()
     if payload.method is not None:
         updates["method"] = payload.method.strip().upper()
+    if payload.platform is not None:
+        updates["platform"] = payload.platform.strip().lower()
+    if payload.timeout_seconds is not None:
+        updates["timeout_seconds"] = payload.timeout_seconds
+    if payload.requires_confirmation is not None:
+        updates["requires_confirmation"] = payload.requires_confirmation
     if payload.parameters is not None:
         updates["parameters"] = payload.parameters
     if payload.is_enabled is not None:
@@ -212,6 +252,13 @@ async def create_tool_from_chat(payload: dict, db: AsyncSession, current_user=De
         description=description,
         instructions=instructions,
         tool_type="workflow",
+        arguments=None,
+        working_directory=None,
+        endpoint=None,
+        method=None,
+        platform=None,
+        timeout_seconds=None,
+        requires_confirmation=False,
         is_enabled=True,
     ).returning(AITool)
     try:

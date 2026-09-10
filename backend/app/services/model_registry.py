@@ -22,7 +22,6 @@ class ModelRegistrySource:
 
 MODEL_SYNC_SOURCES: tuple[ModelRegistrySource, ...] = (
     ModelRegistrySource(provider="chat", source_url=settings.hippo_api_url, api_key=settings.hippo_api_key, capability="chat"),
-    ModelRegistrySource(provider="embedding", source_url=settings.hippo_embedding_url, api_key=settings.hippo_embedding_key, capability="embedding"),
     ModelRegistrySource(provider="vision", source_url=settings.hippo_vision_url, api_key=settings.hippo_api_key, capability="vision"),
 )
 

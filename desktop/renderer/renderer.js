@@ -74,6 +74,8 @@ const els = {
   imageInput: document.getElementById('image-input'),
   fileInput: document.getElementById('file-input'),
   micBtn: document.getElementById('mic-btn'),
+  createToolFromChatBtn: document.getElementById('create-tool-from-chat-btn'),
+  createSkillFromChatBtn: document.getElementById('create-skill-from-chat-btn'),
   sendChat: document.getElementById('send-chat'),
   voiceStatus: document.getElementById('voice-status'),
   voiceCanvas: document.getElementById('voice-canvas'),
@@ -1182,6 +1184,36 @@ function renderMessage(role, content, extras = {}) {
   els.chatLog.appendChild(message)
   els.chatLog.scrollTop = els.chatLog.scrollHeight
 }
+
+async function createConversationArtifact(kind) {
+  const conversationId = state.currentConversationId
+  if (!conversationId) {
+    showToast('Öffne zuerst eine Konversation.', 'error')
+    return
+  }
+
+  const endpoint = kind === 'tool' ? '/tools/library/from-chat' : '/skills/library/from-chat'
+  const successMessage = kind === 'tool' ? 'Tool aus dem Chat erstellt' : 'Skill aus dem Chat erstellt'
+
+  showLoader(kind === 'tool' ? 'Tool wird aus dem Chat erstellt...' : 'Skill wird aus dem Chat erstellt...')
+  try {
+    await apiJson(endpoint, {
+      method: 'POST',
+      body: JSON.stringify({ conversation_id: conversationId }),
+    })
+    showToast(successMessage)
+    if (kind === 'tool') {
+      await openToolModal()
+    } else {
+      await openProjectSkillsModal()
+    }
+  } catch (error) {
+    showToast(error.message || 'Aktion konnte nicht ausgeführt werden', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
 
 async function openMessageEditModal(message) {
   if (!message?.id) return
@@ -3416,6 +3448,135 @@ function buildToolManagerContent(project) {
   instructionsInput.placeholder = 'Beschreibe hier den Ablauf, die Regeln und das gewünschte Verhalten.'
   instructionsField.append(instructionsLabel, instructionsInput)
 
+  const typeField = document.createElement('label')
+  typeField.className = 'field'
+  const typeLabel = document.createElement('span')
+  typeLabel.textContent = 'Tool-Typ'
+  const typeInput = document.createElement('select')
+  typeInput.id = 'tool-type'
+  typeInput.className = 'text-input'
+  ;[
+    ['workflow', 'Workflow'],
+    ['cli', 'CLI / Shell'],
+    ['http', 'HTTP API'],
+    ['desktop', 'Desktop-Aktion'],
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = label
+    typeInput.appendChild(option)
+  })
+  typeField.append(typeLabel, typeInput)
+
+  const commandField = document.createElement('label')
+  commandField.className = 'field'
+  const commandLabel = document.createElement('span')
+  commandLabel.textContent = 'Command / Programm'
+  const commandInput = document.createElement('input')
+  commandInput.id = 'tool-command'
+  commandInput.className = 'text-input'
+  commandInput.placeholder = 'z. B. qgis, python, bash, qgis.exe'
+  commandField.append(commandLabel, commandInput)
+
+  const argumentsField = document.createElement('label')
+  argumentsField.className = 'field'
+  const argumentsLabel = document.createElement('span')
+  argumentsLabel.textContent = 'Argumente'
+  const argumentsInput = document.createElement('textarea')
+  argumentsInput.id = 'tool-arguments'
+  argumentsInput.className = 'composer-input'
+  argumentsInput.style.minHeight = '88px'
+  argumentsInput.placeholder = 'Argumente, je Zeile eines oder als Freitext.'
+  argumentsField.append(argumentsLabel, argumentsInput)
+
+  const workingDirectoryField = document.createElement('label')
+  workingDirectoryField.className = 'field'
+  const workingDirectoryLabel = document.createElement('span')
+  workingDirectoryLabel.textContent = 'Arbeitsverzeichnis'
+  const workingDirectoryInput = document.createElement('input')
+  workingDirectoryInput.id = 'tool-working-directory'
+  workingDirectoryInput.className = 'text-input'
+  workingDirectoryInput.placeholder = '/pfad/zum/projekt'
+  workingDirectoryField.append(workingDirectoryLabel, workingDirectoryInput)
+
+  const endpointField = document.createElement('label')
+  endpointField.className = 'field'
+  const endpointLabel = document.createElement('span')
+  endpointLabel.textContent = 'HTTP Endpoint'
+  const endpointInput = document.createElement('input')
+  endpointInput.id = 'tool-endpoint'
+  endpointInput.className = 'text-input'
+  endpointInput.placeholder = 'https://api.example.com/execute'
+  endpointField.append(endpointLabel, endpointInput)
+
+  const methodField = document.createElement('label')
+  methodField.className = 'field'
+  const methodLabel = document.createElement('span')
+  methodLabel.textContent = 'HTTP Methode'
+  const methodInput = document.createElement('select')
+  methodInput.id = 'tool-method'
+  methodInput.className = 'text-input'
+  ;['', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'].forEach((value) => {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = value || 'auto'
+    methodInput.appendChild(option)
+  })
+  methodField.append(methodLabel, methodInput)
+
+  const platformField = document.createElement('label')
+  platformField.className = 'field'
+  const platformLabel = document.createElement('span')
+  platformLabel.textContent = 'Plattform'
+  const platformInput = document.createElement('select')
+  platformInput.id = 'tool-platform'
+  platformInput.className = 'text-input'
+  ;[
+    ['', 'Alle'],
+    ['linux', 'Linux'],
+    ['macos', 'Mac'],
+    ['windows', 'Windows'],
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = label
+    platformInput.appendChild(option)
+  })
+  platformField.append(platformLabel, platformInput)
+
+  const timeoutField = document.createElement('label')
+  timeoutField.className = 'field'
+  const timeoutLabel = document.createElement('span')
+  timeoutLabel.textContent = 'Timeout in Sekunden'
+  const timeoutInput = document.createElement('input')
+  timeoutInput.id = 'tool-timeout-seconds'
+  timeoutInput.className = 'text-input'
+  timeoutInput.type = 'number'
+  timeoutInput.min = '1'
+  timeoutInput.step = '1'
+  timeoutInput.placeholder = '60'
+  timeoutField.append(timeoutLabel, timeoutInput)
+
+  const confirmationRow = document.createElement('label')
+  confirmationRow.className = 'tool-enabled-row'
+  const confirmationInput = document.createElement('input')
+  confirmationInput.type = 'checkbox'
+  confirmationInput.id = 'tool-requires-confirmation'
+  const confirmationLabel = document.createElement('span')
+  confirmationLabel.textContent = 'Vor Ausführung bestätigen'
+  confirmationRow.append(confirmationInput, confirmationLabel)
+
+  const parametersField = document.createElement('label')
+  parametersField.className = 'field'
+  const parametersLabel = document.createElement('span')
+  parametersLabel.textContent = 'Zusätzliche Parameter (JSON)'
+  const parametersInput = document.createElement('textarea')
+  parametersInput.id = 'tool-parameters'
+  parametersInput.className = 'composer-input'
+  parametersInput.style.minHeight = '120px'
+  parametersInput.placeholder = '{"key":"value"}'
+  parametersField.append(parametersLabel, parametersInput)
+
   const enabledRow = document.createElement('label')
   enabledRow.className = 'tool-enabled-row'
   const enabledInput = document.createElement('input')
@@ -3483,7 +3644,7 @@ function buildToolManagerContent(project) {
   formHint.className = 'muted-copy'
   formHint.textContent = 'Geteilte Tools sind für alle Projekte sichtbar und werden im Chat automatisch priorisiert.'
 
-  formSection.append(formHeading, nameField, descriptionField, instructionsField, enabledRow, formActions, uploadRow, formHint)
+  formSection.append(formHeading, nameField, descriptionField, instructionsField, typeField, commandField, argumentsField, workingDirectoryField, endpointField, methodField, platformField, timeoutField, confirmationRow, parametersField, enabledRow, formActions, uploadRow, formHint)
   listSection.append(listHeading, toolList)
   wrapper.append(intro, listSection, formSection)
 
@@ -3496,6 +3657,16 @@ function buildToolManagerContent(project) {
     nameInput.value = ''
     descriptionInput.value = ''
     instructionsInput.value = ''
+    typeInput.value = 'workflow'
+    commandInput.value = ''
+    argumentsInput.value = ''
+    workingDirectoryInput.value = ''
+    endpointInput.value = ''
+    methodInput.value = ''
+    platformInput.value = ''
+    timeoutInput.value = ''
+    confirmationInput.checked = false
+    parametersInput.value = ''
     enabledInput.checked = true
     saveButton.textContent = 'Tool speichern'
   }
@@ -3506,6 +3677,16 @@ function buildToolManagerContent(project) {
     nameInput.value = tool.name || ''
     descriptionInput.value = tool.description || ''
     instructionsInput.value = tool.instructions || ''
+    typeInput.value = tool.tool_type || 'workflow'
+    commandInput.value = tool.command || ''
+    argumentsInput.value = tool.arguments || ''
+    workingDirectoryInput.value = tool.working_directory || ''
+    endpointInput.value = tool.endpoint || ''
+    methodInput.value = tool.method || ''
+    platformInput.value = tool.platform || ''
+    timeoutInput.value = tool.timeout_seconds ? String(tool.timeout_seconds) : ''
+    confirmationInput.checked = Boolean(tool.requires_confirmation)
+    parametersInput.value = tool.parameters ? JSON.stringify(tool.parameters, null, 2) : ''
     enabledInput.checked = Boolean(tool.is_enabled)
     saveButton.textContent = 'Änderungen speichern'
     nameInput.focus()
@@ -3614,16 +3795,38 @@ function buildToolManagerContent(project) {
     const name = nameInput.value.trim()
     const description = descriptionInput.value.trim()
     const instructions = instructionsInput.value.trim()
+    const parametersRaw = parametersInput.value.trim()
+    let parameters = null
 
     if (!name || !instructions) {
       showToast('Name und Anweisungen sind erforderlich.', 'error')
       return
     }
 
+    if (parametersRaw) {
+      try {
+        parameters = JSON.parse(parametersRaw)
+      } catch (error) {
+        showToast('JSON-Parameter sind ungültig.', 'error')
+        return
+      }
+    }
+
+    const timeoutSeconds = timeoutInput.value.trim() ? Number(timeoutInput.value.trim()) : null
     const payload = {
       name,
       description: description || null,
       instructions,
+      tool_type: typeInput.value || 'workflow',
+      command: commandInput.value.trim() || null,
+      arguments: argumentsInput.value.trim() || null,
+      working_directory: workingDirectoryInput.value.trim() || null,
+      endpoint: endpointInput.value.trim() || null,
+      method: methodInput.value.trim() || null,
+      platform: platformInput.value.trim() || null,
+      timeout_seconds: Number.isFinite(timeoutSeconds) ? timeoutSeconds : null,
+      requires_confirmation: confirmationInput.checked,
+      parameters,
       is_enabled: enabledInput.checked,
     }
 
@@ -4162,6 +4365,8 @@ function bindComposerEvents() {
     }
   })
 
+  els.createToolFromChatBtn?.addEventListener('click', () => createConversationArtifact('tool'))
+  els.createSkillFromChatBtn?.addEventListener('click', () => createConversationArtifact('skill'))
   els.sendChat.addEventListener('click', sendChat)
 }
 

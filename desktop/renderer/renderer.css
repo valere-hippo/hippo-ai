@@ -1298,21 +1298,25 @@ textarea {
   border-color: rgba(255, 107, 122, 0.18);
 }
 
-.skill-manager {
+.skill-manager,
+.tool-manager {
   gap: 16px;
 }
 
-.skill-manager-section {
+.skill-manager-section,
+.tool-manager-section {
   display: grid;
   gap: 10px;
 }
 
-.skill-list {
+.skill-list,
+.tool-list {
   display: grid;
   gap: 10px;
 }
 
-.skill-card {
+.skill-card,
+.tool-card {
   display: grid;
   gap: 10px;
   padding: 13px;
@@ -1322,43 +1326,51 @@ textarea {
   backdrop-filter: blur(12px);
 }
 
-.skill-card.active {
+.skill-card.active,
+.tool-card.active {
   border-color: rgba(99, 215, 191, 0.24);
   background: linear-gradient(180deg, rgba(99, 215, 191, 0.06), rgba(255, 255, 255, 0.03));
 }
 
-.skill-card-top {
+.skill-card-top,
+.tool-card-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
 }
 
-.skill-card-title {
+.skill-card-title,
+.tool-card-title {
   font-weight: 700;
   color: var(--text);
 }
 
 .skill-card-subtitle,
-.skill-card-instructions {
+.skill-card-instructions,
+.tool-card-subtitle,
+.tool-card-instructions {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.55;
   white-space: pre-wrap;
 }
 
-.skill-card-instructions {
+.skill-card-instructions,
+.tool-card-instructions {
   color: var(--text);
   opacity: 0.92;
 }
 
-.skill-card-actions {
+.skill-card-actions,
+.tool-card-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.skill-form {
+.skill-form,
+.tool-form {
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -1367,19 +1379,21 @@ textarea {
   background: rgba(255, 255, 255, 0.03);
 }
 
-.skill-form-actions {
+.skill-form-actions,
+.tool-form-actions {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
   flex-wrap: wrap;
 }
 
-.skill-enabled-row {
+.skill-enabled-row,
+.tool-enabled-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--muted);
   font-size: 13px;
+  color: var(--muted);
 }
 
 .project-file-row {

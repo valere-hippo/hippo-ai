@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api import auth, users, admin_users, project_folders, projects, chat, files, permissions, audio, search
+from app.api import auth, users, admin_users, project_folders, projects, chat, files, permissions, audio
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
@@ -30,7 +30,6 @@ try:
     api_router.include_router(admin_overview.router)
 except Exception:
     pass
-api_router.include_router(search.router)
 # enhanced chat that consults project context and tools
 try:
     from app.api import chat_enhanced

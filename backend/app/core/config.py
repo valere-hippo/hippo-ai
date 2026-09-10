@@ -61,10 +61,6 @@ class Settings(BaseSettings):
     stt_compute_type: str = "int8"
     stt_language: str | None = "de"
 
-    # Optional Hippo embedding endpoint
-    hippo_embedding_url: str | None = None
-    hippo_embedding_key: str | None = None
-
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

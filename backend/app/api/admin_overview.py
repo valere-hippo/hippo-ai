@@ -4,10 +4,9 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 
 from app.api.dependencies import DbSession, get_current_user
-from app.core.config import settings
 from app.models.chat import ChatMessage, Conversation
 from app.models.permission import ProjectPermission
 from app.models.project import Project
@@ -17,7 +16,6 @@ from app.models.model_registry import ModelRegistry
 from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/admin/overview", tags=["admin-overview"])
-EMBEDDINGS_TABLE = f"{settings.postgres_schema}.ai_embeddings"
 
 
 @router.get("/")
@@ -42,13 +40,8 @@ async def admin_overview(db: DbSession, current_user=Depends(get_current_user)):
         "model_errors": int(
             await db.scalar(select(func.count()).select_from(ModelRegistry).where(ModelRegistry.status != "ok")) or 0
         ),
+        "embeddings": 0,
     }
-
-    try:
-        embeddings_result = await db.execute(text(f"SELECT count(*) FROM {EMBEDDINGS_TABLE}"))
-        counts["embeddings"] = int(embeddings_result.scalar_one() or 0)
-    except Exception:
-        counts["embeddings"] = 0
 
     recent_projects = await db.execute(select(Project).order_by(Project.created_at.desc()).limit(8))
     recent_skills = await db.execute(select(ProjectSkill).order_by(ProjectSkill.created_at.desc()).limit(8))
