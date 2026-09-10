@@ -238,28 +238,43 @@ async def create_tool_from_chat(payload: dict, db: AsyncSession, current_user=De
         if message.role == "user":
             last_user_message = content
 
-    name = (conversation.title or "").strip() or (last_user_message or "Unbenanntes Tool").splitlines()[0][:120]
-    description = (last_user_message or "").strip()[:240] or None
-    instructions = "\n\n".join([
+    name = str(payload.get("name") or "").strip() or (conversation.title or "").strip() or (last_user_message or "Unbenanntes Tool").splitlines()[0][:120]
+    description = str(payload.get("description") or "").strip() or ((last_user_message or "").strip()[:240] or None)
+    instructions = str(payload.get("instructions") or "").strip() or "\n\n".join([
         "Aus dem Chat abgeleitetes Tool.",
         f"Konversation: {conversation.title or f'#{conversation.id}'}",
         "Transkript:",
         "\n".join(transcript_lines) if transcript_lines else "(keine Nachrichten gefunden)",
     ])
 
+    def _maybe_int(value):
+        try:
+            return int(value) if value not in (None, "") else None
+        except Exception:
+            return None
+
+    parameters = payload.get("parameters")
+    if isinstance(parameters, str):
+        import json
+        try:
+            parameters = json.loads(parameters)
+        except Exception:
+            parameters = None
+
     stmt = insert(AITool).values(
         name=name,
         description=description,
         instructions=instructions,
-        tool_type="workflow",
-        arguments=None,
-        working_directory=None,
-        endpoint=None,
-        method=None,
-        platform=None,
-        timeout_seconds=None,
-        requires_confirmation=False,
-        is_enabled=True,
+        tool_type=str(payload.get("tool_type") or "workflow").strip() or "workflow",
+        arguments=str(payload.get("arguments") or "").strip() or None,
+        working_directory=str(payload.get("working_directory") or "").strip() or None,
+        endpoint=str(payload.get("endpoint") or "").strip() or None,
+        method=(str(payload.get("method") or "").strip().upper() or None),
+        platform=(str(payload.get("platform") or "").strip().lower() or None),
+        timeout_seconds=_maybe_int(payload.get("timeout_seconds")),
+        requires_confirmation=bool(payload.get("requires_confirmation")),
+        parameters=parameters or {},
+        is_enabled=bool(payload.get("is_enabled", True)),
     ).returning(AITool)
     try:
         result = await db.execute(stmt)

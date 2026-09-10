@@ -252,9 +252,9 @@ async def create_skill_from_chat(payload: dict, db: DbSession, current_user=Depe
         if message.role == "user":
             last_user_message = content
 
-    name = (conversation.title or "").strip() or (last_user_message or "Unbenannte Skill").splitlines()[0][:120]
-    description = (last_user_message or "").strip()[:240] or None
-    instructions = "\n\n".join([
+    name = str(payload.get("name") or "").strip() or (conversation.title or "").strip() or (last_user_message or "Unbenannte Skill").splitlines()[0][:120]
+    description = str(payload.get("description") or "").strip() or ((last_user_message or "").strip()[:240] or None)
+    instructions = str(payload.get("instructions") or "").strip() or "\n\n".join([
         "Aus dem Chat abgeleitete Skill.",
         f"Konversation: {conversation.title or f'#{conversation.id}'}",
         "Transkript:",
@@ -266,7 +266,7 @@ async def create_skill_from_chat(payload: dict, db: DbSession, current_user=Depe
         name=name,
         description=description,
         instructions=instructions,
-        is_enabled=True,
+        is_enabled=bool(payload.get("is_enabled", True)),
     ).returning(ProjectSkill)
     try:
         result = await db.execute(stmt)

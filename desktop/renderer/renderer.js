@@ -1185,6 +1185,44 @@ function renderMessage(role, content, extras = {}) {
   els.chatLog.scrollTop = els.chatLog.scrollHeight
 }
 
+function buildArtifactDraftFromConversation(kind, conversation) {
+  const messages = Array.isArray(conversation?.messages) ? conversation.messages : []
+  const transcript = messages
+    .map((message) => {
+      const role = message.role || 'assistant'
+      const content = String(message.content || '').trim()
+      return content ? `${role.toUpperCase()}: ${content}` : ''
+    })
+    .filter(Boolean)
+    .join('\\n')
+
+  const userMessages = messages.filter((message) => message.role === 'user')
+  const assistantMessages = messages.filter((message) => message.role === 'assistant')
+  const title = String(conversation?.title || '').trim()
+  const fallbackSource = userMessages[0]?.content || assistantMessages[0]?.content || 'Unbenannt'
+  const baseName = title || String(fallbackSource).split('\\n')[0].slice(0, 120)
+
+  const draft = {
+    name: baseName,
+    description: userMessages[0]?.content ? String(userMessages[0].content).slice(0, 240) : '',
+    instructions: transcript || 'Keine Nachrichten gefunden.',
+    tool_type: kind === 'tool' ? 'workflow' : undefined,
+    command: '',
+    arguments: '',
+    working_directory: '',
+    endpoint: '',
+    method: '',
+    platform: '',
+    timeout_seconds: '',
+    requires_confirmation: false,
+    parameters: '',
+    is_enabled: true,
+    transcript,
+  }
+
+  return draft
+}
+
 async function createConversationArtifact(kind) {
   const conversationId = state.currentConversationId
   if (!conversationId) {
@@ -1192,23 +1230,192 @@ async function createConversationArtifact(kind) {
     return
   }
 
-  const endpoint = kind === 'tool' ? '/tools/library/from-chat' : '/skills/library/from-chat'
-  const successMessage = kind === 'tool' ? 'Tool aus dem Chat erstellt' : 'Skill aus dem Chat erstellt'
-
-  showLoader(kind === 'tool' ? 'Tool wird aus dem Chat erstellt...' : 'Skill wird aus dem Chat erstellt...')
+  showLoader(kind === 'tool' ? 'Tool-Vorschau wird geladen...' : 'Skill-Vorschau wird geladen...')
   try {
-    await apiJson(endpoint, {
-      method: 'POST',
-      body: JSON.stringify({ conversation_id: conversationId }),
-    })
-    showToast(successMessage)
+    const conversation = await apiJson(`/chat/conversations/${conversationId}`)
+    const draft = buildArtifactDraftFromConversation(kind, conversation)
+    const content = document.createElement('div')
+    content.className = 'modal-grid'
+
+    const makeField = (labelText, input, className = 'field') => {
+      const field = document.createElement('label')
+      field.className = className
+      const label = document.createElement('span')
+      label.textContent = labelText
+      field.append(label, input)
+      return field
+    }
+
+    const nameInput = document.createElement('input')
+    nameInput.id = 'name'
+    nameInput.className = 'text-input'
+    nameInput.value = draft.name
+    const descriptionInput = document.createElement('textarea')
+    descriptionInput.id = 'description'
+    descriptionInput.className = 'composer-input'
+    descriptionInput.style.minHeight = '80px'
+    descriptionInput.value = draft.description
+    const instructionsInput = document.createElement('textarea')
+    instructionsInput.id = 'instructions'
+    instructionsInput.className = 'composer-input'
+    instructionsInput.style.minHeight = '180px'
+    instructionsInput.value = draft.instructions
+
+    content.append(
+      makeField(kind === 'tool' ? 'Tool-Name' : 'Skill-Name', nameInput),
+      makeField('Kurzbeschreibung', descriptionInput),
+      makeField(kind === 'tool' ? 'Vorschau / Ablauf aus dem Chat' : 'Vorschau / Ablauf aus dem Chat', instructionsInput),
+    )
+
     if (kind === 'tool') {
-      await openToolModal()
-    } else {
-      await openProjectSkillsModal()
+      const typeInput = document.createElement('select')
+      typeInput.id = 'tool_type'
+      typeInput.className = 'text-input'
+      ;[
+        ['workflow', 'Workflow'],
+        ['cli', 'CLI / Shell'],
+        ['http', 'HTTP API'],
+        ['desktop', 'Desktop-Aktion'],
+      ].forEach(([value, label]) => {
+        const option = document.createElement('option')
+        option.value = value
+        option.textContent = label
+        typeInput.appendChild(option)
+      })
+      typeInput.value = draft.tool_type
+
+      const commandInput = document.createElement('input')
+      commandInput.id = 'command'
+      commandInput.className = 'text-input'
+      commandInput.placeholder = 'qgis, python, bash, ...'
+      const argumentsInput = document.createElement('textarea')
+      argumentsInput.id = 'arguments'
+      argumentsInput.className = 'composer-input'
+      argumentsInput.style.minHeight = '80px'
+      argumentsInput.placeholder = 'Optionale Argumente'
+      const workingDirectoryInput = document.createElement('input')
+      workingDirectoryInput.id = 'working_directory'
+      workingDirectoryInput.className = 'text-input'
+      workingDirectoryInput.placeholder = '/pfad/zum/arbeitsordner'
+      const endpointInput = document.createElement('input')
+      endpointInput.id = 'endpoint'
+      endpointInput.className = 'text-input'
+      endpointInput.placeholder = 'https://api.example.com/execute'
+      const methodInput = document.createElement('select')
+      methodInput.id = 'method'
+      methodInput.className = 'text-input'
+      ;['', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'].forEach((value) => {
+        const option = document.createElement('option')
+        option.value = value
+        option.textContent = value || 'auto'
+        methodInput.appendChild(option)
+      })
+      const platformInput = document.createElement('select')
+      platformInput.id = 'platform'
+      platformInput.className = 'text-input'
+      ;['', 'linux', 'macos', 'windows'].forEach((value) => {
+        const option = document.createElement('option')
+        option.value = value
+        option.textContent = value || 'alle'
+        platformInput.appendChild(option)
+      })
+      const timeoutInput = document.createElement('input')
+      timeoutInput.id = 'timeout_seconds'
+      timeoutInput.className = 'text-input'
+      timeoutInput.type = 'number'
+      timeoutInput.min = '1'
+      timeoutInput.step = '1'
+      timeoutInput.placeholder = '60'
+      const parametersInput = document.createElement('textarea')
+      parametersInput.id = 'parameters'
+      parametersInput.className = 'composer-input'
+      parametersInput.style.minHeight = '120px'
+      parametersInput.placeholder = '{"key":"value"}'
+      const confirmationRow = document.createElement('label')
+      confirmationRow.className = 'tool-enabled-row'
+      const confirmationInput = document.createElement('input')
+      confirmationInput.id = 'requires_confirmation'
+      confirmationInput.type = 'checkbox'
+      confirmationInput.checked = false
+      const confirmationLabel = document.createElement('span')
+      confirmationLabel.textContent = 'Vor Ausführung bestätigen'
+      confirmationRow.append(confirmationInput, confirmationLabel)
+
+      content.append(
+        makeField('Tool-Typ', typeInput),
+        makeField('Command / Programm', commandInput),
+        makeField('Argumente', argumentsInput),
+        makeField('Arbeitsverzeichnis', workingDirectoryInput),
+        makeField('HTTP Endpoint', endpointInput),
+        makeField('HTTP Methode', methodInput),
+        makeField('Plattform', platformInput),
+        makeField('Timeout in Sekunden', timeoutInput),
+        makeField('Zusätzliche Parameter (JSON)', parametersInput),
+        confirmationRow,
+      )
+    }
+
+    const result = await openModal({
+      title: kind === 'tool' ? 'Tool aus Chat erstellen' : 'Skill aus Chat erstellen',
+      copy: kind === 'tool'
+        ? 'Hier kannst du die aus der Unterhaltung abgeleitete Tool-Vorschau prüfen und vor dem Speichern anpassen.'
+        : 'Hier kannst du die aus der Unterhaltung abgeleitete Skill-Vorschau prüfen und vor dem Speichern anpassen.',
+      content,
+      submitLabel: 'Erstellen',
+      validate: (values) => Boolean(values.name?.trim() && values.instructions?.trim()),
+    })
+
+    if (!result || !result.name?.trim() || !result.instructions?.trim()) return
+
+    const payload = {
+      conversation_id: conversationId,
+      name: result.name.trim(),
+      description: result.description?.trim() || null,
+      instructions: result.instructions.trim(),
+      is_enabled: true,
+    }
+
+    if (kind === 'tool') {
+      payload.tool_type = result.tool_type || 'workflow'
+      payload.command = result.command?.trim() || null
+      payload.arguments = result.arguments?.trim() || null
+      payload.working_directory = result.working_directory?.trim() || null
+      payload.endpoint = result.endpoint?.trim() || null
+      payload.method = result.method?.trim() || null
+      payload.platform = result.platform?.trim() || null
+      payload.timeout_seconds = result.timeout_seconds ? Number(result.timeout_seconds) : null
+      payload.requires_confirmation = Boolean(result.requires_confirmation)
+      if (result.parameters?.trim()) {
+        try {
+          payload.parameters = JSON.parse(result.parameters)
+        } catch (error) {
+          showToast('JSON-Parameter sind ungültig.', 'error')
+          return
+        }
+      } else {
+        payload.parameters = null
+      }
+    }
+
+    showLoader(kind === 'tool' ? 'Tool wird aus dem Chat erstellt...' : 'Skill wird aus dem Chat erstellt...')
+    try {
+      await apiJson(kind === 'tool' ? '/tools/library/from-chat' : '/skills/library/from-chat', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      showToast(kind === 'tool' ? 'Tool aus dem Chat erstellt' : 'Skill aus dem Chat erstellt')
+      if (kind === 'tool') {
+        await openToolModal()
+      } else {
+        await openProjectSkillsModal()
+      }
+    } catch (error) {
+      showToast(error.message || 'Aktion konnte nicht ausgeführt werden', 'error')
+    } finally {
+      hideLoader()
     }
   } catch (error) {
-    showToast(error.message || 'Aktion konnte nicht ausgeführt werden', 'error')
+    showToast(error.message || 'Vorschau konnte nicht geladen werden', 'error')
   } finally {
     hideLoader()
   }
