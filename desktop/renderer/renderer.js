@@ -4357,7 +4357,10 @@ async function sendChat() {
   )
 
   const project = getContextProject()
-  const projectFolderContext = project ? (state.projectFolderContextCache.get(project.id) || '') : ''
+  let projectFolderContext = ''
+  if (project?.watched_folder) {
+    projectFolderContext = await refreshProjectFolderContext(project)
+  }
   const attachments = state.draftAttachments.map((attachment) => ({
     filename: attachment.filename,
     mime_type: attachment.mime_type,

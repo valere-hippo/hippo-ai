@@ -271,6 +271,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
             "If the user explicitly requests an image or PNG, return a real file block with an image filename instead of prose instructions. If the user only wants analysis or a textual answer, respond in text and do not create an image file.\n"
             "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language.\n"
+            "If project_folder_context is present, treat it as the source of truth for the shared folder contents and do not claim you lack local filesystem access.\n"
             "For shared-folder questions, respond with a detailed structure: overview, visible files, file-by-file details, and conclusion.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
             "If an image, screenshot, or document is attached, rely on the supplied vision summary and any locally extracted text; do not claim that you cannot read attachments.\n"
