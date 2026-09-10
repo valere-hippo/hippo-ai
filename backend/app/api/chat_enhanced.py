@@ -107,6 +107,19 @@ def _infer_desktop_launch_action(message: str, reply_text: str, profile: str | N
     return []
 
 
+def _desktop_agent_off_reply(message: str, profile: str | None = None) -> str:
+    profile_label = {
+        'qgis': 'QGIS',
+        'fledermaus': 'Fledermaus',
+        'bioacoustics': 'Fledermaus-/Akustik',
+        'custom': 'benutzerdefinierte Programme',
+    }.get((profile or '').strip().lower(), 'Programme')
+    return (
+        f"PC-Agent ist aus. Schalte PC-Agent ein, dann kann ich {profile_label} auf deinem PC öffnen, klicken, tippen und steuern. "
+        "Dann kann ich auch hipponalyze, QGIS, Word, Excel oder LibreOffice direkt bedienen."
+    )
+
+
 def _parse_desktop_actions(reply_text: str) -> tuple[str, list[DesktopAction]]:
     payload = _extract_json_object(reply_text)
     if not payload:
@@ -167,6 +180,14 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         )
     )
     await db.commit()
+
+    if not payload.desktop_agent:
+        inferred_launch_actions = _infer_desktop_launch_action(payload.message, payload.message, payload.desktop_profile)
+        if inferred_launch_actions:
+            reply_text = _desktop_agent_off_reply(payload.message, payload.desktop_profile)
+            await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user_id, role='assistant', content=reply_text))
+            await db.commit()
+            return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=[], desktop_actions=[])
 
     conv_title = derive_conversation_title(payload.message, payload.attachments)
     await db.execute(
