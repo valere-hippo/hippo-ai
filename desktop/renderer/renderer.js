@@ -1230,10 +1230,10 @@ async function createConversationArtifact(kind) {
     return
   }
 
-  showLoader(kind === 'tool' ? 'Tool-Vorschau wird geladen...' : 'Skill-Vorschau wird geladen...')
+  showLoader('Vorschau wird geladen...')
   try {
     const conversation = await apiJson(`/chat/conversations/${conversationId}`)
-    const draft = buildArtifactDraftFromConversation(kind, conversation)
+    const draftBase = buildArtifactDraftFromConversation(kind, conversation)
     const content = document.createElement('div')
     content.className = 'modal-grid'
 
@@ -1246,120 +1246,155 @@ async function createConversationArtifact(kind) {
       return field
     }
 
-    const nameInput = document.createElement('input')
-    nameInput.id = 'name'
-    nameInput.className = 'text-input'
-    nameInput.value = draft.name
-    const descriptionInput = document.createElement('textarea')
-    descriptionInput.id = 'description'
-    descriptionInput.className = 'composer-input'
-    descriptionInput.style.minHeight = '80px'
-    descriptionInput.value = draft.description
-    const instructionsInput = document.createElement('textarea')
-    instructionsInput.id = 'instructions'
-    instructionsInput.className = 'composer-input'
-    instructionsInput.style.minHeight = '180px'
-    instructionsInput.value = draft.instructions
+    const artifactKindField = document.createElement('label')
+    artifactKindField.className = 'field'
+    const artifactKindLabel = document.createElement('span')
+    artifactKindLabel.textContent = 'Typ'
+    const artifactKindSelect = document.createElement('select')
+    artifactKindSelect.id = 'artifact_kind'
+    artifactKindSelect.className = 'text-input'
+    ;[
+      ['tool', 'Tool'],
+      ['skill', 'Skill'],
+    ].forEach(([value, label]) => {
+      const option = document.createElement('option')
+      option.value = value
+      option.textContent = label
+      artifactKindSelect.appendChild(option)
+    })
+    artifactKindSelect.value = kind === 'tool' ? 'tool' : 'skill'
+    artifactKindField.append(artifactKindLabel, artifactKindSelect)
 
-    content.append(
-      makeField(kind === 'tool' ? 'Tool-Name' : 'Skill-Name', nameInput),
-      makeField('Kurzbeschreibung', descriptionInput),
-      makeField(kind === 'tool' ? 'Vorschau / Ablauf aus dem Chat' : 'Vorschau / Ablauf aus dem Chat', instructionsInput),
-    )
+    const fieldsContainer = document.createElement('div')
+    fieldsContainer.className = 'modal-grid'
 
-    if (kind === 'tool') {
-      const typeInput = document.createElement('select')
-      typeInput.id = 'tool_type'
-      typeInput.className = 'text-input'
-      ;[
-        ['workflow', 'Workflow'],
-        ['cli', 'CLI / Shell'],
-        ['http', 'HTTP API'],
-        ['desktop', 'Desktop-Aktion'],
-      ].forEach(([value, label]) => {
-        const option = document.createElement('option')
-        option.value = value
-        option.textContent = label
-        typeInput.appendChild(option)
-      })
-      typeInput.value = draft.tool_type
+    const renderFields = (selectedKind) => {
+      fieldsContainer.innerHTML = ''
 
-      const commandInput = document.createElement('input')
-      commandInput.id = 'command'
-      commandInput.className = 'text-input'
-      commandInput.placeholder = 'qgis, python, bash, ...'
-      const argumentsInput = document.createElement('textarea')
-      argumentsInput.id = 'arguments'
-      argumentsInput.className = 'composer-input'
-      argumentsInput.style.minHeight = '80px'
-      argumentsInput.placeholder = 'Optionale Argumente'
-      const workingDirectoryInput = document.createElement('input')
-      workingDirectoryInput.id = 'working_directory'
-      workingDirectoryInput.className = 'text-input'
-      workingDirectoryInput.placeholder = '/pfad/zum/arbeitsordner'
-      const endpointInput = document.createElement('input')
-      endpointInput.id = 'endpoint'
-      endpointInput.className = 'text-input'
-      endpointInput.placeholder = 'https://api.example.com/execute'
-      const methodInput = document.createElement('select')
-      methodInput.id = 'method'
-      methodInput.className = 'text-input'
-      ;['', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'].forEach((value) => {
-        const option = document.createElement('option')
-        option.value = value
-        option.textContent = value || 'auto'
-        methodInput.appendChild(option)
-      })
-      const platformInput = document.createElement('select')
-      platformInput.id = 'platform'
-      platformInput.className = 'text-input'
-      ;['', 'linux', 'macos', 'windows'].forEach((value) => {
-        const option = document.createElement('option')
-        option.value = value
-        option.textContent = value || 'alle'
-        platformInput.appendChild(option)
-      })
-      const timeoutInput = document.createElement('input')
-      timeoutInput.id = 'timeout_seconds'
-      timeoutInput.className = 'text-input'
-      timeoutInput.type = 'number'
-      timeoutInput.min = '1'
-      timeoutInput.step = '1'
-      timeoutInput.placeholder = '60'
-      const parametersInput = document.createElement('textarea')
-      parametersInput.id = 'parameters'
-      parametersInput.className = 'composer-input'
-      parametersInput.style.minHeight = '120px'
-      parametersInput.placeholder = '{"key":"value"}'
-      const confirmationRow = document.createElement('label')
-      confirmationRow.className = 'tool-enabled-row'
-      const confirmationInput = document.createElement('input')
-      confirmationInput.id = 'requires_confirmation'
-      confirmationInput.type = 'checkbox'
-      confirmationInput.checked = false
-      const confirmationLabel = document.createElement('span')
-      confirmationLabel.textContent = 'Vor Ausführung bestätigen'
-      confirmationRow.append(confirmationInput, confirmationLabel)
+      const nameInput = document.createElement('input')
+      nameInput.id = 'name'
+      nameInput.className = 'text-input'
+      nameInput.value = draftBase.name
 
-      content.append(
-        makeField('Tool-Typ', typeInput),
-        makeField('Command / Programm', commandInput),
-        makeField('Argumente', argumentsInput),
-        makeField('Arbeitsverzeichnis', workingDirectoryInput),
-        makeField('HTTP Endpoint', endpointInput),
-        makeField('HTTP Methode', methodInput),
-        makeField('Plattform', platformInput),
-        makeField('Timeout in Sekunden', timeoutInput),
-        makeField('Zusätzliche Parameter (JSON)', parametersInput),
-        confirmationRow,
+      const descriptionInput = document.createElement('textarea')
+      descriptionInput.id = 'description'
+      descriptionInput.className = 'composer-input'
+      descriptionInput.style.minHeight = '80px'
+      descriptionInput.value = draftBase.description
+
+      const instructionsInput = document.createElement('textarea')
+      instructionsInput.id = 'instructions'
+      instructionsInput.className = 'composer-input'
+      instructionsInput.style.minHeight = '180px'
+      instructionsInput.value = draftBase.instructions
+
+      fieldsContainer.append(
+        makeField(selectedKind === 'tool' ? 'Tool-Name' : 'Skill-Name', nameInput),
+        makeField('Kurzbeschreibung', descriptionInput),
+        makeField(selectedKind === 'tool' ? 'Vorschau / Ablauf aus dem Chat' : 'Vorschau / Ablauf aus dem Chat', instructionsInput),
       )
+
+      if (selectedKind === 'tool') {
+        const typeInput = document.createElement('select')
+        typeInput.id = 'tool_type'
+        typeInput.className = 'text-input'
+        ;[
+          ['workflow', 'Workflow'],
+          ['cli', 'CLI / Shell'],
+          ['http', 'HTTP API'],
+          ['desktop', 'Desktop-Aktion'],
+        ].forEach(([value, label]) => {
+          const option = document.createElement('option')
+          option.value = value
+          option.textContent = label
+          typeInput.appendChild(option)
+        })
+        typeInput.value = draftBase.tool_type || 'workflow'
+
+        const commandInput = document.createElement('input')
+        commandInput.id = 'command'
+        commandInput.className = 'text-input'
+        commandInput.placeholder = 'qgis, python, bash, ...'
+        const argumentsInput = document.createElement('textarea')
+        argumentsInput.id = 'arguments'
+        argumentsInput.className = 'composer-input'
+        argumentsInput.style.minHeight = '80px'
+        argumentsInput.placeholder = 'Optionale Argumente'
+        const workingDirectoryInput = document.createElement('input')
+        workingDirectoryInput.id = 'working_directory'
+        workingDirectoryInput.className = 'text-input'
+        workingDirectoryInput.placeholder = '/pfad/zum/arbeitsordner'
+        const endpointInput = document.createElement('input')
+        endpointInput.id = 'endpoint'
+        endpointInput.className = 'text-input'
+        endpointInput.placeholder = 'https://api.example.com/execute'
+        const methodInput = document.createElement('select')
+        methodInput.id = 'method'
+        methodInput.className = 'text-input'
+        ;['', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'].forEach((value) => {
+          const option = document.createElement('option')
+          option.value = value
+          option.textContent = value || 'auto'
+          methodInput.appendChild(option)
+        })
+        const platformInput = document.createElement('select')
+        platformInput.id = 'platform'
+        platformInput.className = 'text-input'
+        ;['', 'linux', 'macos', 'windows'].forEach((value) => {
+          const option = document.createElement('option')
+          option.value = value
+          option.textContent = value || 'alle'
+          platformInput.appendChild(option)
+        })
+        const timeoutInput = document.createElement('input')
+        timeoutInput.id = 'timeout_seconds'
+        timeoutInput.className = 'text-input'
+        timeoutInput.type = 'number'
+        timeoutInput.min = '1'
+        timeoutInput.step = '1'
+        timeoutInput.placeholder = '60'
+        const parametersInput = document.createElement('textarea')
+        parametersInput.id = 'parameters'
+        parametersInput.className = 'composer-input'
+        parametersInput.style.minHeight = '120px'
+        parametersInput.placeholder = '{"key":"value"}'
+        const confirmationRow = document.createElement('label')
+        confirmationRow.className = 'tool-enabled-row'
+        const confirmationInput = document.createElement('input')
+        confirmationInput.id = 'requires_confirmation'
+        confirmationInput.type = 'checkbox'
+        confirmationInput.checked = false
+        const confirmationLabel = document.createElement('span')
+        confirmationLabel.textContent = 'Vor Ausführung bestätigen'
+        confirmationRow.append(confirmationInput, confirmationLabel)
+
+        fieldsContainer.append(
+          makeField('Tool-Typ', typeInput),
+          makeField('Command / Programm', commandInput),
+          makeField('Argumente', argumentsInput),
+          makeField('Arbeitsverzeichnis', workingDirectoryInput),
+          makeField('HTTP Endpoint', endpointInput),
+          makeField('HTTP Methode', methodInput),
+          makeField('Plattform', platformInput),
+          makeField('Timeout in Sekunden', timeoutInput),
+          makeField('Zusätzliche Parameter (JSON)', parametersInput),
+          confirmationRow,
+        )
+      }
     }
 
+    renderFields(artifactKindSelect.value)
+    artifactKindSelect.addEventListener('change', () => renderFields(artifactKindSelect.value))
+
+    const selectorHint = document.createElement('div')
+    selectorHint.className = 'muted-copy'
+    selectorHint.textContent = 'Wähle hier direkt, ob die Unterhaltung als Tool oder Skill gespeichert werden soll.'
+
+    content.append(artifactKindField, selectorHint, fieldsContainer)
+
     const result = await openModal({
-      title: kind === 'tool' ? 'Tool aus Chat erstellen' : 'Skill aus Chat erstellen',
-      copy: kind === 'tool'
-        ? 'Hier kannst du die aus der Unterhaltung abgeleitete Tool-Vorschau prüfen und vor dem Speichern anpassen.'
-        : 'Hier kannst du die aus der Unterhaltung abgeleitete Skill-Vorschau prüfen und vor dem Speichern anpassen.',
+      title: 'Artefakt aus Chat erstellen',
+      copy: 'Prüfe die Vorschau, wähle den Typ und passe die Felder vor dem Speichern an.',
       content,
       submitLabel: 'Erstellen',
       validate: (values) => Boolean(values.name?.trim() && values.instructions?.trim()),
@@ -1367,6 +1402,7 @@ async function createConversationArtifact(kind) {
 
     if (!result || !result.name?.trim() || !result.instructions?.trim()) return
 
+    const selectedKind = result.artifact_kind === 'skill' ? 'skill' : 'tool'
     const payload = {
       conversation_id: conversationId,
       name: result.name.trim(),
@@ -1375,7 +1411,7 @@ async function createConversationArtifact(kind) {
       is_enabled: true,
     }
 
-    if (kind === 'tool') {
+    if (selectedKind === 'tool') {
       payload.tool_type = result.tool_type || 'workflow'
       payload.command = result.command?.trim() || null
       payload.arguments = result.arguments?.trim() || null
@@ -1397,14 +1433,14 @@ async function createConversationArtifact(kind) {
       }
     }
 
-    showLoader(kind === 'tool' ? 'Tool wird aus dem Chat erstellt...' : 'Skill wird aus dem Chat erstellt...')
+    showLoader(selectedKind === 'tool' ? 'Tool wird aus dem Chat erstellt...' : 'Skill wird aus dem Chat erstellt...')
     try {
-      await apiJson(kind === 'tool' ? '/tools/library/from-chat' : '/skills/library/from-chat', {
+      await apiJson(selectedKind === 'tool' ? '/tools/library/from-chat' : '/skills/library/from-chat', {
         method: 'POST',
         body: JSON.stringify(payload),
       })
-      showToast(kind === 'tool' ? 'Tool aus dem Chat erstellt' : 'Skill aus dem Chat erstellt')
-      if (kind === 'tool') {
+      showToast(selectedKind === 'tool' ? 'Tool aus dem Chat erstellt' : 'Skill aus dem Chat erstellt')
+      if (selectedKind === 'tool') {
         await openToolModal()
       } else {
         await openProjectSkillsModal()
@@ -1420,7 +1456,6 @@ async function createConversationArtifact(kind) {
     hideLoader()
   }
 }
-
 
 async function openMessageEditModal(message) {
   if (!message?.id) return
@@ -4133,7 +4168,7 @@ function openModal({ title, copy, content, submitLabel, extraActions = [], width
       const values = {}
       const inputs = content.querySelectorAll('input, select, textarea')
       inputs.forEach((input) => {
-        values[input.id] = input.value.trim()
+        values[input.id] = input.type === 'checkbox' ? input.checked : input.value.trim()
       })
       confirm.disabled = !validate(values)
     }
@@ -4154,7 +4189,7 @@ function openModal({ title, copy, content, submitLabel, extraActions = [], width
       const values = {}
       const inputs = content.querySelectorAll('input, select, textarea')
       inputs.forEach((input) => {
-        values[input.id] = input.value.trim()
+        values[input.id] = input.type === 'checkbox' ? input.checked : input.value.trim()
       })
       overlay.remove()
       resolve(values)
