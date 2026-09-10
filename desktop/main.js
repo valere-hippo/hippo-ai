@@ -285,29 +285,29 @@ function getAppPreset(appKey) {
   const key = String(appKey || '').trim().toLowerCase()
   const presets = {
     hipponalyze: {
-      windows: [process.env.HIPPONALYZE_WINDOWS_EXE || 'hipponalyze.exe', 'hipponalyze'],
-      macos: [process.env.HIPPONALYZE_MAC_APP || 'hipponalyze'],
-      linux: [process.env.HIPPONALYZE_LINUX_CMD || 'hipponalyze'],
+      windows: ['hipponalyze.exe', 'hipponalyze'],
+      macos: ['hipponalyze'],
+      linux: ['hipponalyze'],
     },
     qgis: {
-      windows: [process.env.QGIS_WINDOWS_EXE || 'QGIS.exe', process.env.QGIS_LTR_WINDOWS_EXE || 'qgis-ltr-bin.exe', 'qgis-bin.exe', 'qgis.exe', 'qgis'],
-      macos: [process.env.QGIS_MAC_APP || 'QGIS'],
-      linux: [process.env.QGIS_LINUX_CMD || 'qgis', 'qgis-ltr'],
+      windows: ['QGIS.exe', 'qgis-ltr-bin.exe', 'qgis-bin.exe', 'qgis.exe', 'qgis'],
+      macos: ['QGIS'],
+      linux: ['qgis', 'qgis-ltr'],
     },
     word: {
-      windows: [process.env.WORD_WINDOWS_EXE || 'WINWORD.EXE', 'winword.exe'],
-      macos: [process.env.WORD_MAC_APP || 'Microsoft Word'],
-      linux: [process.env.LIBREOFFICE_CMD || 'libreoffice', 'soffice'],
+      windows: ['WINWORD.EXE', 'winword.exe', 'word'],
+      macos: ['Microsoft Word'],
+      linux: ['libreoffice', 'soffice'],
     },
     excel: {
-      windows: [process.env.EXCEL_WINDOWS_EXE || 'EXCEL.EXE', 'excel.exe'],
-      macos: [process.env.EXCEL_MAC_APP || 'Microsoft Excel'],
-      linux: [process.env.LIBREOFFICE_CMD || 'libreoffice', 'soffice'],
+      windows: ['EXCEL.EXE', 'excel.exe', 'excel'],
+      macos: ['Microsoft Excel'],
+      linux: ['libreoffice', 'soffice'],
     },
     libreoffice: {
-      windows: [process.env.LIBREOFFICE_WINDOWS_EXE || 'soffice.exe', 'libreoffice.exe'],
-      macos: [process.env.LIBREOFFICE_MAC_APP || 'LibreOffice'],
-      linux: [process.env.LIBREOFFICE_CMD || 'libreoffice', 'soffice'],
+      windows: ['soffice.exe', 'libreoffice.exe', 'soffice', 'libreoffice'],
+      macos: ['LibreOffice'],
+      linux: ['libreoffice', 'soffice'],
     },
   }
   return presets[key] || null
