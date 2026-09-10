@@ -100,7 +100,7 @@ def _build_vision_messages(user_message: str | None, attachment: Any) -> list[di
 async def _call_vision_model(user_message: str | None, attachment: Any) -> str:
     vision_url = _normalize_vision_base_url(settings.hippo_vision_url or settings.hippo_api_url)
     api_key = (settings.hippo_api_key or "").strip()
-    if not vision_url or not api_key or not attachment_is_image(attachment):
+    if not vision_url or not attachment_is_image(attachment):
         return ""
 
     messages = _build_vision_messages(user_message, attachment)
@@ -113,16 +113,16 @@ async def _call_vision_model(user_message: str | None, attachment: Any) -> str:
         "max_tokens": 700,
         "temperature": 0.1,
     }
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(
                 vision_url,
                 json=payload,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
+                headers=headers,
             )
             response.raise_for_status()
             data = response.json()

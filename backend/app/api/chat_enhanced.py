@@ -23,7 +23,6 @@ from app.services.project_tools import build_tools_context
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
-from app.services.model_registry import resolve_chat_max_tokens, resolve_chat_model_name
 import base64
 import json
 
@@ -323,19 +322,17 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         pass
 
     # call Hippo chat completions
-    if not (settings.hippo_api_url and settings.hippo_api_key):
-        raise HTTPException(status_code=503, detail='Die Hippo-API ist nicht konfiguriert.')
+    if not settings.hippo_api_url:
+        raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
 
     async with httpx.AsyncClient(timeout=60.0) as client:
-        headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
-        model_name = await resolve_chat_model_name(db, settings.hippo_model)
-        max_tokens = await resolve_chat_max_tokens(
-            db,
-            settings.hippo_response_max_tokens,
-            settings.hippo_response_max_tokens_long,
-        )
+        headers = {"Content-Type": "application/json"}
+        if settings.hippo_api_key:
+            headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
+        model_name = settings.hippo_model
+        max_tokens = settings.hippo_response_max_tokens
         if payload.attachments or conv_project is not None:
-            max_tokens = min(max_tokens, settings.hippo_response_max_tokens_long)
+            max_tokens = min(settings.hippo_response_max_tokens_long, max(max_tokens, 512))
         payload_h = {
             "model": model_name,
             "messages": hippo_messages,

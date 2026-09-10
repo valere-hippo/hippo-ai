@@ -23,7 +23,6 @@ from app.services.project_tools import build_tools_context
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
-from app.services.model_registry import resolve_chat_max_tokens, resolve_chat_model_name
 import base64
 
 router = APIRouter(prefix="/chat", tags=["chat"]) 
@@ -246,45 +245,43 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     # Call Hippo model endpoint if configured (preferred)
     import httpx
     reply_text = ''
-    if settings.hippo_api_url and settings.hippo_api_key:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            headers = {"Authorization": f"Bearer {settings.hippo_api_key}", "Content-Type": "application/json"}
-            model_name = await resolve_chat_model_name(db, settings.hippo_model)
-            max_tokens = await resolve_chat_max_tokens(
-                db,
-                settings.hippo_response_max_tokens,
-                settings.hippo_response_max_tokens_long,
-            )
-            if payload.attachments or conv_project is not None:
-                max_tokens = min(max_tokens, settings.hippo_response_max_tokens_long)
-            model_payload = {
-                "model": model_name,
-                "messages": hippo_messages,
-                "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
-                "max_tokens": max_tokens,
-            }
+    if not settings.hippo_api_url:
+        raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        headers = {"Content-Type": "application/json"}
+        if settings.hippo_api_key:
+            headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
+        model_name = settings.hippo_model
+        max_tokens = settings.hippo_response_max_tokens
+        if payload.attachments or conv_project is not None:
+            max_tokens = min(settings.hippo_response_max_tokens_long, max(max_tokens, 512))
+        model_payload = {
+            "model": model_name,
+            "messages": hippo_messages,
+            "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
+            "max_tokens": max_tokens,
+        }
+        try:
+            r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=model_payload, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            if isinstance(data, dict) and data.get('choices'):
+                reply_text = data['choices'][0]['message']['content']
+            else:
+                reply_text = str(data)
+        except httpx.HTTPStatusError as exc:
+            body = ""
             try:
-                r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=model_payload, headers=headers)
-                r.raise_for_status()
-                data = r.json()
-                if isinstance(data, dict) and data.get('choices'):
-                    reply_text = data['choices'][0]['message']['content']
-                else:
-                    reply_text = str(data)
-            except httpx.HTTPStatusError as exc:
-                body = ""
-                try:
-                    body = exc.response.text[:500]
-                except Exception:
-                    pass
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
-                )
-            except Exception as e:
-                raise HTTPException(status_code=502, detail=f"Hippo API error: {e}")
-    else:
-        raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_API_URL und HIPPO_API_KEY setzen.")
+                body = exc.response.text[:500]
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=502,
+                detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
+            )
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Hippo API error: {e}")
 
     # sanitize assistant reply: remove any <think>...</think> reasoning tags
     try:
