@@ -377,11 +377,36 @@ function getContextProject() {
   return state.projects.find((project) => project.id === state.selectedProjectId) || null
 }
 
+function projectFolderConsentKey(folder) {
+  return `hippo.folder.consent:${String(folder || '').trim()}`
+}
+
+function hasProjectFolderConsent(folder) {
+  return localStorage.getItem(projectFolderConsentKey(folder)) === '1'
+}
+
+function requestProjectFolderConsent(project) {
+  const folder = String(project?.watched_folder || '').trim()
+  if (!folder) return false
+  if (hasProjectFolderConsent(folder)) return true
+  const accepted = window.confirm(
+    `Hippo AI benötigt ausdrücklich Lese- und Schreibzugriff auf den gemeinsamen Ordner:\n\n${folder}\n\nErlaubst du diesen Zugriff?`
+  )
+  if (accepted) {
+    localStorage.setItem(projectFolderConsentKey(folder), '1')
+  }
+  return accepted
+}
+
 async function refreshProjectFolderContext(project, { force = false } = {}) {
   if (!project?.id) return ''
   const cached = state.projectFolderContextCache.get(project.id)
   if (cached && !force) return cached
   if (!project.watched_folder || !window.electron?.inspectProjectFolder) {
+    state.projectFolderContextCache.set(project.id, '')
+    return ''
+  }
+  if (!requestProjectFolderConsent(project)) {
     state.projectFolderContextCache.set(project.id, '')
     return ''
   }
