@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.dependencies import DbSession, get_current_user
 from app.models.permission import PermissionLevel
 from app.models.project import Project
+from app.models.chat import Conversation, ChatMessage
 from app.models.skill import ProjectSkill
 from app.schemas.skill import ProjectSkillCreate, ProjectSkillResponse, ProjectSkillUpdate
 
@@ -219,6 +220,61 @@ async def upload_skill_markdown(db: DbSession, file: UploadFile = File(...), cur
     result = await db.execute(stmt)
     await db.commit()
     return result.scalar_one()
+
+
+@library_router.post("/library/from-chat", response_model=ProjectSkillResponse, status_code=status.HTTP_201_CREATED)
+async def create_skill_from_chat(payload: dict, db: DbSession, current_user=Depends(get_current_user)):
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
+
+    conversation_id = int(payload.get("conversation_id") or 0)
+    if conversation_id <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="conversation_id fehlt.")
+
+    conv_result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conversation = conv_result.scalar_one_or_none()
+    if conversation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Konversation nicht gefunden.")
+
+    msg_result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.conversation_id == conversation_id)
+        .order_by(ChatMessage.created_at.asc())
+    )
+    messages = msg_result.scalars().all()
+    transcript_lines = []
+    last_user_message = None
+    for message in messages:
+        content = (message.content or "").strip()
+        if not content:
+            continue
+        transcript_lines.append(f"{message.role.upper()}: {content}")
+        if message.role == "user":
+            last_user_message = content
+
+    name = (conversation.title or "").strip() or (last_user_message or "Unbenannte Skill").splitlines()[0][:120]
+    description = (last_user_message or "").strip()[:240] or None
+    instructions = "\n\n".join([
+        "Aus dem Chat abgeleitete Skill.",
+        f"Konversation: {conversation.title or f'#{conversation.id}'}",
+        "Transkript:",
+        "\n".join(transcript_lines) if transcript_lines else "(keine Nachrichten gefunden)",
+    ])
+
+    stmt = insert(ProjectSkill).values(
+        project_id=None,
+        name=name,
+        description=description,
+        instructions=instructions,
+        is_enabled=True,
+    ).returning(ProjectSkill)
+    try:
+        result = await db.execute(stmt)
+        await db.commit()
+        return result.scalar_one()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Eine Skill mit diesem Namen existiert bereits.")
 
 
 @library_router.patch("/library/{skill_id}", response_model=ProjectSkillResponse)

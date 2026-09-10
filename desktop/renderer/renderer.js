@@ -56,7 +56,7 @@ const els = {
   accountMeta: document.getElementById('account-meta'),
   logoutBtn: document.getElementById('logout-btn'),
   profileBtn: document.getElementById('profile-btn'),
-  projectEmbedBtn: document.getElementById('project-embed-btn'),
+  projectToolsBtn: document.getElementById('project-tools-btn'),
   projectSkillsBtn: document.getElementById('project-skills-btn'),
   markdownImportBtn: document.getElementById('markdown-import-btn'),
   pageTitle: document.getElementById('page-title'),
@@ -687,8 +687,8 @@ function updatePresence() {
 function renderContext() {
   const project = getContextProject()
   els.projectPill.textContent = project ? project.name : 'Global'
-  if (els.projectEmbedBtn) {
-    els.projectEmbedBtn.disabled = !project
+  if (els.projectToolsBtn) {
+    els.projectToolsBtn.disabled = !project
   }
   if (els.projectSkillsBtn) {
     els.projectSkillsBtn.disabled = !project
@@ -1353,7 +1353,7 @@ function renderDbStatus() {
       <span class="context-pill">U ${counts.users || 0}</span>
       <span class="context-pill">P ${counts.projects || 0}</span>
       <span class="context-pill">S ${counts.shared_skills || 0}</span>
-      <span class="context-pill">E ${counts.embeddings || 0}</span>
+      <span class="context-pill">E ${counts.tools || 0}</span>
       <span class="context-pill">M ${counts.model_registry || 0}</span>
       <span class="context-pill">! ${counts.model_errors || 0}</span>
     </div>
@@ -2376,7 +2376,7 @@ async function openUserDashboardModal(initialTab = 'profile') {
     overviewTitle.textContent = 'Datenbank-Überblick'
     const overviewSubtitle = document.createElement('div')
     overviewSubtitle.className = 'dashboard-panel-subtitle'
-    overviewSubtitle.textContent = 'Schnellansicht für Backend-, Skill- und Embedding-Inhalte.'
+    overviewSubtitle.textContent = 'Schnellansicht für Backend-, Skill- und Tool-Inhalte.'
     overviewHeaderCopy.append(overviewTitle, overviewSubtitle)
     const overviewRefresh = document.createElement('button')
     overviewRefresh.type = 'button'
@@ -2399,7 +2399,7 @@ async function openUserDashboardModal(initialTab = 'profile') {
         ['Projekte', counts.projects],
         ['Skills', counts.shared_skills || 0],
         ['Projekt-Skills', counts.project_skills || 0],
-        ['Embeddings', counts.embeddings],
+        ['Tools', counts.tools],
         ['Chats', counts.conversations],
         ['Modelle', counts.model_registry || 0],
         ['Fehler', counts.model_errors || 0],
@@ -2698,7 +2698,7 @@ async function openProfileModal() {
   await openUserDashboardModal('profile')
 }
 
-function buildEmbeddingForm(project = null) {
+function buildToolForm(project = null) {
   const wrapper = document.createElement('div')
   wrapper.className = 'modal-grid'
 
@@ -2710,7 +2710,7 @@ function buildEmbeddingForm(project = null) {
   textArea.id = 'text'
   textArea.className = 'composer-input'
   textArea.style.minHeight = '140px'
-  textArea.placeholder = 'Hier Informationen eingeben, die ins Embedding gespeichert werden sollen.'
+  textArea.placeholder = 'Hier Informationen eingeben, die ins Tool gespeichert werden sollen.'
   textField.append(textLabel, textArea)
 
   const sourceField = document.createElement('label')
@@ -2763,7 +2763,7 @@ function buildEmbeddingForm(project = null) {
 
   const hint = document.createElement('div')
   hint.className = 'muted-copy'
-  hint.textContent = project ? `Das speichert den Inhalt in der geteilten Embedding-Bibliothek. Projekt-ID: ${project.id}` : 'Das speichert den Inhalt in der geteilten Embedding-Bibliothek.'
+  hint.textContent = project ? `Das speichert den Inhalt in der geteilten Tool-Bibliothek. Projekt-ID: ${project.id}` : 'Das speichert den Inhalt in der geteilten Tool-Bibliothek.'
 
   wrapper.append(textField, sourceField, typeField, hint)
   return wrapper
@@ -2825,7 +2825,7 @@ function setDesktopAgentMode(enabled) {
 
 async function openMarkdownImportModal() {
   const content = document.createElement('div')
-  content.className = 'modal-grid embedding-library-modal'
+  content.className = 'modal-grid tool-library-modal'
 
   const targetField = document.createElement('label')
   targetField.className = 'field'
@@ -2836,7 +2836,7 @@ async function openMarkdownImportModal() {
   targetSelect.id = 'markdown-target'
   ;[
     ['skill', 'Skill'],
-    ['embedding', 'Embedding'],
+    ['tool', 'Tool'],
   ].forEach(([value, label]) => {
     const option = document.createElement('option')
     option.value = value
@@ -2845,7 +2845,7 @@ async function openMarkdownImportModal() {
   })
   const targetHelp = document.createElement('div')
   targetHelp.className = 'muted-copy'
-  targetHelp.textContent = 'Hippo importiert deine Markdown-Datei direkt als Skill oder als Embedding-Basis.'
+  targetHelp.textContent = 'Hippo importiert deine Markdown-Datei direkt als Skill oder als Tool.'
   targetField.append(targetLabel, targetSelect, targetHelp)
 
   const uploadField = document.createElement('div')
@@ -2869,12 +2869,12 @@ async function openMarkdownImportModal() {
     const [file] = uploadInput.files || []
     if (!file) return
 
-    const target = targetSelect.value === 'embedding' ? 'embedding' : 'skill'
-    const endpoint = target === 'embedding' ? '/embeddings/library/upload' : '/skills/library/upload'
+    const target = targetSelect.value === 'tool' ? 'tool' : 'skill'
+    const endpoint = target === 'tool' ? '/tools/library/upload' : '/skills/library/upload'
     const formData = new FormData()
     formData.append('file', file, file.name)
 
-    showLoader(target === 'embedding' ? 'Embedding wird importiert...' : 'Skill wird importiert...')
+    showLoader(target === 'tool' ? 'Tool wird importiert...' : 'Skill wird importiert...')
     try {
       const response = await fetch(`${API}${endpoint}`, {
         method: 'POST',
@@ -2885,9 +2885,9 @@ async function openMarkdownImportModal() {
         const data = await response.json().catch(() => null)
         throw new Error(data?.detail || `HTTP ${response.status}`)
       }
-      showToast(target === 'embedding' ? 'Markdown als Embedding gespeichert' : 'Markdown als Skill gespeichert')
-      if (target === 'embedding') {
-        await openEmbeddingModal()
+      showToast(target === 'tool' ? 'Markdown als Tool gespeichert' : 'Markdown als Skill gespeichert')
+      if (target === 'tool') {
+        await openToolModal()
       } else {
         await openProjectSkillsModal()
       }
@@ -2903,41 +2903,41 @@ async function openMarkdownImportModal() {
 
   await openModal({
     title: '.md importieren',
-    copy: 'Du kannst denselben Markdown-Inhalt direkt als Skill oder als Embedding speichern.',
+    copy: 'Du kannst denselben Markdown-Inhalt direkt als Skill oder als Tool speichern.',
     content,
     submitLabel: 'Schließen',
   })
 }
 
-async function openEmbeddingModal() {
-  const form = buildEmbeddingForm(null)
+async function openToolModalLegacy() {
+  const form = buildToolForm(null)
   const content = document.createElement('div')
-  content.className = 'modal-grid embedding-library-modal'
+  content.className = 'modal-grid tool-library-modal'
 
   const listSection = document.createElement('div')
   listSection.className = 'skill-manager-section'
   const listHeading = document.createElement('div')
   listHeading.className = 'section-heading'
   const listLabel = document.createElement('span')
-  listLabel.textContent = 'Geteilte Embeddings'
+  listLabel.textContent = 'Geteilte Tools'
   const listCount = document.createElement('span')
   listCount.className = 'section-count'
   listCount.textContent = '0'
   listHeading.append(listLabel, listCount)
-  const embeddingList = document.createElement('div')
-  embeddingList.className = 'skill-list'
-  listSection.append(listHeading, embeddingList)
+  const toolList = document.createElement('div')
+  toolList.className = 'skill-list'
+  listSection.append(listHeading, toolList)
 
   const renderLibrary = (items) => {
     const rows = Array.isArray(items) ? items : []
     listCount.textContent = String(rows.length)
-    embeddingList.innerHTML = ''
+    toolList.innerHTML = ''
     if (!rows.length) {
       const empty = document.createElement('div')
       empty.className = 'muted-copy'
       empty.style.padding = '8px 0'
-      empty.textContent = 'Noch keine geteilten Embeddings gespeichert.'
-      embeddingList.appendChild(empty)
+      empty.textContent = 'Noch keine geteilten Tools gespeichert.'
+      toolList.appendChild(empty)
       return
     }
 
@@ -2946,7 +2946,7 @@ async function openEmbeddingModal() {
       card.className = 'skill-card'
       const title = document.createElement('div')
       title.className = 'skill-card-title'
-      title.textContent = item.metadata?.type ? `${item.metadata.type}` : 'Embedding'
+      title.textContent = item.metadata?.type ? `${item.metadata.type}` : 'Tool'
       const subtitle = document.createElement('div')
       subtitle.className = 'skill-card-subtitle'
       subtitle.textContent = item.metadata?.source ? `${item.metadata.source} · ${item.created_at || ''}` : (item.created_at || '')
@@ -2954,20 +2954,20 @@ async function openEmbeddingModal() {
       instructions.className = 'skill-card-instructions'
       instructions.textContent = item.text || ''
       card.append(title, subtitle, instructions)
-      embeddingList.appendChild(card)
+      toolList.appendChild(card)
     })
   }
 
   const loadLibrary = async () => {
     try {
-      const items = await apiJson('/embeddings/library')
+      const items = await apiJson('/tools/library')
       renderLibrary(items)
     } catch (error) {
-      embeddingList.innerHTML = ''
+      toolList.innerHTML = ''
       const errorNode = document.createElement('div')
       errorNode.className = 'muted-copy'
-      errorNode.textContent = error.message || 'Embedding-Bibliothek konnte nicht geladen werden.'
-      embeddingList.appendChild(errorNode)
+      errorNode.textContent = error.message || 'Tool-Bibliothek konnte nicht geladen werden.'
+      toolList.appendChild(errorNode)
     }
   }
 
@@ -2985,9 +2985,9 @@ async function openEmbeddingModal() {
     if (!file) return
     const formData = new FormData()
     formData.append('file', file, file.name)
-    showLoader('Embedding aus Markdown wird gespeichert...')
+    showLoader('Tool aus Markdown wird gespeichert...')
     try {
-      const response = await fetch(`${API}/embeddings/library/upload`, {
+      const response = await fetch(`${API}/tools/library/upload`, {
         method: 'POST',
         headers: authHeaders(),
         body: formData,
@@ -2997,9 +2997,9 @@ async function openEmbeddingModal() {
         throw new Error(data?.detail || `HTTP ${response.status}`)
       }
       await loadLibrary()
-      showToast('Markdown als Embedding gespeichert')
+      showToast('Markdown als Tool gespeichert')
     } catch (error) {
-      showToast(error.message || 'Embedding konnte nicht gespeichert werden', 'error')
+      showToast(error.message || 'Tool konnte nicht gespeichert werden', 'error')
     } finally {
       uploadInput.value = ''
       hideLoader()
@@ -3010,17 +3010,17 @@ async function openEmbeddingModal() {
   loadLibrary()
 
   const result = await openModal({
-    title: 'In Embedding speichern',
-    copy: 'Diese Information wird in der geteilten Embedding-Bibliothek abgelegt.',
+    title: 'In Tool speichern',
+    copy: 'Diese Information wird in der geteilten Tool-Bibliothek abgelegt.',
     content,
     submitLabel: 'Speichern',
   })
 
   if (!result) return
 
-  showLoader('Embedding wird aktualisiert...')
+  showLoader('Tool wird aktualisiert...')
   try {
-    await apiJson('/embeddings/library', {
+    await apiJson('/tools/library', {
       method: 'POST',
       body: JSON.stringify({
         text: result.text,
@@ -3031,9 +3031,9 @@ async function openEmbeddingModal() {
       }),
     })
     await loadLibrary()
-    showToast('Informationen ins Embedding gespeichert')
+    showToast('Informationen ins Tool gespeichert')
   } catch (error) {
-    showToast(error.message || 'Embedding konnte nicht gespeichert werden', 'error')
+    showToast(error.message || 'Tool konnte nicht gespeichert werden', 'error')
   } finally {
     hideLoader()
   }
@@ -3347,6 +3347,329 @@ function buildSkillManagerContent(project) {
   })
 
   return wrapper
+}
+
+function buildToolManagerContent(project) {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'modal-grid tool-manager'
+
+  const intro = document.createElement('div')
+  intro.className = 'muted-copy'
+  intro.textContent = 'Tools sind wiederverwendbare Projektanweisungen. Aktive Tools werden im Projekt-Chat priorisiert.'
+
+  const listSection = document.createElement('div')
+  listSection.className = 'tool-manager-section'
+
+  const listHeading = document.createElement('div')
+  listHeading.className = 'section-heading'
+  const listLabel = document.createElement('span')
+  listLabel.textContent = 'Vorhandene Tools'
+  const listCount = document.createElement('span')
+  listCount.className = 'section-count'
+  listCount.textContent = '0'
+  listHeading.append(listLabel, listCount)
+
+  const toolList = document.createElement('div')
+  toolList.className = 'tool-list'
+
+  const formSection = document.createElement('div')
+  formSection.className = 'tool-form'
+
+  const formHeading = document.createElement('div')
+  formHeading.className = 'section-heading'
+  const formLabel = document.createElement('span')
+  formLabel.textContent = 'Tool anlegen oder bearbeiten'
+  const formState = document.createElement('span')
+  formState.className = 'section-count'
+  formState.textContent = 'Neu'
+  formHeading.append(formLabel, formState)
+
+  const nameField = document.createElement('label')
+  nameField.className = 'field'
+  const nameLabel = document.createElement('span')
+  nameLabel.textContent = 'Name'
+  const nameInput = document.createElement('input')
+  nameInput.id = 'tool-name'
+  nameInput.className = 'text-input'
+  nameInput.placeholder = 'z. B. Grünlandanalyse'
+  nameField.append(nameLabel, nameInput)
+
+  const descriptionField = document.createElement('label')
+  descriptionField.className = 'field'
+  const descriptionLabel = document.createElement('span')
+  descriptionLabel.textContent = 'Kurzbeschreibung'
+  const descriptionInput = document.createElement('textarea')
+  descriptionInput.id = 'tool-description'
+  descriptionInput.className = 'composer-input'
+  descriptionInput.style.minHeight = '88px'
+  descriptionInput.placeholder = 'Wofür ist dieses Tool gedacht?'
+  descriptionField.append(descriptionLabel, descriptionInput)
+
+  const instructionsField = document.createElement('label')
+  instructionsField.className = 'field'
+  const instructionsLabel = document.createElement('span')
+  instructionsLabel.textContent = 'Anweisungen'
+  const instructionsInput = document.createElement('textarea')
+  instructionsInput.id = 'tool-instructions'
+  instructionsInput.className = 'composer-input'
+  instructionsInput.style.minHeight = '160px'
+  instructionsInput.placeholder = 'Beschreibe hier den Ablauf, die Regeln und das gewünschte Verhalten.'
+  instructionsField.append(instructionsLabel, instructionsInput)
+
+  const enabledRow = document.createElement('label')
+  enabledRow.className = 'tool-enabled-row'
+  const enabledInput = document.createElement('input')
+  enabledInput.type = 'checkbox'
+  enabledInput.id = 'tool-enabled'
+  enabledInput.checked = true
+  const enabledLabel = document.createElement('span')
+  enabledLabel.textContent = 'Tool aktivieren'
+  enabledRow.append(enabledInput, enabledLabel)
+
+  const formActions = document.createElement('div')
+  formActions.className = 'tool-form-actions'
+  const resetButton = document.createElement('button')
+  resetButton.type = 'button'
+  resetButton.className = 'ghost-action'
+  resetButton.textContent = 'Neu starten'
+  const saveButton = document.createElement('button')
+  saveButton.type = 'button'
+  saveButton.className = 'primary-button'
+  saveButton.style.width = 'auto'
+  saveButton.textContent = 'Tool speichern'
+  formActions.append(resetButton, saveButton)
+
+  const uploadRow = document.createElement('div')
+  uploadRow.className = 'tool-upload-row'
+  const uploadInput = document.createElement('input')
+  uploadInput.type = 'file'
+  uploadInput.accept = '.md'
+  uploadInput.className = 'hidden'
+  const uploadButton = document.createElement('button')
+  uploadButton.type = 'button'
+  uploadButton.className = 'ghost-action'
+  uploadButton.textContent = 'Markdown hochladen'
+  uploadButton.addEventListener('click', () => uploadInput.click())
+  uploadInput.addEventListener('change', async () => {
+    const [file] = uploadInput.files || []
+    if (!file) return
+    const formData = new FormData()
+    formData.append('file', file, file.name)
+    showLoader('Tool aus Markdown wird geladen...')
+    try {
+      await fetch(`${API}/tools/library/upload`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: formData,
+      }).then(async (response) => {
+        if (!response.ok) {
+          const data = await response.json().catch(() => null)
+          throw new Error(data?.detail || `HTTP ${response.status}`)
+        }
+        return response.json()
+      })
+      await refreshTools()
+      showToast('Markdown als Tool gespeichert')
+    } catch (error) {
+      showToast(error.message || 'Markdown konnte nicht gespeichert werden', 'error')
+    } finally {
+      uploadInput.value = ''
+      hideLoader()
+    }
+  })
+  uploadRow.append(uploadButton, uploadInput)
+
+  const formHint = document.createElement('div')
+  formHint.className = 'muted-copy'
+  formHint.textContent = 'Geteilte Tools sind für alle Projekte sichtbar und werden im Chat automatisch priorisiert.'
+
+  formSection.append(formHeading, nameField, descriptionField, instructionsField, enabledRow, formActions, uploadRow, formHint)
+  listSection.append(listHeading, toolList)
+  wrapper.append(intro, listSection, formSection)
+
+  let toolCache = []
+  let editingToolId = null
+
+  function resetForm() {
+    editingToolId = null
+    formState.textContent = 'Neu'
+    nameInput.value = ''
+    descriptionInput.value = ''
+    instructionsInput.value = ''
+    enabledInput.checked = true
+    saveButton.textContent = 'Tool speichern'
+  }
+
+  function fillForm(tool) {
+    editingToolId = tool.id
+    formState.textContent = 'Bearbeiten'
+    nameInput.value = tool.name || ''
+    descriptionInput.value = tool.description || ''
+    instructionsInput.value = tool.instructions || ''
+    enabledInput.checked = Boolean(tool.is_enabled)
+    saveButton.textContent = 'Änderungen speichern'
+    nameInput.focus()
+  }
+
+  function renderTools() {
+    toolList.innerHTML = ''
+    listCount.textContent = String(toolCache.length)
+
+    if (!toolCache.length) {
+      const empty = document.createElement('div')
+      empty.className = 'muted-copy'
+      empty.style.padding = '8px 0'
+      empty.textContent = 'Noch keine Tools angelegt.'
+      toolList.appendChild(empty)
+      return
+    }
+
+    toolCache.forEach((tool) => {
+      const card = document.createElement('div')
+      card.className = `tool-card${tool.is_enabled ? ' active' : ''}`
+
+      const cardTop = document.createElement('div')
+      cardTop.className = 'tool-card-top'
+
+      const meta = document.createElement('div')
+      const title = document.createElement('div')
+      title.className = 'tool-card-title'
+      title.textContent = tool.name || 'Unbenannte Tool'
+      const subtitle = document.createElement('div')
+      subtitle.className = 'tool-card-subtitle'
+      subtitle.textContent = tool.description || 'Keine Beschreibung'
+      meta.append(title, subtitle)
+
+      const chip = document.createElement('span')
+      chip.className = `section-badge${tool.is_enabled ? '' : ' subtle'}`
+      chip.textContent = tool.is_enabled ? 'Aktiv' : 'Inaktiv'
+      cardTop.append(meta, chip)
+
+      const instructions = document.createElement('div')
+      instructions.className = 'tool-card-instructions'
+      instructions.textContent = tool.instructions || ''
+
+      const actions = document.createElement('div')
+      actions.className = 'tool-card-actions'
+
+      const editButton = document.createElement('button')
+      editButton.type = 'button'
+      editButton.className = 'ghost-action'
+      editButton.textContent = 'Bearbeiten'
+      editButton.addEventListener('click', () => fillForm(tool))
+
+      const toggleButton = document.createElement('button')
+      toggleButton.type = 'button'
+      toggleButton.className = 'ghost-action'
+      toggleButton.textContent = tool.is_enabled ? 'Deaktivieren' : 'Aktivieren'
+      toggleButton.addEventListener('click', async () => {
+        showLoader('Tool wird aktualisiert...')
+        try {
+          await apiJson(`/tools/library/${tool.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_enabled: !tool.is_enabled }),
+          })
+          await refreshTools()
+          showToast('Tool aktualisiert')
+        } catch (error) {
+          showToast(error.message || 'Tool konnte nicht aktualisiert werden', 'error')
+        } finally {
+          hideLoader()
+        }
+      })
+
+      const deleteButton = document.createElement('button')
+      deleteButton.type = 'button'
+      deleteButton.className = 'ghost-action danger'
+      deleteButton.textContent = 'Löschen'
+      deleteButton.addEventListener('click', async () => {
+        if (!window.confirm(`Tool "${tool.name}" wirklich löschen?`)) return
+        showLoader('Tool wird gelöscht...')
+        try {
+          await apiJson(`/tools/library/${tool.id}`, { method: 'DELETE' })
+          if (editingToolId === tool.id) {
+            resetForm()
+          }
+          await refreshTools()
+          showToast('Tool gelöscht')
+        } catch (error) {
+          showToast(error.message || 'Tool konnte nicht gelöscht werden', 'error')
+        } finally {
+          hideLoader()
+        }
+      })
+
+      actions.append(editButton, toggleButton, deleteButton)
+      card.append(cardTop, instructions, actions)
+      toolList.appendChild(card)
+    })
+  }
+
+  async function refreshTools() {
+    toolCache = await apiJson('/tools/library')
+    renderTools()
+  }
+
+  async function saveTool() {
+    const name = nameInput.value.trim()
+    const description = descriptionInput.value.trim()
+    const instructions = instructionsInput.value.trim()
+
+    if (!name || !instructions) {
+      showToast('Name und Anweisungen sind erforderlich.', 'error')
+      return
+    }
+
+    const payload = {
+      name,
+      description: description || null,
+      instructions,
+      is_enabled: enabledInput.checked,
+    }
+
+    showLoader(editingToolId ? 'Tool wird aktualisiert...' : 'Tool wird erstellt...')
+    try {
+      if (editingToolId) {
+        await apiJson(`/tools/library/${editingToolId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        })
+      } else {
+        await apiJson('/tools/library', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+      }
+      resetForm()
+      await refreshTools()
+      showToast('Tool gespeichert')
+    } catch (error) {
+      showToast(error.message || 'Tool konnte nicht gespeichert werden', 'error')
+    } finally {
+      hideLoader()
+    }
+  }
+
+  resetButton.addEventListener('click', resetForm)
+  saveButton.addEventListener('click', saveTool)
+  refreshTools().catch((error) => {
+    showToast(error.message || 'Tools konnten nicht geladen werden', 'error')
+  })
+
+  return wrapper
+}
+
+
+
+async function openToolModal() {
+  const content = buildToolManagerContent()
+  await openModal({
+    title: 'Tools verwalten',
+    copy: 'Hier verwaltest du die geteilte Tool-Bibliothek. Alle Projekte können diese Tools nutzen.',
+    content,
+    submitLabel: 'Schließen',
+    width: 'min(1100px, 100%)',
+  })
 }
 
 async function openProjectSkillsModal() {
@@ -3846,7 +4169,7 @@ function bindSidebarEvents() {
   els.sidebarNewChat.addEventListener('click', startNewChat)
   els.sidebarToggle?.addEventListener('click', toggleSidebarDrawer)
   els.sidebarBackdrop?.addEventListener('click', closeSidebarDrawer)
-  els.projectEmbedBtn.addEventListener('click', openEmbeddingModal)
+  els.projectToolsBtn.addEventListener('click', openToolModal)
   els.projectSkillsBtn.addEventListener('click', openProjectSkillsModal)
   if (els.markdownImportBtn) {
     els.markdownImportBtn.addEventListener('click', openMarkdownImportModal)

@@ -12,6 +12,7 @@ from app.models.chat import ChatMessage, Conversation
 from app.models.permission import ProjectPermission
 from app.models.project import Project
 from app.models.skill import ProjectSkill
+from app.models.tool import AITool
 from app.models.model_registry import ModelRegistry
 from app.models.user import User, UserRole
 
@@ -36,6 +37,7 @@ async def admin_overview(db: DbSession, current_user=Depends(get_current_user)):
         "project_skills": int(
             await db.scalar(select(func.count()).select_from(ProjectSkill).where(ProjectSkill.project_id.is_not(None))) or 0
         ),
+        "shared_tools": int(await db.scalar(select(func.count()).select_from(AITool)) or 0),
         "model_registry": int(await db.scalar(select(func.count()).select_from(ModelRegistry)) or 0),
         "model_errors": int(
             await db.scalar(select(func.count()).select_from(ModelRegistry).where(ModelRegistry.status != "ok")) or 0
@@ -50,6 +52,7 @@ async def admin_overview(db: DbSession, current_user=Depends(get_current_user)):
 
     recent_projects = await db.execute(select(Project).order_by(Project.created_at.desc()).limit(8))
     recent_skills = await db.execute(select(ProjectSkill).order_by(ProjectSkill.created_at.desc()).limit(8))
+    recent_tools = await db.execute(select(AITool).order_by(AITool.created_at.desc()).limit(8))
     recent_models = await db.execute(select(ModelRegistry).order_by(ModelRegistry.last_seen_at.desc()).limit(8))
 
     return {
@@ -73,6 +76,16 @@ async def admin_overview(db: DbSession, current_user=Depends(get_current_user)):
                 "created_at": item.created_at,
             }
             for item in recent_skills.scalars().all()
+        ],
+        "recent_tools": [
+            {
+                "id": item.id,
+                "name": item.name,
+                "tool_type": item.tool_type,
+                "is_enabled": item.is_enabled,
+                "created_at": item.created_at,
+            }
+            for item in recent_tools.scalars().all()
         ],
         "recent_models": [
             {

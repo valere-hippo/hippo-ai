@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api import auth, users, admin_users, project_folders, projects, chat, files, permissions, audio, embeddings, search
+from app.api import auth, users, admin_users, project_folders, projects, chat, files, permissions, audio, search
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
@@ -14,6 +14,12 @@ try:
     api_router.include_router(skills.library_router)
 except Exception:
     pass
+try:
+    from app.api import tools
+    api_router.include_router(tools.router)
+    api_router.include_router(tools.library_router)
+except Exception:
+    pass
 api_router.include_router(chat.router)
 api_router.include_router(files.router)
 api_router.include_router(permissions.router)
@@ -24,19 +30,8 @@ try:
     api_router.include_router(admin_overview.router)
 except Exception:
     pass
-# keep legacy embeddings endpoints and also add library endpoints that store in the backend DB
-try:
-    from app.api import embeddings_proxy
-    api_router.include_router(embeddings_proxy.router)
-except Exception:
-    pass
-api_router.include_router(embeddings.router)
-try:
-    api_router.include_router(embeddings.library_router)
-except Exception:
-    pass
 api_router.include_router(search.router)
-# enhanced chat that consults embeddings first
+# enhanced chat that consults project context and tools
 try:
     from app.api import chat_enhanced
     api_router.include_router(chat_enhanced.router)

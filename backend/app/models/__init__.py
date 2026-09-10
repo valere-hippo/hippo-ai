@@ -4,6 +4,7 @@ from app.models.project import Project
 from app.models.permission import ProjectPermission, PermissionLevel
 from app.models.chat import Conversation, ChatMessage
 from app.models.skill import ProjectSkill
+from app.models.tool import AITool
 from app.models.model_registry import ModelRegistry
 
-__all__ = ["Base", "User", "UserRole", "Project", "ProjectPermission", "PermissionLevel", "Conversation", "ChatMessage", "ProjectSkill", "ModelRegistry"]
+__all__ = ["Base", "User", "UserRole", "Project", "ProjectPermission", "PermissionLevel", "Conversation", "ChatMessage", "ProjectSkill", "AITool", "ModelRegistry"]

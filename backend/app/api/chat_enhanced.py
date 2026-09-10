@@ -19,7 +19,7 @@ from app.services.chat_payloads import (
     looks_like_image_generation_request,
 )
 from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
-from app.services.embedding_context import build_embedding_context_for_request
+from app.services.project_tools import build_tools_context
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
@@ -307,17 +307,15 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             pass
 
     try:
-        embedding_context = await build_embedding_context_for_request(db, payload.message, project_id=resolved_project_id, limit=5)
-        if embedding_context:
+        tools_context = await build_tools_context(db, payload.message, limit=6)
+        if tools_context:
             hippo_messages.insert(
                 1 if conv_project is None else 4,
                 {
                     "role": "system",
                     "content": (
-                        f"{embedding_context}\n\n"
-                        "Verwende diese Hinweise als zusätzliche Wissensquelle für die aktuelle Unterhaltung. "
-                        "Wenn sie zur aktuellen Frage passen, antworte direkt daraus und formuliere sie sauber im Chat neu. "
-                        "Nur wenn sie nicht passen, ergänze mit deinen eigenen Schlussfolgerungen."
+                        f"{tools_context}\n\n"
+                        "Diese Tools stehen dem Agenten zur Verfügung. Nutze sie als Arbeitsmittel und beschreibe danach klar die Ergebnisse."
                     ),
                 },
             )
