@@ -18,8 +18,11 @@ try:
     from app.api import tools
     api_router.include_router(tools.router)
     api_router.include_router(tools.library_router)
-except Exception:
-    pass
+except Exception as exc:
+    import logging
+    logging.getLogger("hippo-ai.api").warning("Tools router failed to load: %s", exc)
+    from app.api import tools_library_fallback
+    api_router.include_router(tools_library_fallback.router)
 api_router.include_router(chat.router)
 api_router.include_router(files.router)
 api_router.include_router(permissions.router)
