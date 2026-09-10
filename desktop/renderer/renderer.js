@@ -1977,6 +1977,22 @@ async function openCreateProjectModal() {
     return
   }
 
+  showLoader('Ordnerzugriff wird geprüft...')
+  try {
+    const access = await window.electron.inspectProjectFolder({
+      folder: result.folder,
+      maxTextChars: 2000,
+    })
+    if (!access?.ok || !access?.can_read || !access?.can_write) {
+      const details = access?.context ? ` ${access.context}` : ''
+      throw new Error(`Der gemeinsame Ordner muss les- und schreibbar sein.${details}`)
+    }
+  } catch (error) {
+    hideLoader()
+    showToast(error.message || 'Der Ordnerzugriff konnte nicht geprüft werden', 'error')
+    return
+  }
+
   showLoader('Projekt wird erstellt...')
   try {
     await apiJson('/projects/', {
@@ -2031,6 +2047,22 @@ async function openEditProjectModal(project) {
 
   if (!result || !result.folder) {
     showToast('Du musst beim Speichern einen gemeinsamen Ordner beibehalten oder auswählen.', 'error')
+    return
+  }
+
+  showLoader('Ordnerzugriff wird geprüft...')
+  try {
+    const access = await window.electron.inspectProjectFolder({
+      folder: result.folder,
+      maxTextChars: 2000,
+    })
+    if (!access?.ok || !access?.can_read || !access?.can_write) {
+      const details = access?.context ? ` ${access.context}` : ''
+      throw new Error(`Der gemeinsame Ordner muss les- und schreibbar sein.${details}`)
+    }
+  } catch (error) {
+    hideLoader()
+    showToast(error.message || 'Der Ordnerzugriff konnte nicht geprüft werden', 'error')
     return
   }
 

@@ -6,14 +6,32 @@ function isProbablyTextFile(filename) {
   return new Set(['.txt', '.md', '.markdown', '.csv', '.json', '.yml', '.yaml', '.xml', '.rtf', '.log', '.ini', '.py', '.js', '.ts', '.html', '.htm', '.css']).has(ext)
 }
 
+function testWriteAccess(root) {
+  const markerName = `.hippo-access-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`
+  const markerPath = path.join(root, markerName)
+  try {
+    fs.writeFileSync(markerPath, 'access-check', 'utf8')
+    fs.unlinkSync(markerPath)
+    return { can_write: true, write_check: 'ok' }
+  } catch (error) {
+    try {
+      if (fs.existsSync(markerPath)) fs.unlinkSync(markerPath)
+    } catch (cleanupError) {
+      // ignore cleanup failure
+    }
+    return { can_write: false, write_check: error.message }
+  }
+}
+
 function summarizeLocalFolder(folderPath, options = {}) {
   const maxTextChars = Number.isFinite(options.maxTextChars) ? options.maxTextChars : 12000
   const root = String(folderPath || '').trim()
-  if (!root) return { ok: false, context: 'Kein Ordnerpfad angegeben.' }
+  if (!root) return { ok: false, context: 'Kein Ordnerpfad angegeben.', can_read: false, can_write: false }
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
-    return { ok: false, context: `Der Ordner ist nicht erreichbar: ${root}` }
+    return { ok: false, context: `Der Ordner ist nicht erreichbar: ${root}`, can_read: false, can_write: false }
   }
 
+  const access = testWriteAccess(root)
   const lines = [`Lokaler gemeinsamer Ordner (vom Desktop gelesen): ${root}`]
   let chars = 0
 
@@ -61,7 +79,7 @@ function summarizeLocalFolder(folderPath, options = {}) {
   walk(root, 0)
   if (lines.length === 1) lines.push('Keine Dateien gefunden.')
   if (chars === 0) lines.push('Hinweis: Es wurden keine direkt lesbaren Textinhalte gefunden, aber die Dateistruktur wurde vollständig erfasst.')
-  return { ok: true, context: lines.join(String.fromCharCode(10)) }
+  return { ok: true, context: lines.join(String.fromCharCode(10)), can_read: true, ...access }
 }
 
 const folder = process.argv[2] || ''
