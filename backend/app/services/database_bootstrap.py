@@ -15,3 +15,9 @@ async def ensure_database_schema_and_tables(engine: AsyncEngine) -> None:
                 'ADD COLUMN IF NOT EXISTS pcloud_path VARCHAR(1000)'
             )
         )
+        await conn.execute(
+            text(
+                f'ALTER TABLE IF EXISTS "{settings.postgres_schema}"."ai_project_skills" '
+                'ALTER COLUMN project_id DROP NOT NULL'
+            )
+        )
