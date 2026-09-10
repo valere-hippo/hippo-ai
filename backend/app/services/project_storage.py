@@ -44,6 +44,87 @@ def _safe_name(value: str | None) -> str:
     return candidate[:240] or "attachment"
 
 
+def _safe_relative_project_path(value: str | None) -> Path:
+    raw = str(value or "").strip().replace("\\", "/")
+    if not raw:
+        raise ValueError("filename is required")
+    candidate = Path(raw)
+    if candidate.is_absolute():
+        raise ValueError("absolute paths are not allowed")
+    parts: list[str] = []
+    for part in candidate.parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            raise ValueError("path traversal is not allowed")
+        cleaned = re.sub(r"[^A-Za-z0-9._ -]+", "_", part).strip()
+        if not cleaned:
+            cleaned = "attachment"
+        parts.append(cleaned[:240])
+    if not parts:
+        raise ValueError("filename is required")
+    return Path(*parts)
+
+
+def _local_project_root(project: Any) -> Path:
+    return _local_project_dir(project).resolve()
+
+
+def _resolve_local_project_file(project: Any, filename: str) -> tuple[Path, str]:
+    root = _local_project_root(project)
+    rel_path = _safe_relative_project_path(filename)
+    candidate = (root / rel_path).resolve(strict=False)
+    if candidate != root and root not in candidate.parents:
+        raise ValueError("path escapes the project folder")
+    return candidate, rel_path.as_posix()
+
+
+def _iter_local_project_files(project: Any) -> list[ProjectFile]:
+    root = _local_project_root(project)
+    items: list[ProjectFile] = []
+    for entry in sorted(root.rglob("*"), key=lambda path: path.as_posix().lower()):
+        if not entry.is_file():
+            continue
+        try:
+            stat = entry.stat()
+        except OSError:
+            continue
+        items.append(
+            ProjectFile(
+                filename=entry.relative_to(root).as_posix(),
+                size=stat.st_size,
+                modified_at=datetime.fromtimestamp(stat.st_mtime),
+                storage="local",
+            )
+        )
+    return items
+
+
+def _build_local_project_tree_context(project: Any) -> str:
+    root = _local_project_root(project)
+    lines = [f"Ordnerbaum des gemeinsamen Projektordners: {root}"]
+    for current_root, dirs, files in os.walk(root):
+        dirs.sort()
+        files.sort()
+        current = Path(current_root)
+        rel = current.relative_to(root)
+        depth = 0 if rel == Path(".") else len(rel.parts)
+        indent = "  " * depth
+        label = "." if rel == Path(".") else rel.as_posix()
+        lines.append(f"{indent}[Ordner] {label}")
+        for directory in dirs:
+            rel_dir = (rel / directory) if rel != Path(".") else Path(directory)
+            lines.append(f"{indent}  [Ordner] {rel_dir.as_posix()}")
+        for filename in files:
+            rel_file = (rel / filename) if rel != Path(".") else Path(filename)
+            try:
+                size = (current / filename).stat().st_size
+            except OSError:
+                size = 0
+            lines.append(f"{indent}  - {rel_file.as_posix()} ({size} bytes)")
+    return "\n".join(lines)
+
+
 def _storage_prefix() -> str:
     prefix = (settings.hippo_s3_bucket_prefix or "hippo-ai-").strip().lower()
     prefix = re.sub(r"[^a-z0-9-]+", "-", prefix)
@@ -228,10 +309,15 @@ def store_project_file(project: Any, filename: str, content: bytes, content_type
                 "key": key,
             }
 
-    path = _local_project_dir(project) / safe_filename
+    try:
+        path, rel_name = _resolve_local_project_file(project, filename)
+    except Exception:
+        path = _local_project_root(project) / safe_filename
+        rel_name = safe_filename
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
     return {
-        "filename": safe_filename,
+        "filename": rel_name,
         "storage": "local",
         "path": str(path),
     }
@@ -264,21 +350,7 @@ def list_project_files(project: Any) -> list[ProjectFile]:
             )
         return items
 
-    dir_path = _local_project_dir(project)
-    items: list[ProjectFile] = []
-    for entry in sorted(dir_path.iterdir()):
-        if not entry.is_file():
-            continue
-        stat = entry.stat()
-        items.append(
-            ProjectFile(
-                filename=entry.name,
-                size=stat.st_size,
-                modified_at=datetime.fromtimestamp(stat.st_mtime),
-                storage="local",
-            )
-        )
-    return items
+    return _iter_local_project_files(project)
 
 
 def read_project_file(project: Any, filename: str) -> tuple[bytes, str, str]:
@@ -294,9 +366,9 @@ def read_project_file(project: Any, filename: str) -> tuple[bytes, str, str]:
         body = response["Body"].read()
         return body, response.get("ContentType") or content_type, "s3"
 
-    path = _local_project_dir(project) / safe_filename
+    path, _rel_name = _resolve_local_project_file(project, filename)
     if not path.exists() or not path.is_file():
-        raise FileNotFoundError(safe_filename)
+        raise FileNotFoundError(filename)
     return path.read_bytes(), content_type, "local"
 
 
@@ -304,6 +376,7 @@ def delete_project_file(project: Any, filename: str) -> dict[str, int | str]:
     safe_filename = _safe_name(filename)
     deleted_remote = 0
     deleted_local = 0
+    rel_name = safe_filename
 
     if can_use_s3_storage():
         client = s3_client()
@@ -315,23 +388,22 @@ def delete_project_file(project: Any, filename: str) -> dict[str, int | str]:
             except ClientError:
                 pass
 
-    project_id = getattr(project, "id", None)
-    local_path = _local_project_dir(project) / safe_filename if project_id is not None else None
     try:
-        if local_path is not None and local_path.exists() and local_path.is_file():
+        local_path, rel_name = _resolve_local_project_file(project, filename)
+        if local_path.exists() and local_path.is_file():
             local_path.unlink()
             deleted_local = 1
     except Exception:
         pass
 
     return {
-        "filename": safe_filename,
+        "filename": rel_name,
         "deleted_remote": deleted_remote,
         "deleted_local": deleted_local,
     }
 
 
-def _truncate(text: str, limit: int = 5000) -> str:
+def _truncate(text: str, limit: int = 20000) -> str:
     text = re.sub(r"\s+\n", "\n", text or "").strip()
     if len(text) <= limit:
         return text
@@ -661,7 +733,9 @@ def _extract_shapefile_context(project: Any, stem: str, files_by_name: dict[str,
             base = Path(tmpdir) / stem
             for name in related_files:
                 data, _, _ = read_project_file(project, name)
-                (Path(tmpdir) / name).write_bytes(data)
+                target = Path(tmpdir) / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
 
             try:
                 import shapefile  # type: ignore
@@ -765,7 +839,7 @@ def _find_shapefile_stems(project: Any) -> list[str]:
     for item in list_project_files(project):
         if Path(item.filename).suffix.lower() != ".shp":
             continue
-        stem = Path(item.filename).stem
+        stem = Path(item.filename).with_suffix("").as_posix()
         if stem not in seen:
             seen.add(stem)
             stems.append(stem)
@@ -967,7 +1041,9 @@ def build_geodata_map_file(project: Any, query: str | None = None) -> tuple[str,
             base = Path(tmpdir) / selected_stem
             for name in related_files:
                 data, _, _ = read_project_file(project, name)
-                (Path(tmpdir) / name).write_bytes(data)
+                target = Path(tmpdir) / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
 
             import shapefile  # type: ignore
 
@@ -1063,9 +1139,9 @@ def extract_project_file_preview(filename: str, data: bytes, content_type: str |
 IMAGE_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 
 
-async def build_project_files_context(project: Any, max_files: int = 12) -> str:
+async def build_project_files_context(project: Any, max_files: int | None = None) -> str:
     try:
-        files = list_project_files(project)[:max_files]
+        files = list_project_files(project)
     except FileNotFoundError as exc:
         folder = str(getattr(project, "watched_folder", "") or "").strip()
         return (
@@ -1074,7 +1150,20 @@ async def build_project_files_context(project: Any, max_files: int = 12) -> str:
             f"Fehler: {exc}\n"
             "Bitte prüfe, ob der Backend-Server Zugriff auf diesen Pfad hat oder ob der Ordner korrekt gemountet wurde."
         )
+    if max_files is not None:
+        files = files[:max_files]
     if not files:
+        folder = str(getattr(project, "watched_folder", "") or "").strip()
+        try:
+            tree_context = _build_local_project_tree_context(project)
+        except Exception:
+            tree_context = ""
+        if tree_context:
+            return (
+                "Im gemeinsamen Ordner des Projekts sind aktuell keine Dateien sichtbar, aber die Verzeichnisstruktur ist verfügbar.\n"
+                f"Ordnerpfad: {folder or 'unbekannt'}\n\n"
+                f"{tree_context}"
+            )
         return (
             "Im gemeinsamen Ordner des Projekts sind aktuell keine Dateien sichtbar.\n"
             "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Ordner leer ist oder die Synchronisierung noch nicht abgeschlossen wurde."
@@ -1096,12 +1185,17 @@ async def build_project_files_context(project: Any, max_files: int = 12) -> str:
         f"Im gemeinsamen Ordner des Projekts sind {len(files)} sichtbare Dateien vorhanden:",
     ]
 
+    try:
+        lines.append(_build_local_project_tree_context(project))
+    except Exception:
+        pass
+
     for item in sorted(files, key=lambda entry: entry.filename.lower()):
         if item.filename in processed:
             continue
 
         lower_name = item.filename.lower()
-        stem = Path(item.filename).stem
+        stem = Path(item.filename).with_suffix("").as_posix()
         ext = Path(item.filename).suffix.lower()
         modified = item.modified_at.isoformat(timespec="seconds") if item.modified_at else "unbekannt"
 
@@ -1134,6 +1228,12 @@ async def build_project_files_context(project: Any, max_files: int = 12) -> str:
                     summary = extract_project_file_preview(item.filename, content, content_type)
                 except Exception:
                     summary = ""
+        else:
+            try:
+                content, content_type, _storage = read_project_file(project, item.filename)
+                summary = extract_project_file_preview(item.filename, content, content_type)
+            except Exception:
+                summary = ""
 
         lines.append(f"- {item.filename} ({item.size} bytes, Speicherung {item.storage}, geändert {modified})")
         if summary:
