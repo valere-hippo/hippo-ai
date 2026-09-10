@@ -8,7 +8,7 @@ import sqlite3
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from io import BytesIO
 from tempfile import TemporaryDirectory
@@ -26,6 +26,7 @@ except Exception:  # pragma: no cover - optional dependency
         pass
 
 from app.core.config import settings
+from app.services.pcloud_storage import get_pcloud_file_bytes, list_pcloud_folder_recursive, has_pcloud_storage, normalize_pcloud_path
 
 LOCAL_STORAGE_ROOT = Path("/app/uploads")
 
@@ -269,6 +270,10 @@ def clear_project_storage(project: Any) -> dict[str, int]:
     return {"deleted_remote": deleted_remote, "deleted_local": deleted_local}
 
 
+def _project_uses_pcloud(project: Any) -> bool:
+    return bool(getattr(project, "pcloud_path", None))
+
+
 def _local_project_dir(project: Any) -> Path:
     project_id = getattr(project, "id", None)
     if project_id is None:
@@ -324,6 +329,26 @@ def store_project_file(project: Any, filename: str, content: bytes, content_type
 
 
 def list_project_files(project: Any) -> list[ProjectFile]:
+    if _project_uses_pcloud(project):
+        try:
+            entries = list_pcloud_folder_recursive(normalize_pcloud_path(getattr(project, "pcloud_path", "")), max_items=1000)
+        except Exception:
+            return []
+
+        items: list[ProjectFile] = []
+        for entry in entries:
+            if entry.is_folder:
+                continue
+            items.append(
+                ProjectFile(
+                    filename=entry.path,
+                    size=entry.size,
+                    modified_at=entry.modified_at,
+                    storage="pcloud",
+                )
+            )
+        return items
+
     if can_use_s3_storage():
         client = s3_client()
         if client is None:
@@ -356,6 +381,14 @@ def list_project_files(project: Any) -> list[ProjectFile]:
 def read_project_file(project: Any, filename: str) -> tuple[bytes, str, str]:
     safe_filename = _safe_name(filename)
     content_type = mimetypes.guess_type(safe_filename)[0] or "application/octet-stream"
+
+    if _project_uses_pcloud(project):
+        path_hint = str(filename or "").strip()
+        if not path_hint.startswith("/"):
+            pcloud_root = normalize_pcloud_path(getattr(project, "pcloud_path", ""))
+            path_hint = str(PurePosixPath(pcloud_root) / path_hint.lstrip("/"))
+        body, content_type = get_pcloud_file_bytes(path_hint)
+        return body, content_type, "pcloud"
 
     if can_use_s3_storage():
         client = s3_client()
@@ -1141,7 +1174,28 @@ IMAGE_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif
 
 async def build_project_files_context(project: Any, max_files: int | None = None) -> str:
     try:
-        files = list_project_files(project)
+        if _project_uses_pcloud(project):
+            if not has_pcloud_storage():
+                folder = str(getattr(project, "pcloud_path", "") or "").strip()
+                return (
+                    "Dieses Projekt ist auf pCloud konfiguriert, aber der pCloud-Zugang ist auf diesem Server noch nicht eingerichtet.\n"
+                    f"pCloud-Pfad: {folder or 'unbekannt'}\n"
+                    "Bitte setze PCLOUD_ACCESS_TOKEN und PCLOUD_API_BASE_URL im Backend."
+                )
+            pcloud_root = normalize_pcloud_path(getattr(project, "pcloud_path", ""))
+            entries = await asyncio.to_thread(list_pcloud_folder_recursive, pcloud_root, max_files or 1000)
+            files = [
+                ProjectFile(
+                    filename=entry.path,
+                    size=entry.size,
+                    modified_at=entry.modified_at,
+                    storage="pcloud",
+                )
+                for entry in entries
+                if not entry.is_folder
+            ]
+        else:
+            files = list_project_files(project)
     except FileNotFoundError as exc:
         folder = str(getattr(project, "watched_folder", "") or "").strip()
         return (
@@ -1150,9 +1204,27 @@ async def build_project_files_context(project: Any, max_files: int | None = None
             f"Fehler: {exc}\n"
             "Bitte prüfe, ob der Backend-Server Zugriff auf diesen Pfad hat oder ob der Ordner korrekt gemountet wurde."
         )
+    except Exception as exc:
+        if _project_uses_pcloud(project):
+            folder = str(getattr(project, "pcloud_path", "") or "").strip()
+            return (
+                "Der pCloud-Projektpfad konnte aktuell nicht gelesen werden.\n"
+                f"pCloud-Pfad: {folder or 'unbekannt'}\n"
+                f"Fehler: {exc}\n"
+                "Bitte prüfe den pCloud-Zugangstoken, die API-Basis-URL und den Pfad im Projekt."
+            )
+        raise
+
     if max_files is not None:
         files = files[:max_files]
     if not files:
+        if _project_uses_pcloud(project):
+            folder = str(getattr(project, "pcloud_path", "") or "").strip()
+            return (
+                "Im pCloud-Projektpfad sind aktuell keine Dateien sichtbar.\n"
+                f"pCloud-Pfad: {folder or 'unbekannt'}\n"
+                "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Ordner leer ist oder der Pfad falsch gesetzt ist."
+            )
         folder = str(getattr(project, "watched_folder", "") or "").strip()
         try:
             tree_context = _build_local_project_tree_context(project)
@@ -1185,10 +1257,11 @@ async def build_project_files_context(project: Any, max_files: int | None = None
         f"Im gemeinsamen Ordner des Projekts sind {len(files)} sichtbare Dateien vorhanden:",
     ]
 
-    try:
-        lines.append(_build_local_project_tree_context(project))
-    except Exception:
-        pass
+    if not _project_uses_pcloud(project):
+        try:
+            lines.append(_build_local_project_tree_context(project))
+        except Exception:
+            pass
 
     for item in sorted(files, key=lambda entry: entry.filename.lower()):
         if item.filename in processed:
@@ -1224,13 +1297,19 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                     summary = ""
             if not summary:
                 try:
-                    content, content_type, _storage = read_project_file(project, item.filename)
+                    if _project_uses_pcloud(project):
+                        content, content_type, _storage = await asyncio.to_thread(read_project_file, project, item.filename)
+                    else:
+                        content, content_type, _storage = read_project_file(project, item.filename)
                     summary = extract_project_file_preview(item.filename, content, content_type)
                 except Exception:
                     summary = ""
         else:
             try:
-                content, content_type, _storage = read_project_file(project, item.filename)
+                if _project_uses_pcloud(project):
+                    content, content_type, _storage = await asyncio.to_thread(read_project_file, project, item.filename)
+                else:
+                    content, content_type, _storage = read_project_file(project, item.filename)
                 summary = extract_project_file_preview(item.filename, content, content_type)
             except Exception:
                 summary = ""

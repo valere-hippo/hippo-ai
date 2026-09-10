@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Deprecated: local attachment parsing now covers images/screenshots/documents.
     hippo_vision_model: str | None = None
 
+    # pCloud project source storage
+    pcloud_api_base_url: str = Field(default="https://api.pcloud.com", validation_alias=AliasChoices("PCLOUD_API_BASE_URL", "PCLOUD_API_URL"))
+    pcloud_access_token: str | None = Field(default=None, validation_alias=AliasChoices("PCLOUD_ACCESS_TOKEN", "PCLOUD_TOKEN"))
+
     # AWS / S3 project storage
     aws_region: str | None = None
     aws_access_key_id: str | None = None

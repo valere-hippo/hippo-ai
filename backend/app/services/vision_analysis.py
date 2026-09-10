@@ -178,7 +178,10 @@ async def summarize_project_image_file(project: Any, filename: str, content_type
     from app.services.project_storage import read_project_file
 
     try:
-        data, mime_type, _storage = read_project_file(project, filename)
+        if getattr(project, "pcloud_path", None):
+            data, mime_type, _storage = await asyncio.to_thread(read_project_file, project, filename)
+        else:
+            data, mime_type, _storage = read_project_file(project, filename)
     except Exception:
         return ""
 

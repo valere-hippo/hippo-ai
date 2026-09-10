@@ -218,7 +218,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             pass
 
         try:
-            project_files_context = (payload.project_folder_context or '').strip() or await build_project_files_context(conv_project)
+            project_files_context = await build_project_files_context(conv_project)
             hippo_messages.insert(
                 3,
                 {
