@@ -1780,14 +1780,6 @@ async function selectProject(projectId) {
   renderContext()
   closeSidebarDrawer()
 
-  const project = getContextProject()
-  if (project) {
-    const allowed = await requestProjectFolderConsent(project)
-    if (allowed) {
-      await refreshProjectFolderContext(project, { force: true })
-    }
-  }
-
   if (state.currentConversationId) {
     await openConversationById(state.currentConversationId)
   } else {
@@ -1815,13 +1807,6 @@ async function openConversation(conversation) {
   renderConversations()
   renderContext()
   closeSidebarDrawer()
-  const project = getContextProject()
-  if (project) {
-    const allowed = await requestProjectFolderConsent(project)
-    if (allowed) {
-      await refreshProjectFolderContext(project, { force: true })
-    }
-  }
   await openConversationById(conversation.id)
 }
 
@@ -4460,10 +4445,7 @@ async function sendChat() {
   )
 
   const project = getContextProject()
-  let projectFolderContext = ''
-  if (project?.watched_folder) {
-    projectFolderContext = await refreshProjectFolderContext(project)
-  }
+  const projectFolderContext = project ? (state.projectFolderContextCache.get(project.id) || '') : ''
   const attachments = state.draftAttachments.map((attachment) => ({
     filename: attachment.filename,
     mime_type: attachment.mime_type,
