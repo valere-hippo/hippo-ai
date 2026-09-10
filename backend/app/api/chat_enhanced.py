@@ -83,6 +83,30 @@ def _extract_json_object(text: str) -> dict | None:
     return None
 
 
+def _infer_desktop_launch_action(message: str, reply_text: str, profile: str | None = None) -> list[DesktopAction]:
+    haystack = f"{message or ''}\n{reply_text or ''}".lower()
+    if not any(keyword in haystack for keyword in ('öffne', 'oeffne', 'open', 'starte', 'start', 'launch', 'run', 'öffnen', 'oeffnen', 'öffnest', 'öffnen', 'öffnet', 'starten')):
+        return []
+
+    candidates: list[tuple[str, list[str]]] = [
+        ('hipponalyze', ['hipponalyze', 'hippo analyze', 'hippo-analyze']),
+        ('qgis', ['qgis']),
+        ('word', ['word', 'microsoft word']),
+        ('excel', ['excel', 'microsoft excel']),
+        ('libreoffice', ['libreoffice', 'soffice']),
+    ]
+    for app_key, needles in candidates:
+        if any(needle in haystack for needle in needles):
+            return [DesktopAction(action='launch_app', command=app_key)]
+
+    if profile == 'qgis' and ('karte' in haystack or 'geo' in haystack or 'gpkg' in haystack):
+        return [DesktopAction(action='launch_app', command='qgis')]
+    if profile in {'fledermaus', 'bioacoustics'} and any(needle in haystack for needle in ('fledermaus', 'bat', 'ruf', 'rufe', 'akustik')):
+        return [DesktopAction(action='launch_app', command='hipponalyze')]
+
+    return []
+
+
 def _parse_desktop_actions(reply_text: str) -> tuple[str, list[DesktopAction]]:
     payload = _extract_json_object(reply_text)
     if not payload:
@@ -382,6 +406,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     if payload.desktop_agent:
         parsed_reply, desktop_actions = _parse_desktop_actions(reply_text)
         reply_text = parsed_reply
+        if not desktop_actions:
+            desktop_actions = _infer_desktop_launch_action(payload.message, reply_text, payload.desktop_profile)
 
     generated_files, cleaned_reply = extract_generated_files(reply_text)
     image_request = looks_like_image_generation_request(payload.message, payload.attachments)
