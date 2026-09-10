@@ -4365,8 +4365,14 @@ async function sendChat() {
         showToast('Ein Schritt der PC-Steuerung ist fehlgeschlagen', 'error')
       }
     }
-    if (response.reply) {
-      renderMessage('assistant', response.reply, { generatedFiles: response.generated_files })
+    const savedReportNote = savedArtifacts.length
+      ? `Bericht im gemeinsamen Ordner gespeichert:\n${savedArtifacts.map((filePath) => `- ${filePath}`).join('\n')}`
+      : ''
+    const assistantReply = savedReportNote
+      ? `${response.reply ? `${response.reply}\n\n` : ''}${savedReportNote}`
+      : response.reply
+    if (assistantReply) {
+      renderMessage('assistant', assistantReply, { generatedFiles: response.generated_files })
     } else if (response.generated_files?.length) {
       renderMessage('assistant', 'Datei wurde erstellt.', { generatedFiles: response.generated_files })
     } else {
