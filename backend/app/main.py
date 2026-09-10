@@ -1,6 +1,7 @@
 from contextlib import suppress
 
 import asyncio
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,8 @@ app = FastAPI(
     description="Foundation API for HIPPO-AI.",
 )
 
+logger = logging.getLogger("hippo-ai.api")
+
 
 async def _sync_model_registry_once() -> None:
     async with AsyncSessionLocal() as session:
@@ -29,7 +32,7 @@ async def _sync_model_registry_forever() -> None:
         try:
             await _sync_model_registry_once()
         except Exception as exc:
-            print(f"Model registry sync failed: {exc}")
+            logger.warning("Model registry sync failed: %s", exc)
         await asyncio.sleep(15 * 60)
 
 
@@ -46,20 +49,28 @@ app.include_router(api_router)
 
 @app.on_event("startup")
 async def bootstrap_database_and_default_admin() -> None:
+    logger.info(
+        "HIPPO AI backend starting | base_url=%s | model=%s | api_key_present=%s | vision_url=%s",
+        settings.hippo_api_url,
+        settings.hippo_model,
+        bool((settings.hippo_api_key or '').strip()),
+        settings.hippo_vision_url,
+    )
     await ensure_database_schema_and_tables(engine)
     async with AsyncSessionLocal() as session:
         created = await ensure_bootstrap_admin(session)
         if created:
-            print(f"Bootstrap admin created: {settings.bootstrap_admin_email}")
+            logger.info("Bootstrap admin created: %s", settings.bootstrap_admin_email)
     try:
         await _sync_model_registry_once()
     except Exception as exc:
-        print(f"Initial model registry sync failed: {exc}")
+        logger.warning("Initial model registry sync failed: %s", exc)
     app.state.model_registry_task = asyncio.create_task(_sync_model_registry_forever())
 
 
 @app.on_event("shutdown")
 async def shutdown_model_registry_sync() -> None:
+    logger.info("HIPPO AI backend shutting down")
     task = getattr(app.state, "model_registry_task", None)
     if task is not None:
         task.cancel()
