@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electron', {
   copyText: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   desktopControl: (payload) => ipcRenderer.invoke('desktop-control', payload),
   saveFile: (args) => ipcRenderer.invoke('save-file', args),
+  inspectProjectFolder: (args) => ipcRenderer.invoke('inspect-project-folder', args),
   ocrImage: (args) => ipcRenderer.invoke('ocr-image', args),
   runtimeConfig,
 })

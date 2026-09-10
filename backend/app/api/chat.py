@@ -32,6 +32,7 @@ class ChatRequest(BaseModel):
     project_id: int | None = None
     message: str
     attachments: list[ChatAttachment] | None = None
+    project_folder_context: str | None = None
 
 class ChatResponse(BaseModel):
     reply: str
@@ -215,7 +216,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             pass
 
         try:
-            project_files_context = await build_project_files_context(conv_project)
+            project_files_context = (payload.project_folder_context or '').strip() or await build_project_files_context(conv_project)
             hippo_messages.insert(
                 3,
                 {
@@ -223,7 +224,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                     "content": (
                         "Kontext des gemeinsamen Projektordners:\n"
                         f"{project_files_context}\n\n"
-                        "Wenn der Benutzer nach dem Inhalt des Ordners fragt, antworte ausführlich auf Deutsch, stütze dich direkt auf diesen Kontext und vermeide Tabellen oder übertriebenes Markdown."
+                        "Nutze diesen Kontext, wenn der Benutzer die Dateien oder den Ordner analysieren möchte, antworte ausführlich auf Deutsch und vermeide Tabellen oder übertriebenes Markdown."
                     ),
                 },
             )

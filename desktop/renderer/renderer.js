@@ -4296,6 +4296,20 @@ async function sendChat() {
       .map((attachment) => attachment.ocrPromise)
       .filter(Boolean)
   )
+  let projectFolderContext = ''
+  if (project?.watched_folder && window.electron?.inspectProjectFolder) {
+    try {
+      const folderInfo = await window.electron.inspectProjectFolder({
+        folder: project.watched_folder,
+        maxDepth: 2,
+        maxEntries: 30,
+        maxTextChars: 4000,
+      })
+      projectFolderContext = String(folderInfo?.context || '')
+    } catch (error) {
+      projectFolderContext = `Der lokale Ordner konnte nicht gelesen werden: ${error.message}`
+    }
+  }
   const attachments = state.draftAttachments.map((attachment) => ({
     filename: attachment.filename,
     mime_type: attachment.mime_type,
@@ -4322,6 +4336,7 @@ async function sendChat() {
         attachments,
         desktop_agent: state.desktopAgentMode,
         desktop_profile: state.desktopAgentProfile,
+        project_folder_context: projectFolderContext,
       }),
     })
 
