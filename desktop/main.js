@@ -113,6 +113,32 @@ function summarizeLocalFolder(folderPath, options = {}) {
   return { ok: true, context: lines.join(String.fromCharCode(10)) }
 }
 
+function inspectProjectFolderAsync(folder, options = {}) {
+  return new Promise((resolve) => {
+    const scriptPath = path.join(__dirname, 'scripts', 'inspect-project-folder.js')
+    const child = spawn(process.execPath, [scriptPath, String(folder || ''), JSON.stringify(options || {})], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => { stdout += String(chunk || '') })
+    child.stderr.on('data', (chunk) => { stderr += String(chunk || '') })
+    child.on('error', (error) => resolve({ ok: false, context: `Fehler beim Lesen des Ordners: ${error.message}` }))
+    child.on('close', (code) => {
+      if (code !== 0) {
+        resolve({ ok: false, context: `Fehler beim Lesen des Ordners: ${stderr.trim() || `child exited with code ${code}`}` })
+        return
+      }
+      try {
+        resolve(JSON.parse(stdout || '{}'))
+      } catch (error) {
+        resolve({ ok: false, context: `Fehler beim Lesen des Ordners: ${error.message}` })
+      }
+    })
+  })
+}
+
 function createWindow () {
   const win = new BrowserWindow({
     width: 1440,
@@ -185,7 +211,7 @@ ipcMain.handle('save-file', async (event, { folder, filename, data }) => {
 
 ipcMain.handle('inspect-project-folder', async (event, { folder, maxDepth = 2, maxEntries = 30, maxTextChars = 3000 } = {}) => {
   try {
-    return summarizeLocalFolder(folder, { maxDepth, maxEntries, maxTextChars })
+    return await inspectProjectFolderAsync(folder, { maxDepth, maxEntries, maxTextChars })
   } catch (error) {
     return { ok: false, context: `Fehler beim Lesen des Ordners: ${error.message}` }
   }

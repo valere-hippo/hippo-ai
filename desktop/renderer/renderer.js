@@ -27,6 +27,7 @@ const state = {
   recording: null,
   isRecording: false,
   projectConversationMemory: new Map(),
+  projectFolderContextCache: new Map(),
   projectQuery: '',
   chatQuery: '',
   adminOverview: null,
@@ -374,6 +375,31 @@ function formatRole(role) {
 
 function getContextProject() {
   return state.projects.find((project) => project.id === state.selectedProjectId) || null
+}
+
+async function refreshProjectFolderContext(project, { force = false } = {}) {
+  if (!project?.id) return ''
+  const cached = state.projectFolderContextCache.get(project.id)
+  if (cached && !force) return cached
+  if (!project.watched_folder || !window.electron?.inspectProjectFolder) {
+    state.projectFolderContextCache.set(project.id, '')
+    return ''
+  }
+  try {
+    const folderInfo = await window.electron.inspectProjectFolder({
+      folder: project.watched_folder,
+      maxDepth: 999,
+      maxEntries: 999999,
+      maxTextChars: 20000,
+    })
+    const context = String(folderInfo?.context || '')
+    state.projectFolderContextCache.set(project.id, context)
+    return context
+  } catch (error) {
+    const context = `Der lokale Ordner konnte nicht gelesen werden: ${error.message}`
+    state.projectFolderContextCache.set(project.id, context)
+    return context
+  }
 }
 
 function getConversationTitle(conversation) {
@@ -1698,6 +1724,11 @@ async function selectProject(projectId) {
   renderContext()
   closeSidebarDrawer()
 
+  const project = getContextProject()
+  if (project) {
+    await refreshProjectFolderContext(project, { force: true })
+  }
+
   if (state.currentConversationId) {
     await openConversationById(state.currentConversationId)
   } else {
@@ -1725,6 +1756,10 @@ async function openConversation(conversation) {
   renderConversations()
   renderContext()
   closeSidebarDrawer()
+  const project = getContextProject()
+  if (project) {
+    await refreshProjectFolderContext(project, { force: true })
+  }
   await openConversationById(conversation.id)
 }
 
@@ -4290,26 +4325,14 @@ async function sendChat() {
 
   normalizeActiveConversationState()
 
-  const project = getContextProject()
   await Promise.all(
     state.draftAttachments
       .map((attachment) => attachment.ocrPromise)
       .filter(Boolean)
   )
-  let projectFolderContext = ''
-  if (project?.watched_folder && window.electron?.inspectProjectFolder) {
-    try {
-      const folderInfo = await window.electron.inspectProjectFolder({
-        folder: project.watched_folder,
-        maxDepth: 2,
-        maxEntries: 30,
-        maxTextChars: 4000,
-      })
-      projectFolderContext = String(folderInfo?.context || '')
-    } catch (error) {
-      projectFolderContext = `Der lokale Ordner konnte nicht gelesen werden: ${error.message}`
-    }
-  }
+
+  const project = getContextProject()
+  const projectFolderContext = project ? (state.projectFolderContextCache.get(project.id) || '') : ''
   const attachments = state.draftAttachments.map((attachment) => ({
     filename: attachment.filename,
     mime_type: attachment.mime_type,
