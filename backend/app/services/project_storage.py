@@ -1064,7 +1064,16 @@ IMAGE_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif
 
 
 async def build_project_files_context(project: Any, max_files: int = 12) -> str:
-    files = list_project_files(project)[:max_files]
+    try:
+        files = list_project_files(project)[:max_files]
+    except FileNotFoundError as exc:
+        folder = str(getattr(project, "watched_folder", "") or "").strip()
+        return (
+            "Der gemeinsame Projektordner ist konfiguriert, aber vom Backend aktuell nicht lesbar.\n"
+            f"Ordnerpfad: {folder or 'unbekannt'}\n"
+            f"Fehler: {exc}\n"
+            "Bitte prüfe, ob der Backend-Server Zugriff auf diesen Pfad hat oder ob der Ordner korrekt gemountet wurde."
+        )
     if not files:
         return (
             "Im gemeinsamen Ordner des Projekts sind aktuell keine Dateien sichtbar.\n"
