@@ -385,13 +385,29 @@ function hasProjectFolderConsent(folder) {
   return localStorage.getItem(projectFolderConsentKey(folder)) === '1'
 }
 
-function requestProjectFolderConsent(project) {
+async function requestProjectFolderConsent(project) {
   const folder = String(project?.watched_folder || '').trim()
   if (!folder) return false
   if (hasProjectFolderConsent(folder)) return true
-  const accepted = window.confirm(
-    `Hippo AI benötigt ausdrücklich Lese- und Schreibzugriff auf den gemeinsamen Ordner:\n\n${folder}\n\nErlaubst du diesen Zugriff?`
-  )
+
+  const consentContent = document.createElement('div')
+  consentContent.className = 'modal-grid'
+  consentContent.innerHTML = `
+    <div class="muted-copy">Hippo AI benötigt den gemeinsamen Ordner, um Dateien und Unterordner lesen zu können und Berichte dort zu speichern.</div>
+    <div class="storage-summary">
+      <div class="storage-summary-line"><span>Ordner</span><strong>${escapeHtml(folder)}</strong></div>
+      <div class="storage-summary-line"><span>Zugriff</span><strong>Lese- und Schreibzugriff anfragen</strong></div>
+    </div>
+  `
+
+  const result = await openModal({
+    title: 'Ordnerzugriff erlauben?',
+    copy: 'Ohne deine Zustimmung liest Hippo AI den gemeinsamen Ordner nicht.',
+    content: consentContent,
+    submitLabel: 'Zugriff erlauben',
+  })
+
+  const accepted = Boolean(result)
   if (accepted) {
     localStorage.setItem(projectFolderConsentKey(folder), '1')
   }
@@ -406,7 +422,7 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
     state.projectFolderContextCache.set(project.id, '')
     return ''
   }
-  if (!requestProjectFolderConsent(project)) {
+  if (!hasProjectFolderConsent(project.watched_folder)) {
     state.projectFolderContextCache.set(project.id, '')
     return ''
   }
@@ -1751,7 +1767,10 @@ async function selectProject(projectId) {
 
   const project = getContextProject()
   if (project) {
-    await refreshProjectFolderContext(project, { force: true })
+    const allowed = await requestProjectFolderConsent(project)
+    if (allowed) {
+      await refreshProjectFolderContext(project, { force: true })
+    }
   }
 
   if (state.currentConversationId) {
@@ -1783,7 +1802,10 @@ async function openConversation(conversation) {
   closeSidebarDrawer()
   const project = getContextProject()
   if (project) {
-    await refreshProjectFolderContext(project, { force: true })
+    const allowed = await requestProjectFolderConsent(project)
+    if (allowed) {
+      await refreshProjectFolderContext(project, { force: true })
+    }
   }
   await openConversationById(conversation.id)
 }
@@ -2081,10 +2103,20 @@ async function openEditProjectModal(project) {
 
 async function deleteProject(project) {
   if (!project) return
-  const firstOk = window.confirm(`Projekt "${project.name}" wirklich löschen?`)
-  if (!firstOk) return
-  const secondOk = window.confirm(`Letzte Bestätigung: Das Projekt "${project.name}" wird dauerhaft gelöscht. Fortfahren?`)
-  if (!secondOk) return
+  const result = await openModal({
+    title: 'Projekt wirklich löschen?',
+    copy: `Das Projekt "${project.name}" wird dauerhaft gelöscht.`,
+    content: (() => {
+      const node = document.createElement('div')
+      node.className = 'modal-grid'
+      node.innerHTML = `
+        <div class="muted-copy">Diese Aktion löscht das Projekt, die zugehörigen Chats und die Projektverknüpfungen.</div>
+      `
+      return node
+    })(),
+    submitLabel: 'Löschen',
+  })
+  if (!result) return
 
   showLoader('Projekt wird gelöscht...')
   try {
@@ -2109,10 +2141,20 @@ async function deleteProject(project) {
 
 async function deleteConversation(conversation) {
   if (!conversation) return
-  const firstOk = window.confirm(`Chat "${getConversationTitle(conversation)}" wirklich löschen?`)
-  if (!firstOk) return
-  const secondOk = window.confirm(`Letzte Bestätigung: Der Chat "${getConversationTitle(conversation)}" wird dauerhaft gelöscht. Fortfahren?`)
-  if (!secondOk) return
+  const result = await openModal({
+    title: 'Chat wirklich löschen?',
+    copy: `Der Chat "${getConversationTitle(conversation)}" wird dauerhaft gelöscht.`,
+    content: (() => {
+      const node = document.createElement('div')
+      node.className = 'modal-grid'
+      node.innerHTML = `
+        <div class="muted-copy">Diese Aktion kann nicht rückgängig gemacht werden.</div>
+      `
+      return node
+    })(),
+    submitLabel: 'Löschen',
+  })
+  if (!result) return
 
   showLoader('Chat wird gelöscht...')
   try {
@@ -2253,10 +2295,18 @@ async function downloadProjectFile(project, filename) {
 
 async function deleteProjectStorageFile(project, filename, refresh) {
   if (!project?.id || !filename) return
-  const firstOk = window.confirm(`Datei "${filename}" wirklich löschen?`)
-  if (!firstOk) return
-  const secondOk = window.confirm(`Letzte Bestätigung: "${filename}" wird dauerhaft aus dem Projekt-Speicher entfernt. Fortfahren?`)
-  if (!secondOk) return
+  const result = await openModal({
+    title: 'Datei wirklich löschen?',
+    copy: `"${filename}" wird dauerhaft aus dem Projekt-Speicher entfernt.`,
+    content: (() => {
+      const node = document.createElement('div')
+      node.className = 'modal-grid'
+      node.innerHTML = `<div class="muted-copy">Diese Datei kann danach nur aus einem Backup wiederhergestellt werden.</div>`
+      return node
+    })(),
+    submitLabel: 'Löschen',
+  })
+  if (!result) return
 
   showLoader('Datei wird gelöscht...')
   try {
@@ -2507,10 +2557,18 @@ async function deleteDashboardUser(user) {
     return
   }
 
-  const firstOk = window.confirm(`Benutzer "${user.full_name || user.email}" wirklich löschen?`)
-  if (!firstOk) return
-  const secondOk = window.confirm(`Letzte Bestätigung: Benutzer "${user.full_name || user.email}" wird dauerhaft gelöscht. Fortfahren?`)
-  if (!secondOk) return
+  const result = await openModal({
+    title: 'Benutzer wirklich löschen?',
+    copy: `Benutzer "${user.full_name || user.email}" wird dauerhaft gelöscht.`,
+    content: (() => {
+      const node = document.createElement('div')
+      node.className = 'modal-grid'
+      node.innerHTML = `<div class="muted-copy">Diese Aktion betrifft nur das Benutzerkonto und die zugehörigen Rechte.</div>`
+      return node
+    })(),
+    submitLabel: 'Löschen',
+  })
+  if (!result) return
 
   showLoader('Benutzer wird gelöscht...')
   try {
@@ -2926,10 +2984,18 @@ async function openUserDashboardModal(initialTab = 'profile') {
     }
     const project = state.projects.find((item) => item.id === projectId)
     const projectName = project?.name || `Projekt ${projectId}`
-    const firstOk = window.confirm(`Alle Dateien von "${projectName}" wirklich löschen?`)
-    if (!firstOk) return
-    const secondOk = window.confirm(`Letzte Bestätigung: Der gesamte Projekt-Speicher von "${projectName}" wird gelöscht. Fortfahren?`)
-    if (!secondOk) return
+    const result = await openModal({
+      title: 'Projekt-Speicher wirklich löschen?',
+      copy: `Alle Dateien von "${projectName}" werden dauerhaft gelöscht.`,
+      content: (() => {
+        const node = document.createElement('div')
+        node.className = 'modal-grid'
+        node.innerHTML = `<div class="muted-copy">Diese Aktion leert den kompletten Projektspeicher.</div>`
+        return node
+      })(),
+      submitLabel: 'Löschen',
+    })
+    if (!result) return
 
     showLoader('Projekt-Speicher wird geleert...')
     try {
@@ -3607,7 +3673,18 @@ function buildSkillManagerContent(project) {
       deleteButton.className = 'ghost-action danger'
       deleteButton.textContent = 'Löschen'
       deleteButton.addEventListener('click', async () => {
-        if (!window.confirm(`Skill "${skill.name}" wirklich löschen?`)) return
+        const result = await openModal({
+          title: 'Skill wirklich löschen?',
+          copy: `Skill "${skill.name}" wird dauerhaft gelöscht.`,
+          content: (() => {
+            const node = document.createElement('div')
+            node.className = 'modal-grid'
+            node.innerHTML = `<div class="muted-copy">Die Funktion steht danach nicht mehr als Skill zur Verfügung.</div>`
+            return node
+          })(),
+          submitLabel: 'Löschen',
+        })
+        if (!result) return
         showLoader('Skill wird gelöscht...')
         try {
           await apiJson(`/skills/library/${skill.id}`, { method: 'DELETE' })
@@ -4066,7 +4143,18 @@ function buildToolManagerContent(project) {
       deleteButton.className = 'ghost-action danger'
       deleteButton.textContent = 'Löschen'
       deleteButton.addEventListener('click', async () => {
-        if (!window.confirm(`Tool "${tool.name}" wirklich löschen?`)) return
+        const result = await openModal({
+          title: 'Tool wirklich löschen?',
+          copy: `Tool "${tool.name}" wird dauerhaft gelöscht.`,
+          content: (() => {
+            const node = document.createElement('div')
+            node.className = 'modal-grid'
+            node.innerHTML = `<div class="muted-copy">Die Funktion steht danach nicht mehr als Tool zur Verfügung.</div>`
+            return node
+          })(),
+          submitLabel: 'Löschen',
+        })
+        if (!result) return
         showLoader('Tool wird gelöscht...')
         try {
           await apiJson(`/tools/library/${tool.id}`, { method: 'DELETE' })
