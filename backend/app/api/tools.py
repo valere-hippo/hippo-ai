@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import delete, insert, select
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy.exc import IntegrityError
 
 from app.api.dependencies import DbSession, get_current_user
@@ -59,7 +59,7 @@ def _parse_json_dict(value: object) -> dict | None:
     return None
 
 
-async def _load_tool(db: AsyncSession, tool_id: int) -> AITool:
+async def _load_tool(db: DbSession, tool_id: int) -> AITool:
     result = await db.execute(select(AITool).where(AITool.id == tool_id))
     tool = result.scalar_one_or_none()
     if tool is None:
@@ -68,7 +68,7 @@ async def _load_tool(db: AsyncSession, tool_id: int) -> AITool:
 
 
 @library_router.get("/library", response_model=list[AIToolResponse])
-async def list_tools(db: AsyncSession, current_user=Depends(get_current_user)):
+async def list_tools(db: DbSession, current_user=Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
     result = await db.execute(select(AITool).order_by(AITool.created_at.asc()))
@@ -76,7 +76,7 @@ async def list_tools(db: AsyncSession, current_user=Depends(get_current_user)):
 
 
 @library_router.post("/library", response_model=AIToolResponse, status_code=status.HTTP_201_CREATED)
-async def create_tool(payload: AIToolCreate, db: AsyncSession, current_user=Depends(get_current_user)):
+async def create_tool(payload: AIToolCreate, db: DbSession, current_user=Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
     stmt = insert(AITool).values(
@@ -105,7 +105,7 @@ async def create_tool(payload: AIToolCreate, db: AsyncSession, current_user=Depe
 
 
 @library_router.post("/library/upload", response_model=AIToolResponse, status_code=status.HTTP_201_CREATED)
-async def upload_tool_markdown(db: AsyncSession, file: UploadFile = File(...), current_user=Depends(get_current_user)):
+async def upload_tool_markdown(db: DbSession, file: UploadFile = File(...), current_user=Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
     if not (file.filename or "").lower().endswith(".md"):
@@ -152,7 +152,7 @@ async def upload_tool_markdown(db: AsyncSession, file: UploadFile = File(...), c
 
 
 @library_router.patch("/library/{tool_id}", response_model=AIToolResponse)
-async def update_tool(tool_id: int, payload: AIToolUpdate, db: AsyncSession, current_user=Depends(get_current_user)):
+async def update_tool(tool_id: int, payload: AIToolUpdate, db: DbSession, current_user=Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
     tool = await _load_tool(db, tool_id)
@@ -198,7 +198,7 @@ async def update_tool(tool_id: int, payload: AIToolUpdate, db: AsyncSession, cur
 
 
 @library_router.delete("/library/{tool_id}")
-async def delete_tool(tool_id: int, db: AsyncSession, current_user=Depends(get_current_user)):
+async def delete_tool(tool_id: int, db: DbSession, current_user=Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
     result = await db.execute(delete(AITool).where(AITool.id == tool_id))
@@ -209,7 +209,7 @@ async def delete_tool(tool_id: int, db: AsyncSession, current_user=Depends(get_c
 
 
 @library_router.post("/library/from-chat", response_model=AIToolResponse, status_code=status.HTTP_201_CREATED)
-async def create_tool_from_chat(payload: dict, db: AsyncSession, current_user=Depends(get_current_user)):
+async def create_tool_from_chat(payload: dict, db: DbSession, current_user=Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
 
