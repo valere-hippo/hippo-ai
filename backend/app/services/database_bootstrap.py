@@ -12,8 +12,19 @@ async def ensure_database_schema_and_tables(engine: AsyncEngine) -> None:
         await conn.execute(
             text(
                 f'ALTER TABLE IF EXISTS "{settings.postgres_schema}"."ai_projects" '
-                'ADD COLUMN IF NOT EXISTS pcloud_path VARCHAR(1000), '
-                'ADD COLUMN IF NOT EXISTS pcloud_folder_id INTEGER'
+                'ADD COLUMN IF NOT EXISTS pcloud_path VARCHAR(1000)'
+            )
+        )
+        await conn.execute(
+            text(
+                f'ALTER TABLE IF EXISTS "{settings.postgres_schema}"."ai_projects" '
+                'ADD COLUMN IF NOT EXISTS pcloud_folder_id BIGINT'
+            )
+        )
+        await conn.execute(
+            text(
+                f'ALTER TABLE IF EXISTS "{settings.postgres_schema}"."ai_projects" '
+                'ALTER COLUMN pcloud_folder_id TYPE BIGINT USING pcloud_folder_id::BIGINT'
             )
         )
         await conn.execute(
