@@ -279,7 +279,7 @@ def _project_pcloud_reference(project: Any) -> tuple[str | None, int | None]:
 
 
 def _project_uses_pcloud(project: Any) -> bool:
-    return bool(getattr(project, "pcloud_path", None) or getattr(project, "pcloud_folder_id", None))
+    return bool(getattr(project, "pcloud_path", None) and getattr(project, "pcloud_folder_id", None))
 
 
 def _local_project_dir(project: Any) -> Path:
@@ -340,7 +340,7 @@ def list_project_files(project: Any) -> list[ProjectFile]:
     if _project_uses_pcloud(project):
         try:
             pcloud_path, pcloud_folder_id = _project_pcloud_reference(project)
-            entries = list_pcloud_folder_recursive(pcloud_path, pcloud_folder_id, max_items=1000)
+            entries = list_pcloud_folder_recursive(pcloud_path, pcloud_folder_id)
         except Exception:
             return []
 
@@ -1184,6 +1184,15 @@ IMAGE_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif
 
 async def build_project_files_context(project: Any, max_files: int | None = None) -> str:
     try:
+        pcloud_path_raw = getattr(project, "pcloud_path", None)
+        pcloud_folder_id_raw = getattr(project, "pcloud_folder_id", None)
+        if bool(pcloud_path_raw) ^ bool(pcloud_folder_id_raw):
+            return (
+                "Dieses Projekt ist nur teilweise für pCloud konfiguriert.\n"
+                f"pCloud-Pfad: {str(pcloud_path_raw or 'unbekannt').strip()}\n"
+                f"pCloud folderid: {pcloud_folder_id_raw or 'unbekannt'}\n"
+                "Bitte trage in den Projekteinstellungen sowohl den pCloud-Pfad als auch die folderid ein."
+            )
         if _project_uses_pcloud(project):
             if not has_pcloud_storage():
                 folder = str(getattr(project, "pcloud_path", "") or "").strip()
@@ -1195,7 +1204,7 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                     "Bitte setze PCLOUD_ACCESS_TOKEN und PCLOUD_API_BASE_URL im Backend."
                 )
             pcloud_root, pcloud_folder_id = _project_pcloud_reference(project)
-            entries = await asyncio.to_thread(list_pcloud_folder_recursive, pcloud_root, pcloud_folder_id, max_files or 1000)
+            entries = await asyncio.to_thread(list_pcloud_folder_recursive, pcloud_root, pcloud_folder_id)
             files = [
                 ProjectFile(
                     filename=entry.path,

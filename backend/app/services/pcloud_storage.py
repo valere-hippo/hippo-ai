@@ -20,6 +20,8 @@ class PCloudEntry:
     size: int
     modified_at: datetime | None
     is_folder: bool
+    file_id: int | None = None
+    folder_id: int | None = None
 
 
 def has_pcloud_storage() -> bool:
@@ -122,7 +124,7 @@ def list_pcloud_folder(path: str | None = None, folder_id: int | str | None = No
     return [item for item in contents if isinstance(item, dict)]
 
 
-def list_pcloud_folder_recursive(path: str | None = None, folder_id: int | str | None = None, max_items: int | None = None, max_depth: int = 32) -> list[PCloudEntry]:
+def list_pcloud_folder_recursive(path: str | None = None, folder_id: int | str | None = None, max_items: int | None = None, max_depth: int = 64) -> list[PCloudEntry]:
     root_folder_id = normalize_pcloud_folder_id(folder_id)
     root_path = normalize_pcloud_path(path) if path else None
     entries: list[PCloudEntry] = []
@@ -145,8 +147,17 @@ def list_pcloud_folder_recursive(path: str | None = None, folder_id: int | str |
             if max_items is not None and len(entries) >= max_items:
                 return
 
-            item_path = str(item.get("path") or "").strip() or (folder_path or "")
-            item_name = str(item.get("name") or PurePosixPath(item_path).name or item_path).strip() or item_path
+            item_name = str(item.get("name") or "").strip()
+            item_path = str(item.get("path") or "").strip()
+            if not item_path:
+                parent_path = folder_path or root_path or "/"
+                if item_name:
+                    item_path = str(PurePosixPath(parent_path) / item_name)
+                else:
+                    item_path = parent_path
+            if not item_name:
+                item_name = PurePosixPath(item_path).name or item_path
+
             is_folder = bool(item.get("isfolder"))
             size = int(item.get("size") or 0)
             modified = item.get("modified") or item.get("created")
@@ -157,6 +168,9 @@ def list_pcloud_folder_recursive(path: str | None = None, folder_id: int | str |
                 except Exception:
                     modified_at = None
 
+            file_id = normalize_pcloud_folder_id(item.get("fileid")) if not is_folder else None
+            child_folder_id = normalize_pcloud_folder_id(item.get("folderid")) if is_folder else None
+
             entries.append(
                 PCloudEntry(
                     filename=item_name,
@@ -164,11 +178,13 @@ def list_pcloud_folder_recursive(path: str | None = None, folder_id: int | str |
                     size=size,
                     modified_at=modified_at,
                     is_folder=is_folder,
+                    file_id=file_id,
+                    folder_id=child_folder_id,
                 )
             )
 
             if is_folder:
-                next_folder_id = normalize_pcloud_folder_id(item.get("folderid"))
+                next_folder_id = child_folder_id
                 walk(item_path or None, depth + 1, next_folder_id)
 
     walk(root_path, 0, root_folder_id)

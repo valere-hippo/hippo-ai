@@ -29,15 +29,16 @@ def _normalize_shared_folder(folder: str) -> str:
     return str(path)
 
 
-def _normalize_pcloud_reference(path: str | None, folder_id: int | str | None) -> tuple[str | None, int | None]:
-    normalized_path = None
-    normalized_folder_id = None
-    if path not in (None, ''):
-        normalized_path = normalize_pcloud_path(path)
-    if folder_id not in (None, ''):
-        normalized_folder_id = normalize_pcloud_folder_id(folder_id)
-    if normalized_path is None and normalized_folder_id is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen pCloud-Pfad oder eine folderid auswählen.")
+def _normalize_pcloud_reference(path: str | None, folder_id: int | str | None) -> tuple[str, int]:
+    if path in (None, ''):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen pCloud-Pfad auswählen.")
+    if folder_id in (None, ''):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte eine pCloud folderid auswählen.")
+
+    normalized_path = normalize_pcloud_path(path)
+    normalized_folder_id = normalize_pcloud_folder_id(folder_id)
+    if normalized_folder_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte eine gültige pCloud folderid auswählen.")
     return normalized_path, normalized_folder_id
 
 async def _load_project(db: DbSession, project_id: int) -> Project:

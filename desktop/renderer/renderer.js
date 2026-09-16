@@ -417,7 +417,7 @@ async function requestProjectFolderConsent(project) {
 
 async function refreshProjectFolderContext(project, { force = false } = {}) {
   if (!project?.id) return ''
-  if (project.pcloud_path || project.pcloud_folder_id) {
+  if (project.pcloud_path && project.pcloud_folder_id) {
     state.projectFolderScanState.set(project.id, 'pcloud')
     return state.projectFolderContextCache.get(project.id) || ''
   }
@@ -454,7 +454,7 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
 }
 
 function queueProjectFolderRefresh(project) {
-  if (!project?.id || !project.watched_folder || project.pcloud_path || project.pcloud_folder_id) return
+  if (!project?.id || !project.watched_folder || (project.pcloud_path && project.pcloud_folder_id)) return
   if (state.projectFolderScanState.get(project.id) === 'loading') return
   void refreshProjectFolderContext(project, { force: true }).then(() => {
     if (state.selectedProjectId === project.id) {
@@ -782,7 +782,7 @@ function renderContext() {
   if (els.projectSkillsBtn) {
     els.projectSkillsBtn.disabled = !project
   }
-  const scanState = project ? (state.projectFolderScanState.get(project.id) || (project.pcloud_path || project.pcloud_folder_id ? 'pcloud' : 'idle')) : 'idle'
+  const scanState = project ? (state.projectFolderScanState.get(project.id) || (project.pcloud_path && project.pcloud_folder_id ? 'pcloud' : 'idle')) : 'idle'
   const scanLabel = scanState === 'loading'
     ? 'Ordneranalyse läuft…'
     : scanState === 'ready'
@@ -848,7 +848,7 @@ function renderProjects() {
     subtitle.className = 'item-subtitle'
     const parts = []
     if (project.watched_folder) parts.push(`Lokal: ${project.watched_folder}`)
-    if (project.pcloud_path || project.pcloud_folder_id) parts.push(project.pcloud_folder_id ? `pCloud: ${project.pcloud_path || 'folderid'} #${project.pcloud_folder_id}` : `pCloud: ${project.pcloud_path}`)
+    if (project.pcloud_path && project.pcloud_folder_id) parts.push(`pCloud: ${project.pcloud_path} #${project.pcloud_folder_id}`)
     subtitle.textContent = parts.length ? parts.join(' · ') : 'Kein Ordner verknüpft'
     main.append(title, subtitle)
 
@@ -1815,7 +1815,7 @@ async function selectProject(projectId) {
   closeSidebarDrawer()
 
   const project = getContextProject()
-  if (project?.pcloud_path || project?.pcloud_folder_id) {
+  if (project?.pcloud_path && project?.pcloud_folder_id) {
     state.projectFolderScanState.set(project.id, 'pcloud')
     renderContext()
   } else if (project) {
@@ -1850,7 +1850,7 @@ async function openConversation(conversation) {
   renderContext()
   closeSidebarDrawer()
   const project = getContextProject()
-  if (project?.pcloud_path || project?.pcloud_folder_id) {
+  if (project?.pcloud_path && project?.pcloud_folder_id) {
     state.projectFolderScanState.set(project.id, 'pcloud')
     renderContext()
   } else if (project) {
@@ -2052,7 +2052,7 @@ function buildProjectForm(defaults = {}) {
 
   const hint = document.createElement('div')
   hint.className = 'muted-copy'
-  hint.textContent = 'Der pCloud-Pfad wird als Arbeitsquelle analysiert. Alternativ kannst du die pCloud folderid eintragen, wenn der Ordner ein geteiltes Verzeichnis ist.'
+  hint.textContent = 'Pfad und folderid sind Pflicht. Hippo liest dann den pCloud-Ordner und alle Unterordner rekursiv.'
 
   const pcloudField = document.createElement('label')
   pcloudField.className = 'field'
@@ -2067,7 +2067,7 @@ function buildProjectForm(defaults = {}) {
 
   const folderIdField = document.createElement('label')
   folderIdField.className = 'field'
-  folderIdField.innerHTML = '<span>pCloud folderid (optional, für geteilte Ordner)</span>'
+  folderIdField.innerHTML = '<span>pCloud folderid</span>'
   const folderIdInput = document.createElement('input')
   folderIdInput.id = 'pcloud_folder_id'
   folderIdInput.type = 'number'
@@ -2086,14 +2086,14 @@ async function openCreateProjectModal() {
   const form = buildProjectForm()
   const result = await openModal({
     title: 'Projekt erstellen',
-    copy: 'Wähle den lokalen gemeinsamen Ordner und den pCloud-Pfad für die Projektquelle aus.',
+    copy: 'Wähle den lokalen gemeinsamen Ordner sowie den pCloud-Pfad und die folderid für die Projektquelle aus.',
     content: form,
     submitLabel: 'Erstellen',
-    validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && (values.pcloud_path?.trim() || values.pcloud_folder_id?.trim())),
+    validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.pcloud_path?.trim() && values.pcloud_folder_id?.trim()),
   })
 
-  if (!result || !result.folder || (!result.pcloud_path && !result.pcloud_folder_id)) {
-    showToast('Du musst einen lokalen Ordner und mindestens einen pCloud-Pfad oder eine folderid auswählen.', 'error')
+  if (!result || !result.folder || !result.pcloud_path || !result.pcloud_folder_id) {
+    showToast('Du musst einen lokalen Ordner, den pCloud-Pfad und die pCloud folderid auswählen.', 'error')
     return
   }
 
@@ -2130,7 +2130,7 @@ async function openEditProjectModal(project) {
 
   const result = await openModal({
     title: 'Projekt bearbeiten',
-    copy: 'Hier siehst und änderst du den lokalen gemeinsamen Ordner sowie den pCloud-Pfad oder die folderid des Projekts.',
+    copy: 'Hier siehst und änderst du den lokalen gemeinsamen Ordner sowie den pCloud-Pfad und die folderid des Projekts.',
     content: form,
     submitLabel: 'Speichern',
     extraActions: [
@@ -2153,8 +2153,8 @@ async function openEditProjectModal(project) {
     ],
   })
 
-  if (!result || !result.folder || (!result.pcloud_path && !result.pcloud_folder_id)) {
-    showToast('Du musst beim Speichern einen lokalen Ordner und mindestens einen pCloud-Pfad oder eine folderid beibehalten oder auswählen.', 'error')
+  if (!result || !result.folder || !result.pcloud_path || !result.pcloud_folder_id) {
+    showToast('Du musst beim Speichern den lokalen Ordner, den pCloud-Pfad und die pCloud folderid beibehalten oder auswählen.', 'error')
     return
   }
 
@@ -4524,12 +4524,12 @@ async function sendChat() {
   )
 
   const project = getContextProject()
-  if (project?.pcloud_path || project?.pcloud_folder_id) {
+  if (project?.pcloud_path && project?.pcloud_folder_id) {
     state.projectFolderScanState.set(project.id, 'pcloud')
   } else if (project?.watched_folder) {
     queueProjectFolderRefresh(project)
   }
-  const projectFolderContext = project && !project?.pcloud_path ? (state.projectFolderContextCache.get(project.id) || '') : ''
+  const projectFolderContext = project && !(project?.pcloud_path && project?.pcloud_folder_id) ? (state.projectFolderContextCache.get(project.id) || '') : ''
   const attachments = state.draftAttachments.map((attachment) => ({
     filename: attachment.filename,
     mime_type: attachment.mime_type,
