@@ -25,10 +25,10 @@ async def transcribe_audio(file: UploadFile = File(...), current_user=Depends(ge
             tmp.flush()
             tmp_path = Path(tmp.name)
 
-        text = transcribe_audio_file(tmp_path)
+        text = await transcribe_audio_file(tmp_path)
         return {"text": text}
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=f"Der lokale Transkriptionsdienst ist nicht verfügbar: {exc}")
+        raise HTTPException(status_code=503, detail=f"Der Transkriptionsdienst ist nicht verfügbar: {exc}")
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Fehler bei der Transkription: {exc}")
     finally:
