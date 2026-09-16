@@ -347,38 +347,54 @@ function windowsStartProcess(target, args = [], cwd) {
 }
 
 function launchAppByPreset(appKey, options = {}) {
-  const preset = getAppPreset(appKey)
-  if (!preset) {
-    return { ok: false, error: `Unbekannte App: ${appKey}` }
-  }
+  const rawKey = String(appKey || '').trim()
+  const preset = getAppPreset(rawKey)
   const platformKey = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux'
-  const candidates = preset[platformKey] || []
+  const candidates = preset ? (preset[platformKey] || []) : []
   const cwd = String(options.cwd || '').trim() || undefined
   const extraArgs = Array.isArray(options.args) ? options.args.map((item) => String(item)) : []
   const file = String(options.file || options.path || '').trim()
-  const executableOverride = getAppExecutableOverride(appKey) || String(options.executable || options.exePath || options.programPath || options.path || '').trim()
+  const executableOverride = getAppExecutableOverride(rawKey) || String(options.executable || options.exePath || options.programPath || options.path || '').trim()
+  const genericTarget = executableOverride || (isExecutablePath(rawKey) ? rawKey : '')
 
-  if (executableOverride && isExecutablePath(executableOverride)) {
+  if (genericTarget && isExecutablePath(genericTarget)) {
     if (process.platform === 'win32') {
       const launchArgs = []
-      if (file && file !== executableOverride) launchArgs.push(file)
+      if (file && file !== genericTarget) launchArgs.push(file)
       launchArgs.push(...extraArgs)
-      const result = windowsStartProcess(executableOverride, launchArgs, cwd)
+      const result = windowsStartProcess(genericTarget, launchArgs, cwd)
       if (result.ok) {
-        return { ok: true, pid: result.pid || null, launched: executableOverride, app: String(appKey), file: file || null, override: true }
+        return { ok: true, pid: result.pid || null, launched: genericTarget, app: rawKey || genericTarget, file: file || null, override: true }
       }
     } else if (process.platform === 'darwin') {
-      const args = ['-a', executableOverride]
-      if (file && file !== executableOverride) args.push(file)
+      const args = ['-a', genericTarget]
+      if (file && file !== genericTarget) args.push(file)
       if (extraArgs.length) args.push(...extraArgs)
       const pid = spawnDetached('/usr/bin/open', args, { cwd, env: process.env })
-      return { ok: true, pid, launched: executableOverride, app: String(appKey), file: file || null, override: true }
+      return { ok: true, pid, launched: genericTarget, app: rawKey || genericTarget, file: file || null, override: true }
     } else {
       const launchArgs = []
-      if (file && file !== executableOverride) launchArgs.push(file)
+      if (file && file !== genericTarget) launchArgs.push(file)
       launchArgs.push(...extraArgs)
-      const pid = spawnDetached(executableOverride, launchArgs, { cwd, env: process.env })
-      return { ok: true, pid, launched: executableOverride, app: String(appKey), file: file || null, override: true }
+      const pid = spawnDetached(genericTarget, launchArgs, { cwd, env: process.env })
+      return { ok: true, pid, launched: genericTarget, app: rawKey || genericTarget, file: file || null, override: true }
+    }
+  }
+
+  if (!preset && rawKey) {
+    if (process.platform === 'win32') {
+      const launchArgs = []
+      if (file) launchArgs.push(file)
+      launchArgs.push(...extraArgs)
+      const result = windowsStartProcess(rawKey, launchArgs, cwd)
+      if (result.ok) {
+        return { ok: true, pid: result.pid || null, launched: rawKey, app: rawKey, file: file || null, generic: true }
+      }
+    } else {
+      const launchArgs = [...extraArgs]
+      if (file) launchArgs.push(file)
+      const pid = spawnDetached(rawKey, launchArgs, { cwd, env: process.env })
+      return { ok: true, pid, launched: rawKey, app: rawKey, file: file || null, generic: true }
     }
   }
 
@@ -390,7 +406,7 @@ function launchAppByPreset(appKey, options = {}) {
       launchArgs.push(...extraArgs)
       const result = windowsStartProcess(candidate, launchArgs, cwd)
       if (result.ok) {
-        return { ok: true, launched: candidate, app: String(appKey), file: file || null }
+        return { ok: true, launched: candidate, app: rawKey, file: file || null }
       }
       continue
     }
@@ -400,16 +416,16 @@ function launchAppByPreset(appKey, options = {}) {
       if (file) args.push(file)
       if (extraArgs.length) args.push(...extraArgs)
       const pid = spawnDetached('/usr/bin/open', args, { cwd, env: process.env })
-      return { ok: true, pid, launched: candidate, app: String(appKey), file: file || null }
+      return { ok: true, pid, launched: candidate, app: rawKey, file: file || null }
     }
 
     const launchArgs = [...extraArgs]
     if (file) launchArgs.push(file)
     const pid = spawnDetached(candidate, launchArgs, { cwd, env: process.env })
-    return { ok: true, pid, launched: candidate, app: String(appKey), file: file || null }
+    return { ok: true, pid, launched: candidate, app: rawKey, file: file || null }
   }
 
-  return { ok: false, error: `Die App ${appKey} konnte nicht gestartet werden.` }
+  return { ok: false, error: `Die App ${rawKey} konnte nicht gestartet werden.` }
 }
 
 function openFileWithDefaultApp(filePath, cwd) {
