@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from email.utils import parsedate_to_datetime
+from functools import lru_cache
 from pathlib import PurePosixPath
 from typing import Any
+import os
 
 import httpx
 
@@ -24,8 +26,35 @@ def has_pcloud_storage() -> bool:
     return bool(settings.pcloud_access_token)
 
 
+@lru_cache(maxsize=1)
+def _resolved_api_base_url() -> str:
+    explicit_env = (os.getenv("PCLOUD_API_BASE_URL") or os.getenv("PCLOUD_API_URL") or "").strip()
+    if explicit_env:
+        return explicit_env.rstrip("/")
+
+    configured = (settings.pcloud_api_base_url or "").strip()
+    if configured and configured != "https://api.pcloud.com":
+        return configured.rstrip("/")
+
+    try:
+        with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+            response = client.get("https://api.pcloud.com/getapiserver")
+            response.raise_for_status()
+            payload = response.json()
+            servers = payload.get("api") if isinstance(payload, dict) else None
+            if isinstance(servers, list):
+                for server in servers:
+                    candidate = str(server).strip()
+                    if candidate:
+                        return f"https://{candidate.strip('/')}".rstrip("/")
+    except Exception:
+        pass
+
+    return configured or "https://eapi.pcloud.com"
+
+
 def _base_url() -> str:
-    return (settings.pcloud_api_base_url or "https://api.pcloud.com").rstrip("/")
+    return _resolved_api_base_url()
 
 
 def _auth_headers() -> dict[str, str]:
@@ -78,13 +107,14 @@ def _api_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
 
 
 def list_pcloud_folder(path: str | None = None, folder_id: int | str | None = None) -> list[dict[str, Any]]:
-    params: dict[str, Any] = {}
     normalized_folder_id = normalize_pcloud_folder_id(folder_id)
     if normalized_folder_id is not None:
-        params["folderid"] = normalized_folder_id
+        try:
+            payload = _api_call("listfolderbyid", {"folderid": normalized_folder_id})
+        except Exception:
+            payload = _api_call("listfolder", {"folderid": normalized_folder_id})
     else:
-        params["path"] = normalize_pcloud_path(path)
-    payload = _api_call("listfolder", params)
+        payload = _api_call("listfolder", {"path": normalize_pcloud_path(path)})
     metadata = payload.get("metadata") or {}
     contents = metadata.get("contents") or []
     if not isinstance(contents, list):
