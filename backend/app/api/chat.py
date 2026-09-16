@@ -26,6 +26,7 @@ from app.services.project_tools import build_tools_context
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
+from app.services.model_registry import resolve_chat_max_tokens
 import base64
 
 router = APIRouter(prefix="/chat", tags=["chat"]) 
@@ -222,7 +223,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             pass
 
         try:
-            project_files_context = await build_project_files_context(conv_project, include_previews=not looks_like_project_inventory_request(payload.message))
+            project_files_context = await build_project_files_context(conv_project, include_previews=not looks_like_project_inventory_request(payload.message), question=payload.message)
             hippo_messages.insert(
                 3,
                 {
@@ -268,14 +269,16 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         if settings.hippo_api_key:
             headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
         model_name = settings.hippo_model
-        max_tokens = settings.hippo_response_max_tokens
+        max_tokens = await resolve_chat_max_tokens(db, settings.hippo_response_max_tokens, settings.hippo_response_max_tokens_long)
         if payload.attachments or conv_project is not None:
-            max_tokens = min(settings.hippo_response_max_tokens_long, max(max_tokens, 512))
+            max_tokens = max(512, min(max_tokens, settings.hippo_response_max_tokens_long))
         model_payload = {
             "model": model_name,
             "messages": hippo_messages,
             "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
             "max_tokens": max_tokens,
+            "max_completion_tokens": max_tokens,
+            "max_output_tokens": max_tokens,
         }
         try:
             r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=model_payload, headers=headers)

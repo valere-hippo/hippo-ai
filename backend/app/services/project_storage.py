@@ -27,6 +27,7 @@ except Exception:  # pragma: no cover - optional dependency
         pass
 
 from app.core.config import settings
+from app.services.chat_payloads import looks_like_project_detailed_report_request
 from app.services.pcloud_storage import PCloudEntry, get_pcloud_file_bytes, list_pcloud_folder, has_pcloud_storage, normalize_pcloud_folder_id, normalize_pcloud_path
 
 LOCAL_STORAGE_ROOT = Path("/app/uploads")
@@ -1215,7 +1216,7 @@ def extract_project_file_preview(filename: str, data: bytes, content_type: str |
 IMAGE_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 
 
-async def build_project_files_context(project: Any, max_files: int | None = None, include_previews: bool = True) -> str:
+async def build_project_files_context(project: Any, max_files: int | None = None, include_previews: bool = True, question: str | None = None) -> str:
     try:
         pcloud_path_raw = getattr(project, "pcloud_path", None)
         pcloud_folder_id_raw = getattr(project, "pcloud_folder_id", None)
@@ -1227,6 +1228,7 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                 "Bitte trage in den Projekteinstellungen sowohl den pCloud-Pfad als auch die folderid ein. Dabei werden nur Dateien im Ordner berücksichtigt; Unterordner werden ignoriert."
             )
         if _project_uses_pcloud(project):
+            detailed_report = looks_like_project_detailed_report_request(question or "")
             if not has_pcloud_storage():
                 folder = str(getattr(project, "pcloud_path", "") or "").strip()
                 folder_id = getattr(project, "pcloud_folder_id", None)
@@ -1237,13 +1239,14 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                     "Bitte setze PCLOUD_ACCESS_TOKEN und PCLOUD_API_BASE_URL im Backend. Dabei werden nur Dateien im Ordner berücksichtigt; Unterordner werden ignoriert."
                 )
             files = await asyncio.to_thread(_pcloud_folder_files, project)
-            if max_files is None or max_files > 60:
-                max_files = 60
+            if max_files is None or (detailed_report and max_files > 120) or (not detailed_report and max_files > 60):
+                max_files = 120 if detailed_report else 60
             files = files[:max_files]
             pcloud_lines = [
                 f"Im pCloud-Projektordner sind {len(files)} Dateien sichtbar (Unterordner ignoriert).",
             ]
-            preview_budget = 5 if include_previews else 0
+            preview_budget = 8 if detailed_report else (5 if include_previews else 0)
+            preview_max_chars = 180 if detailed_report else 120
             for index, entry in enumerate(files):
                 line = f"- {entry.path}"
                 if index < preview_budget:
@@ -1256,7 +1259,7 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                     except Exception:
                         summary = ""
                     if summary:
-                        line += f" — {summary}"
+                        line += f" — {_truncate(summary, preview_max_chars)}"
                 pcloud_lines.append(line)
                 if sum(len(part) + 1 for part in pcloud_lines) > 12000:
                     pcloud_lines[-1] = "- … Kontext wegen Länge gekürzt."

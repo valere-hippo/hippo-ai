@@ -114,6 +114,10 @@ PROJECT_INVENTORY_RE = re.compile(
     r"\b(alle\s+dateien|alle\s+ordner|was\s+siehst\s+du|liste\s+.*dateien|liste\s+.*ordner|welche\s+dateien|welche\s+ordner|inhalt\s+des\s+ordners|zeige\s+mir\s+.*dateien|zeige\s+mir\s+.*ordner|enumerate|list\s+files|list\s+folders)\b",
     re.IGNORECASE,
 )
+PROJECT_DETAILED_REPORT_RE = re.compile(
+    r"\b(rapport\s+d[ée]taill[ée]|detaill?ier(?:ter|tes|te)?\s+bericht|report\s+details?|full\s+report|komplette?r?\s+bericht|alle\s+dateien\s+und\s+ordner\s+auswerten|alle\s+dateien\s+analysieren|tous\s+les\s+fichiers|analyser\s+tous\s+les\s+fichiers|analyze\s+all\s+files|analyse\s+all\s+files)\b",
+    re.IGNORECASE,
+)
 
 
 def looks_like_image_generation_request(message: str, attachments: list[Any] | None = None) -> bool:
@@ -166,3 +170,10 @@ def looks_like_project_inventory_request(message: str) -> bool:
     if not text:
         return False
     return bool(PROJECT_INVENTORY_RE.search(text))
+
+
+def looks_like_project_detailed_report_request(message: str) -> bool:
+    text = (message or "").strip()
+    if not text:
+        return False
+    return bool(PROJECT_DETAILED_REPORT_RE.search(text))
