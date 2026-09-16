@@ -132,14 +132,15 @@ def _infer_desktop_launch_action(message: str, reply_text: str, profile: str | N
     actions: list[DesktopAction] = []
     if open_path:
         if 'qgis' in haystack or profile == 'qgis':
-            actions.append(DesktopAction(action='launch_app', command='qgis'))
+            actions.append(DesktopAction(action='launch_app', command='qgis', file=open_path))
         elif 'word' in haystack or 'bericht' in haystack or 'report' in haystack:
-            actions.append(DesktopAction(action='launch_app', command='word'))
+            actions.append(DesktopAction(action='launch_app', command='word', file=open_path))
         elif 'excel' in haystack:
-            actions.append(DesktopAction(action='launch_app', command='excel'))
+            actions.append(DesktopAction(action='launch_app', command='excel', file=open_path))
         elif 'libreoffice' in haystack or 'soffice' in haystack:
-            actions.append(DesktopAction(action='launch_app', command='libreoffice'))
-        actions.append(DesktopAction(action='open_file', file=open_path))
+            actions.append(DesktopAction(action='launch_app', command='libreoffice', file=open_path))
+        else:
+            actions.append(DesktopAction(action='open_file', file=open_path))
         return actions
 
     candidates: list[tuple[str, list[str]]] = [

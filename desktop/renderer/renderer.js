@@ -4582,7 +4582,9 @@ async function sendChat() {
       const actionResult = await executeDesktopActions(response.desktop_actions)
       hideLoader()
       if (!actionResult.ok) {
-        showToast('Ein Schritt der PC-Steuerung ist fehlgeschlagen', 'error')
+        const lastFailure = [...(actionResult.results || [])].reverse().find((entry) => entry && entry.ok === false)
+        const detail = lastFailure?.error ? ` (${lastFailure.error})` : ''
+        showToast(`Ein Schritt der PC-Steuerung ist fehlgeschlagen${detail}`, 'error')
       }
     }
 
