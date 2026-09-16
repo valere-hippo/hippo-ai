@@ -1236,24 +1236,32 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                     f"pCloud folderid: {folder_id or 'unbekannt'}\n"
                     "Bitte setze PCLOUD_ACCESS_TOKEN und PCLOUD_API_BASE_URL im Backend. Dabei werden nur Dateien im Ordner berücksichtigt; Unterordner werden ignoriert."
                 )
-            entries = await asyncio.to_thread(_pcloud_folder_files, project)
-            if not include_previews:
-                inventory_lines = [
-                    f"Im pCloud-Projektordner sind {len(entries)} Dateien sichtbar (Unterordner ignoriert):",
-                ]
-                for entry in entries:
-                    inventory_lines.append(f"- {entry.path}")
-                return "\n".join(inventory_lines)
-            files = [
-                ProjectFile(
-                    filename=entry.path,
-                    size=entry.size,
-                    modified_at=entry.modified_at,
-                    storage="pcloud",
-                )
-                for entry in entries
-                if not entry.is_folder
+            files = await asyncio.to_thread(_pcloud_folder_files, project)
+            if max_files is None or max_files > 60:
+                max_files = 60
+            files = files[:max_files]
+            pcloud_lines = [
+                f"Im pCloud-Projektordner sind {len(files)} Dateien sichtbar (Unterordner ignoriert).",
             ]
+            preview_budget = 5 if include_previews else 0
+            for index, entry in enumerate(files):
+                line = f"- {entry.path}"
+                if index < preview_budget:
+                    try:
+                        if _project_uses_pcloud(project):
+                            content, content_type, _storage = await asyncio.to_thread(read_project_file, project, entry.path)
+                        else:
+                            content, content_type, _storage = read_project_file(project, entry.path)
+                        summary = extract_project_file_preview(entry.path, content, content_type)
+                    except Exception:
+                        summary = ""
+                    if summary:
+                        line += f" — {summary}"
+                pcloud_lines.append(line)
+                if sum(len(part) + 1 for part in pcloud_lines) > 12000:
+                    pcloud_lines[-1] = "- … Kontext wegen Länge gekürzt."
+                    break
+            return "\n".join(pcloud_lines)
         else:
             files = list_project_files(project)
     except FileNotFoundError as exc:
