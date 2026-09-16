@@ -21,13 +21,15 @@ from app.services.chat_payloads import (
     looks_like_project_inventory_request,
     storage_text,
 )
-from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
+from app.services.generated_files import GeneratedFile, SCENE_PREFIX, build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.project_tools import build_tools_context
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 from app.services.model_registry import resolve_chat_max_tokens
+from app.services.image_generation import build_image_scene_spec
 import base64
+import json
 
 router = APIRouter(prefix="/chat", tags=["chat"]) 
 
@@ -325,33 +327,19 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             discarded_visual = True
         generated_files = []
 
-    if image_request and generated_files:
-        normalized_files: list[GeneratedFile] = []
-        for file in generated_files:
-            suffix = Path(file.filename).suffix.lower()
-            if geodata_direct_svg and file.filename == geodata_direct_svg[0]:
-                normalized_files.append(file)
-                continue
-            if suffix in {".svg", ".png", ".jpg", ".jpeg"}:
-                safe_stem = re.sub(r"[^A-Za-z0-9]+", "_", Path(file.filename).stem).strip("_").lower() or "hippo_image"
-                content = file.content
-                if suffix == ".svg" and not file.content.lstrip().startswith("<svg"):
-                    content = cleaned_reply or reply_text or payload.message
-                normalized_files.append(GeneratedFile(filename=f"{safe_stem}.png", content=content))
-            else:
-                normalized_files.append(file)
-        generated_files = normalized_files
-    used_image_fallback = False
-    if not generated_files and image_request:
+    if image_request and not geodata_visual_request:
+        scene = await build_image_scene_spec(payload.message, cleaned_reply or reply_text)
         fallback_title = derive_conversation_title(payload.message, payload.attachments)
         fallback_name = re.sub(r"[^A-Za-z0-9]+", "_", fallback_title).strip("_").lower() or "hippo_image"
         generated_files = [
             GeneratedFile(
                 filename=f"{fallback_name}.png",
-                content=cleaned_reply or reply_text or payload.message,
+                content=f"{SCENE_PREFIX}{json.dumps(scene, ensure_ascii=False)}",
             )
         ]
         used_image_fallback = True
+    else:
+        used_image_fallback = False
     serialized_files: list[dict[str, str]] = []
     for file in generated_files:
         try:

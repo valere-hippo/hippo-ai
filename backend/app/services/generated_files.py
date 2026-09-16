@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 from zipfile import ZipFile, ZIP_DEFLATED
 import struct
 import re
 import html
+import json
 import mimetypes
 import math
 import textwrap
@@ -22,6 +24,7 @@ except Exception:  # pragma: no cover - optional runtime dependency
 
 FILE_START_RE = re.compile(r"<<<FILE:(?P<filename>[^>]+)>>>", re.IGNORECASE)
 FILE_END_RE = re.compile(r"<<<END_FILE>>>", re.IGNORECASE)
+SCENE_PREFIX = "AI_IMAGE_SCENE:"
 
 
 @dataclass
@@ -782,10 +785,235 @@ def _topic_key(title: str, body: str) -> str:
     return "generic"
 
 
+def _scene_value(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _scene_color(value: Any, fallback: tuple[int, int, int] = (255, 255, 255)) -> tuple[int, int, int]:
+    if isinstance(value, str):
+        raw = value.strip().lstrip("#")
+        if len(raw) == 6:
+            try:
+                return (int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16))
+            except Exception:
+                pass
+    return fallback
+
+
+def _scene_payload(body: str) -> dict[str, Any] | None:
+    raw = (body or "").strip()
+    if not raw.startswith(SCENE_PREFIX):
+        return None
+    try:
+        parsed = json.loads(raw[len(SCENE_PREFIX) :].strip())
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        return None
+
+
 def _draw_glow(draw, cx: int, cy: int, radius: int, color: tuple[int, int, int], alpha: int) -> None:
     for step in range(radius, 0, -1):
         current_alpha = int(alpha * (step / radius) ** 2)
         draw.ellipse((cx - step, cy - step, cx + step, cy + step), fill=(*color, max(0, min(255, current_alpha))))
+
+
+def _draw_scene_background(draw, width: int, height: int, palette: list[Any] | None, mood: str = "balanced") -> None:
+    colors = ["#081018", "#132235", "#1d3046", "#3c5270"]
+    if isinstance(palette, list) and palette:
+        colors = [str(c) for c in palette[:4]] + colors
+    top = _scene_color(colors[0], (8, 16, 24))
+    mid = _scene_color(colors[1], (18, 34, 53))
+    bottom = _scene_color(colors[2], (8, 14, 20))
+    if mood == "dramatic":
+        top = _scene_color(colors[0], (4, 8, 18))
+        mid = _scene_color(colors[1], (16, 20, 32))
+        bottom = _scene_color(colors[2], (8, 10, 16))
+    for y in range(height):
+        ratio = y / max(1, height - 1)
+        if ratio < 0.56:
+            span = ratio / 0.56
+            r = int(top[0] + (mid[0] - top[0]) * span)
+            g = int(top[1] + (mid[1] - top[1]) * span)
+            b = int(top[2] + (mid[2] - top[2]) * span)
+        else:
+            span = (ratio - 0.56) / 0.44
+            r = int(mid[0] + (bottom[0] - mid[0]) * span)
+            g = int(mid[1] + (bottom[1] - mid[1]) * span)
+            b = int(mid[2] + (bottom[2] - mid[2]) * span)
+        draw.line((0, y, width, y), fill=(r, g, b, 255))
+    _draw_glow(draw, int(width * 0.22), int(height * 0.22), int(min(width, height) * 0.18), _scene_color(colors[3], (99, 215, 191)), 120)
+    _draw_glow(draw, int(width * 0.8), int(height * 0.18), int(min(width, height) * 0.16), _scene_color(colors[4] if len(colors) > 4 else colors[3], (154, 178, 255)), 100)
+    _draw_glow(draw, int(width * 0.5), int(height * 0.55), int(min(width, height) * 0.22), (255, 200, 104), 55)
+
+
+def _draw_scene_element(draw, width: int, height: int, element: dict[str, Any]) -> None:
+    kind = str(element.get("type") or "abstract").lower()
+    x = int(_scene_value(element.get("x"), 0.5) * width)
+    y = int(_scene_value(element.get("y"), 0.5) * height)
+    scale = max(0.15, _scene_value(element.get("scale"), 1.0))
+    color = _scene_color(element.get("color"), (255, 255, 255))
+    rotation = _scene_value(element.get("rotation"), 0.0)
+    _ = rotation  # reserved for future use
+
+    if kind == "sun":
+        r = int(70 * scale)
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=(*color, 255))
+        for angle in range(0, 360, 30):
+            rad = math.radians(angle)
+            x1 = x + int(math.cos(rad) * (r + 10))
+            y1 = y + int(math.sin(rad) * (r + 10))
+            x2 = x + int(math.cos(rad) * (r + 48))
+            y2 = y + int(math.sin(rad) * (r + 48))
+            draw.line((x1, y1, x2, y2), fill=(*color, 180), width=max(2, int(5 * scale)))
+    elif kind == "moon":
+        r = int(56 * scale)
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=(*color, 235))
+        draw.ellipse((x - r // 2, y - r // 2, x + r // 2, y + r // 2), fill=(0, 0, 0, 0))
+    elif kind == "mountain":
+        base = int(160 * scale)
+        peak = int(120 * scale)
+        points = [(x - base, y + base), (x, y - peak), (x + base, y + base)]
+        draw.polygon(points, fill=(*color, 255))
+        draw.polygon([(x - base * 0.45, y + base * 0.55), (x - 10, y - peak * 0.25), (x + base * 0.22, y + base * 0.55)], fill=(255, 255, 255, 50))
+    elif kind == "tree":
+        trunk_w = int(26 * scale)
+        trunk_h = int(110 * scale)
+        draw.rounded_rectangle((x - trunk_w // 2, y, x + trunk_w // 2, y + trunk_h), radius=max(4, trunk_w // 4), fill=(92, 64, 36, 255))
+        crown_r = int(58 * scale)
+        for dx, dy, fr in ((0, -30, 1.0), (-42, -8, 0.8), (42, -8, 0.8), (-18, -42, 0.7), (18, -42, 0.7)):
+            rr = int(crown_r * fr)
+            draw.ellipse((x + dx - rr, y + dy - rr, x + dx + rr, y + dy + rr), fill=(*color, 235))
+    elif kind == "river" or kind == "water":
+        width_px = int(28 * scale)
+        points = [(x - 220, y - 20), (x - 80, y + 40), (x + 40, y - 20), (x + 190, y + 30), (x + 300, y - 10)]
+        draw.line(points, fill=(*color, 220), width=width_px, joint="curve")
+    elif kind == "building":
+        w = int(120 * scale)
+        h = int(220 * scale)
+        draw.rounded_rectangle((x - w // 2, y - h, x + w // 2, y), radius=10, fill=(*color, 255))
+        for row in range(4):
+            for col in range(2):
+                wx = x - w // 2 + 20 + col * 44
+                wy = y - h + 22 + row * 45
+                draw.rectangle((wx, wy, wx + 24, wy + 28), fill=(255, 245, 210, 220))
+    elif kind == "road":
+        draw.polygon([(x - 260, y + 120), (x - 40, y - 120), (x + 40, y - 120), (x + 260, y + 120)], fill=(*color, 180))
+        draw.line((x, y - 110, x, y + 120), fill=(255, 255, 255, 180), width=max(3, int(8 * scale)))
+    elif kind == "book":
+        w = int(180 * scale)
+        h = int(120 * scale)
+        draw.rounded_rectangle((x - w // 2, y - h // 2, x + w // 2, y + h // 2), radius=12, fill=(*color, 255))
+        draw.line((x, y - h // 2, x, y + h // 2), fill=(255, 255, 255, 160), width=max(2, int(4 * scale)))
+    elif kind == "computer":
+        w = int(220 * scale)
+        h = int(140 * scale)
+        draw.rounded_rectangle((x - w // 2, y - h // 2, x + w // 2, y + h // 2), radius=16, fill=(*color, 255))
+        draw.rectangle((x - w // 2 + 18, y - h // 2 + 18, x + w // 2 - 18, y + h // 2 - 24), fill=(20, 28, 40, 255))
+        draw.rectangle((x - 50, y + h // 2 - 4, x + 50, y + h // 2 + 16), fill=(255, 255, 255, 200))
+    elif kind == "bat":
+        body = int(70 * scale)
+        wing = int(160 * scale)
+        draw.ellipse((x - body, y - body // 2, x + body, y + body // 2), fill=(*color, 255))
+        draw.polygon([(x - body // 2, y), (x - wing, y - wing // 2), (x - wing * 1.4, y - wing // 10), (x - wing, y + wing // 8)], fill=(*color, 255))
+        draw.polygon([(x + body // 2, y), (x + wing, y - wing // 2), (x + wing * 1.4, y - wing // 10), (x + wing, y + wing // 8)], fill=(*color, 255))
+    elif kind == "bird":
+        span = int(150 * scale)
+        draw.arc((x - span, y - span // 2, x, y + span // 2), start=200, end=330, fill=(*color, 255), width=max(3, int(8 * scale)))
+        draw.arc((x, y - span // 2, x + span, y + span // 2), start=210, end=340, fill=(*color, 255), width=max(3, int(8 * scale)))
+    elif kind == "flower":
+        stem = int(120 * scale)
+        draw.line((x, y + 80, x, y + stem), fill=(75, 160, 86, 255), width=max(4, int(10 * scale)))
+        draw.ellipse((x - 36, y - 36, x + 36, y + 36), fill=(*color, 255))
+        for dx, dy in ((-40, 0), (40, 0), (0, -40), (0, 40), (-28, -28), (28, -28), (-28, 28), (28, 28)):
+            draw.ellipse((x + dx - 22, y + dy - 22, x + dx + 22, y + dy + 22), fill=(*color, 220))
+    elif kind == "leaf":
+        draw.polygon([(x, y - 80), (x + 70, y - 20), (x + 35, y + 70), (x - 25, y + 90), (x - 80, y + 10)], fill=(*color, 240))
+        draw.line((x - 46, y + 38, x + 48, y - 24), fill=(255, 255, 255, 160), width=max(2, int(5 * scale)))
+    elif kind == "microscope":
+        draw.rounded_rectangle((x - 40, y - 10, x + 46, y + 150), radius=14, fill=(*color, 255))
+        draw.line((x - 10, y + 10, x - 90, y + 120), fill=(*color, 255), width=max(4, int(10 * scale)))
+        draw.line((x + 20, y + 18, x + 80, y - 70), fill=(*color, 255), width=max(4, int(10 * scale)))
+        draw.ellipse((x + 56, y - 104, x + 124, y - 36), fill=(*color, 255))
+    elif kind == "waveform":
+        pts = []
+        for i in range(-160, 161, 12):
+            yy = y + int(math.sin(i / 24.0) * (40 * scale))
+            pts.append((x + i, yy))
+        draw.line(pts, fill=(*color, 255), width=max(3, int(8 * scale)))
+    elif kind == "camera":
+        draw.rounded_rectangle((x - 110, y - 70, x + 110, y + 70), radius=18, fill=(*color, 255))
+        draw.ellipse((x - 42, y - 42, x + 42, y + 42), fill=(20, 28, 40, 255))
+        draw.ellipse((x - 22, y - 22, x + 22, y + 22), fill=(80, 120, 160, 255))
+    elif kind == "gears":
+        r = int(64 * scale)
+        draw.ellipse((x - r, y - r, x + r, y + r), outline=(*color, 255), width=max(4, int(8 * scale)))
+        draw.ellipse((x - r // 3, y - r // 3, x + r // 3, y + r // 3), fill=(*color, 255))
+        for angle in range(0, 360, 45):
+            rad = math.radians(angle)
+            x1 = x + int(math.cos(rad) * (r - 2))
+            y1 = y + int(math.sin(rad) * (r - 2))
+            x2 = x + int(math.cos(rad) * (r + 18))
+            y2 = y + int(math.sin(rad) * (r + 18))
+            draw.line((x1, y1, x2, y2), fill=(*color, 255), width=max(3, int(5 * scale)))
+    elif kind == "map_pin":
+        r = int(44 * scale)
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=(*color, 255))
+        draw.polygon([(x, y + r * 2), (x - r // 2, y + r // 2), (x + r // 2, y + r // 2)], fill=(*color, 255))
+    elif kind == "person":
+        draw.ellipse((x - 38, y - 90, x + 38, y - 14), fill=(*color, 255))
+        draw.rounded_rectangle((x - 60, y - 8, x + 60, y + 130), radius=24, fill=(*color, 255))
+    elif kind == "cloud":
+        for dx, dy, rr in ((-40, 0, 42), (0, -18, 55), (42, 4, 38)):
+            draw.ellipse((x + dx - rr, y + dy - rr, x + dx + rr, y + dy + rr), fill=(*color, 220))
+        draw.rounded_rectangle((x - 86, y, x + 90, y + 60), radius=30, fill=(*color, 220))
+    elif kind == "star":
+        r = int(58 * scale)
+        pts = []
+        for i in range(10):
+            ang = math.radians(-90 + i * 36)
+            rr = r if i % 2 == 0 else int(r * 0.45)
+            pts.append((x + int(math.cos(ang) * rr), y + int(math.sin(ang) * rr)))
+        draw.polygon(pts, fill=(*color, 255))
+    elif kind == "house":
+        draw.rectangle((x - 80, y - 10, x + 80, y + 110), fill=(*color, 255))
+        draw.polygon([(x - 96, y - 10), (x, y - 100), (x + 96, y - 10)], fill=(*color, 255))
+    elif kind == "field":
+        for offset in range(-160, 161, 40):
+            draw.line((x - 180, y + offset, x + 180, y + offset - 20), fill=(*color, 180), width=max(2, int(5 * scale)))
+    else:
+        r = int(72 * scale)
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=(*color, 220))
+        draw.line((x - r, y, x + r, y), fill=(255, 255, 255, 80), width=max(2, int(6 * scale)))
+        draw.line((x, y - r, x, y + r), fill=(255, 255, 255, 80), width=max(2, int(6 * scale)))
+
+
+def _render_scene_image_bytes(scene: dict[str, Any], format_name: str) -> bytes:
+    if Image is None or ImageDraw is None or ImageFont is None:
+        return _build_fallback_png_bytes("Hippo AI", json.dumps(scene, ensure_ascii=False))
+
+    width, height = 1400, 900
+    img = Image.new("RGBA", (width, height), (8, 12, 18, 255))
+    draw = ImageDraw.Draw(img, "RGBA")
+    _draw_scene_background(draw, width, height, scene.get("palette"), str(scene.get("mood") or "balanced"))
+
+    elements = scene.get("elements") if isinstance(scene.get("elements"), list) else []
+    ordered = sorted([e for e in elements if isinstance(e, dict)], key=lambda item: int(_scene_value(item.get("layer"), 1)))
+    for element in ordered:
+        _draw_scene_element(draw, width, height, element)
+
+    # Add a soft framing vignette so the composition feels like a finished illustration.
+    _draw_glow(draw, width // 2, height // 2, int(min(width, height) * 0.42), (0, 0, 0), 42)
+    buffer = BytesIO()
+    save_format = "JPEG" if format_name.lower() in {"jpg", "jpeg"} else "PNG"
+    if save_format == "JPEG":
+        img = img.convert("RGB")
+        img.save(buffer, format=save_format, quality=94, optimize=True)
+    else:
+        img.save(buffer, format=save_format, optimize=True)
+    return buffer.getvalue()
 
 
 def _draw_bat_scene(draw, width: int, height: int, title_text: str, body_text: str, title_font, body_font) -> None:
@@ -910,6 +1138,9 @@ def build_raster_image_bytes(title: str, body: str, format_name: str) -> bytes:
 
     title_text = (title or "Hippo AI").strip()
     body_text = (body or "").strip()
+    scene = _scene_payload(body_text)
+    if scene is not None:
+        return _render_scene_image_bytes(scene, format_name)
     title_font = _load_font(64, bold=True)
     body_font = _load_font(26, bold=False)
 
