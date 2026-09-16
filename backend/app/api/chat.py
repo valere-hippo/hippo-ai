@@ -18,6 +18,7 @@ from app.services.chat_payloads import (
     looks_like_image_analysis_request,
     looks_like_geodata_visual_request,
     looks_like_image_generation_request,
+    looks_like_project_inventory_request,
     storage_text,
 )
 from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
@@ -221,7 +222,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             pass
 
         try:
-            project_files_context = await build_project_files_context(conv_project)
+            project_files_context = await build_project_files_context(conv_project, include_previews=not looks_like_project_inventory_request(payload.message))
             hippo_messages.insert(
                 3,
                 {

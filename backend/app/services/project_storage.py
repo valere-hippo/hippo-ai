@@ -1182,7 +1182,7 @@ def extract_project_file_preview(filename: str, data: bytes, content_type: str |
 IMAGE_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 
 
-async def build_project_files_context(project: Any, max_files: int | None = None) -> str:
+async def build_project_files_context(project: Any, max_files: int | None = None, include_previews: bool = True) -> str:
     try:
         pcloud_path_raw = getattr(project, "pcloud_path", None)
         pcloud_folder_id_raw = getattr(project, "pcloud_folder_id", None)
@@ -1205,6 +1205,14 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                 )
             pcloud_root, pcloud_folder_id = _project_pcloud_reference(project)
             entries = await asyncio.to_thread(list_pcloud_folder_recursive, pcloud_root, pcloud_folder_id)
+            if not include_previews:
+                inventory_lines = [
+                    f"Im pCloud-Projektordner sind {len(entries)} Elemente sichtbar:",
+                ]
+                for entry in entries:
+                    prefix = "[Ordner]" if entry.is_folder else "-"
+                    inventory_lines.append(f"{prefix} {entry.path}")
+                return "\n".join(inventory_lines)
             files = [
                 ProjectFile(
                     filename=entry.path,

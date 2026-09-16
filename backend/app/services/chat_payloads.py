@@ -54,7 +54,6 @@ def build_message_content(
         text_parts.append(base_text)
 
     for attachment in attachments:
-        filename = getattr(attachment, "filename", "attachment")
         mime_type = (getattr(attachment, "mime_type", None) or "").lower()
         data_url = getattr(attachment, "data_url", None)
         if has_images and data_url and mime_type.startswith("image/"):
@@ -111,6 +110,10 @@ IMAGE_ANALYSIS_RE = re.compile(
     r"\b(describe|beschreibe|erkl[aä]re|analyse|analysiere|sag\s+mir|was\s+siehst\s+du|what\s+do\s+you\s+see|que\s+vois[- ]tu|dis[- ]moi)\b",
     re.IGNORECASE,
 )
+PROJECT_INVENTORY_RE = re.compile(
+    r"\b(alle\s+dateien|alle\s+ordner|was\s+siehst\s+du|liste\s+.*dateien|liste\s+.*ordner|welche\s+dateien|welche\s+ordner|inhalt\s+des\s+ordners|zeige\s+mir\s+.*dateien|zeige\s+mir\s+.*ordner|enumerate|list\s+files|list\s+folders)\b",
+    re.IGNORECASE,
+)
 
 
 def looks_like_image_generation_request(message: str, attachments: list[Any] | None = None) -> bool:
@@ -156,3 +159,10 @@ def looks_like_image_analysis_request(message: str, attachments: list[Any] | Non
     if not text:
         return False
     return bool(IMAGE_ANALYSIS_RE.search(text))
+
+
+def looks_like_project_inventory_request(message: str) -> bool:
+    text = (message or "").strip()
+    if not text:
+        return False
+    return bool(PROJECT_INVENTORY_RE.search(text))
