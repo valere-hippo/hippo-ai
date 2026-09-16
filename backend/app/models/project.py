@@ -14,5 +14,6 @@ class Project(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("hippoai.ai_users.id"), nullable=False)
     watched_folder: Mapped[str] = mapped_column(String(1000), nullable=True)
     pcloud_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    pcloud_folder_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

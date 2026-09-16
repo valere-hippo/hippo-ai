@@ -48,6 +48,18 @@ def normalize_pcloud_path(value: str | None) -> str:
     return normalized or "/"
 
 
+def normalize_pcloud_folder_id(value: int | str | None) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        folder_id = int(str(value).strip())
+    except Exception as exc:
+        raise ValueError("pCloud folderid must be an integer") from exc
+    if folder_id <= 0:
+        raise ValueError("pCloud folderid must be greater than zero")
+    return folder_id
+
+
 def _api_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
     token = (settings.pcloud_access_token or "").strip()
     if not token:
@@ -65,9 +77,14 @@ def _api_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {"result": 0, "data": payload}
 
 
-def list_pcloud_folder(path: str) -> list[dict[str, Any]]:
-    normalized = normalize_pcloud_path(path)
-    payload = _api_call("listfolder", {"path": normalized})
+def list_pcloud_folder(path: str | None = None, folder_id: int | str | None = None) -> list[dict[str, Any]]:
+    params: dict[str, Any] = {}
+    normalized_folder_id = normalize_pcloud_folder_id(folder_id)
+    if normalized_folder_id is not None:
+        params["folderid"] = normalized_folder_id
+    else:
+        params["path"] = normalize_pcloud_path(path)
+    payload = _api_call("listfolder", params)
     metadata = payload.get("metadata") or {}
     contents = metadata.get("contents") or []
     if not isinstance(contents, list):
@@ -75,20 +92,22 @@ def list_pcloud_folder(path: str) -> list[dict[str, Any]]:
     return [item for item in contents if isinstance(item, dict)]
 
 
-def list_pcloud_folder_recursive(path: str, max_items: int | None = None, max_depth: int = 32) -> list[PCloudEntry]:
-    normalized = normalize_pcloud_path(path)
+def list_pcloud_folder_recursive(path: str | None = None, folder_id: int | str | None = None, max_items: int | None = None, max_depth: int = 32) -> list[PCloudEntry]:
+    root_folder_id = normalize_pcloud_folder_id(folder_id)
+    root_path = normalize_pcloud_path(path) if path else None
     entries: list[PCloudEntry] = []
     visited: set[str] = set()
 
-    def walk(folder_path: str, depth: int = 0) -> None:
+    def walk(folder_path: str | None, depth: int = 0, folder_id_value: int | None = None) -> None:
         if depth > max_depth:
             return
-        if folder_path in visited:
+        visit_key = f"id:{folder_id_value}" if folder_id_value is not None else f"path:{folder_path}"
+        if visit_key in visited:
             return
-        visited.add(folder_path)
+        visited.add(visit_key)
 
         try:
-            contents = list_pcloud_folder(folder_path)
+            contents = list_pcloud_folder(folder_path, folder_id_value)
         except Exception:
             return
 
@@ -96,7 +115,7 @@ def list_pcloud_folder_recursive(path: str, max_items: int | None = None, max_de
             if max_items is not None and len(entries) >= max_items:
                 return
 
-            item_path = str(item.get("path") or "").strip() or folder_path
+            item_path = str(item.get("path") or "").strip() or (folder_path or "")
             item_name = str(item.get("name") or PurePosixPath(item_path).name or item_path).strip() or item_path
             is_folder = bool(item.get("isfolder"))
             size = int(item.get("size") or 0)
@@ -119,15 +138,21 @@ def list_pcloud_folder_recursive(path: str, max_items: int | None = None, max_de
             )
 
             if is_folder:
-                walk(item_path, depth + 1)
+                next_folder_id = normalize_pcloud_folder_id(item.get("folderid"))
+                walk(item_path or None, depth + 1, next_folder_id)
 
-    walk(normalized)
+    walk(root_path, 0, root_folder_id)
     return entries
 
 
-def get_pcloud_file_bytes(path: str) -> tuple[bytes, str]:
-    normalized = normalize_pcloud_path(path)
-    payload = _api_call("getfilelink", {"path": normalized})
+def get_pcloud_file_bytes(path: str | None = None, folder_id: int | str | None = None) -> tuple[bytes, str]:
+    params: dict[str, Any] = {}
+    normalized_folder_id = normalize_pcloud_folder_id(folder_id)
+    if normalized_folder_id is not None:
+        params["folderid"] = normalized_folder_id
+    else:
+        params["path"] = normalize_pcloud_path(path)
+    payload = _api_call("getfilelink", params)
     hosts = payload.get("hosts") or []
     ppath = str(payload.get("path") or "").strip()
     if not hosts or not ppath:

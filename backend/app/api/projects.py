@@ -11,7 +11,7 @@ from app.models.project import Project
 from app.models.user import UserRole
 from app.schemas.project import ProjectCreate, ProjectResponse
 from app.services.notifications import notify_project_created
-from app.services.pcloud_storage import normalize_pcloud_path
+from app.services.pcloud_storage import normalize_pcloud_folder_id, normalize_pcloud_path
 from app.services.project_storage import delete_project_bucket, ensure_project_bucket, has_s3_storage
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -29,6 +29,17 @@ def _normalize_shared_folder(folder: str) -> str:
     return str(path)
 
 
+def _normalize_pcloud_reference(path: str | None, folder_id: int | str | None) -> tuple[str | None, int | None]:
+    normalized_path = None
+    normalized_folder_id = None
+    if path not in (None, ''):
+        normalized_path = normalize_pcloud_path(path)
+    if folder_id not in (None, ''):
+        normalized_folder_id = normalize_pcloud_folder_id(folder_id)
+    if normalized_path is None and normalized_folder_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen pCloud-Pfad oder eine folderid auswählen.")
+    return normalized_path, normalized_folder_id
+
 async def _load_project(db: DbSession, project_id: int) -> Project:
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -40,10 +51,7 @@ async def _load_project(db: DbSession, project_id: int) -> Project:
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(payload: ProjectCreate, db: DbSession, current_user=Depends(get_current_user)):
     watched_folder = _normalize_shared_folder(payload.watched_folder)
-    try:
-        pcloud_path = normalize_pcloud_path(payload.pcloud_path)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    pcloud_path, pcloud_folder_id = _normalize_pcloud_reference(payload.pcloud_path, payload.pcloud_folder_id)
 
     stmt = insert(Project).values(
         name=payload.name.strip(),
@@ -51,6 +59,7 @@ async def create_project(payload: ProjectCreate, db: DbSession, current_user=Dep
         owner_id=current_user.id,
         watched_folder=watched_folder,
         pcloud_path=pcloud_path,
+        pcloud_folder_id=pcloud_folder_id,
     ).returning(Project)
 
     result = await db.execute(stmt)
@@ -110,15 +119,13 @@ async def update_project(project_id: int, payload: ProjectCreate, db: DbSession,
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
 
     watched_folder = _normalize_shared_folder(payload.watched_folder)
-    try:
-        pcloud_path = normalize_pcloud_path(payload.pcloud_path)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    pcloud_path, pcloud_folder_id = _normalize_pcloud_reference(payload.pcloud_path, payload.pcloud_folder_id)
     updates = {
         "name": payload.name.strip(),
         "description": payload.description,
         "watched_folder": watched_folder,
         "pcloud_path": pcloud_path,
+        "pcloud_folder_id": pcloud_folder_id,
     }
     await db.execute(Project.__table__.update().where(Project.id == project_id).values(**updates))
     await db.commit()

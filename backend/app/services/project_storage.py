@@ -26,7 +26,7 @@ except Exception:  # pragma: no cover - optional dependency
         pass
 
 from app.core.config import settings
-from app.services.pcloud_storage import get_pcloud_file_bytes, list_pcloud_folder_recursive, has_pcloud_storage, normalize_pcloud_path
+from app.services.pcloud_storage import get_pcloud_file_bytes, list_pcloud_folder_recursive, has_pcloud_storage, normalize_pcloud_folder_id, normalize_pcloud_path
 
 LOCAL_STORAGE_ROOT = Path("/app/uploads")
 
@@ -270,8 +270,16 @@ def clear_project_storage(project: Any) -> dict[str, int]:
     return {"deleted_remote": deleted_remote, "deleted_local": deleted_local}
 
 
+def _project_pcloud_reference(project: Any) -> tuple[str | None, int | None]:
+    folder_path = getattr(project, "pcloud_path", None)
+    folder_id = getattr(project, "pcloud_folder_id", None)
+    normalized_path = normalize_pcloud_path(folder_path) if folder_path else None
+    normalized_folder_id = normalize_pcloud_folder_id(folder_id)
+    return normalized_path, normalized_folder_id
+
+
 def _project_uses_pcloud(project: Any) -> bool:
-    return bool(getattr(project, "pcloud_path", None))
+    return bool(getattr(project, "pcloud_path", None) or getattr(project, "pcloud_folder_id", None))
 
 
 def _local_project_dir(project: Any) -> Path:
@@ -331,7 +339,8 @@ def store_project_file(project: Any, filename: str, content: bytes, content_type
 def list_project_files(project: Any) -> list[ProjectFile]:
     if _project_uses_pcloud(project):
         try:
-            entries = list_pcloud_folder_recursive(normalize_pcloud_path(getattr(project, "pcloud_path", "")), max_items=1000)
+            pcloud_path, pcloud_folder_id = _project_pcloud_reference(project)
+            entries = list_pcloud_folder_recursive(pcloud_path, pcloud_folder_id, max_items=1000)
         except Exception:
             return []
 
@@ -385,8 +394,9 @@ def read_project_file(project: Any, filename: str) -> tuple[bytes, str, str]:
     if _project_uses_pcloud(project):
         path_hint = str(filename or "").strip()
         if not path_hint.startswith("/"):
-            pcloud_root = normalize_pcloud_path(getattr(project, "pcloud_path", ""))
-            path_hint = str(PurePosixPath(pcloud_root) / path_hint.lstrip("/"))
+            pcloud_root, _pcloud_folder_id = _project_pcloud_reference(project)
+            if pcloud_root:
+                path_hint = str(PurePosixPath(pcloud_root) / path_hint.lstrip("/"))
         body, content_type = get_pcloud_file_bytes(path_hint)
         return body, content_type, "pcloud"
 
@@ -1177,13 +1187,15 @@ async def build_project_files_context(project: Any, max_files: int | None = None
         if _project_uses_pcloud(project):
             if not has_pcloud_storage():
                 folder = str(getattr(project, "pcloud_path", "") or "").strip()
+                folder_id = getattr(project, "pcloud_folder_id", None)
                 return (
                     "Dieses Projekt ist auf pCloud konfiguriert, aber der pCloud-Zugang ist auf diesem Server noch nicht eingerichtet.\n"
                     f"pCloud-Pfad: {folder or 'unbekannt'}\n"
+                    f"pCloud folderid: {folder_id or 'unbekannt'}\n"
                     "Bitte setze PCLOUD_ACCESS_TOKEN und PCLOUD_API_BASE_URL im Backend."
                 )
-            pcloud_root = normalize_pcloud_path(getattr(project, "pcloud_path", ""))
-            entries = await asyncio.to_thread(list_pcloud_folder_recursive, pcloud_root, max_files or 1000)
+            pcloud_root, pcloud_folder_id = _project_pcloud_reference(project)
+            entries = await asyncio.to_thread(list_pcloud_folder_recursive, pcloud_root, pcloud_folder_id, max_files or 1000)
             files = [
                 ProjectFile(
                     filename=entry.path,
@@ -1207,9 +1219,11 @@ async def build_project_files_context(project: Any, max_files: int | None = None
     except Exception as exc:
         if _project_uses_pcloud(project):
             folder = str(getattr(project, "pcloud_path", "") or "").strip()
+            folder_id = getattr(project, "pcloud_folder_id", None)
             return (
                 "Der pCloud-Projektpfad konnte aktuell nicht gelesen werden.\n"
                 f"pCloud-Pfad: {folder or 'unbekannt'}\n"
+                f"pCloud folderid: {folder_id or 'unbekannt'}\n"
                 f"Fehler: {exc}\n"
                 "Bitte prüfe den pCloud-Zugangstoken, die API-Basis-URL und den Pfad im Projekt."
             )
@@ -1220,9 +1234,11 @@ async def build_project_files_context(project: Any, max_files: int | None = None
     if not files:
         if _project_uses_pcloud(project):
             folder = str(getattr(project, "pcloud_path", "") or "").strip()
+            folder_id = getattr(project, "pcloud_folder_id", None)
             return (
                 "Im pCloud-Projektpfad sind aktuell keine Dateien sichtbar.\n"
                 f"pCloud-Pfad: {folder or 'unbekannt'}\n"
+                f"pCloud folderid: {folder_id or 'unbekannt'}\n"
                 "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Ordner leer ist oder der Pfad falsch gesetzt ist."
             )
         folder = str(getattr(project, "watched_folder", "") or "").strip()
