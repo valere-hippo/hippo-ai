@@ -2052,7 +2052,7 @@ function buildProjectForm(defaults = {}) {
 
   const hint = document.createElement('div')
   hint.className = 'muted-copy'
-  hint.textContent = 'Pfad und folderid sind Pflicht. Hippo liest dann nur die Dateien im pCloud-Ordner; Unterordner werden ignoriert.'
+  hint.textContent = 'Pfad und folderid sind Pflicht. Hippo liest nur die Dateien im pCloud-Ordner; Unterordner werden ignoriert.'
 
   const pcloudField = document.createElement('label')
   pcloudField.className = 'field'
@@ -2086,14 +2086,14 @@ async function openCreateProjectModal() {
   const form = buildProjectForm()
   const result = await openModal({
     title: 'Projekt erstellen',
-    copy: 'Wähle den lokalen gemeinsamen Ordner sowie den pCloud-Pfad und die folderid für die Projektquelle aus.',
+    copy: 'Wähle den lokalen gemeinsamen Ordner sowie den pCloud-Pfad und die folderid für die Projektquelle aus. Es werden nur Dateien im Ordner gelesen, keine Unterordner.',
     content: form,
     submitLabel: 'Erstellen',
     validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.pcloud_path?.trim() && values.pcloud_folder_id?.trim()),
   })
 
   if (!result || !result.folder || !result.pcloud_path || !result.pcloud_folder_id) {
-    showToast('Du musst einen lokalen Ordner, den pCloud-Pfad und die pCloud folderid auswählen.', 'error')
+    showToast('Du musst einen lokalen Ordner, den pCloud-Pfad und die pCloud folderid auswählen. Unterordner werden nicht gelesen.', 'error')
     return
   }
 
@@ -2130,7 +2130,7 @@ async function openEditProjectModal(project) {
 
   const result = await openModal({
     title: 'Projekt bearbeiten',
-    copy: 'Hier siehst und änderst du den lokalen gemeinsamen Ordner sowie den pCloud-Pfad und die folderid des Projekts.',
+    copy: 'Hier siehst und änderst du den lokalen gemeinsamen Ordner sowie den pCloud-Pfad und die folderid des Projekts. Es werden nur Dateien im Ordner gelesen, keine Unterordner.',
     content: form,
     submitLabel: 'Speichern',
     extraActions: [
@@ -2154,7 +2154,7 @@ async function openEditProjectModal(project) {
   })
 
   if (!result || !result.folder || !result.pcloud_path || !result.pcloud_folder_id) {
-    showToast('Du musst beim Speichern den lokalen Ordner, den pCloud-Pfad und die pCloud folderid beibehalten oder auswählen.', 'error')
+    showToast('Du musst beim Speichern den lokalen Ordner, den pCloud-Pfad und die pCloud folderid beibehalten oder auswählen. Unterordner werden nicht gelesen.', 'error')
     return
   }
 

@@ -163,7 +163,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         "- Wenn der Benutzer Französisch schreibt, antworte auf Französisch.\n"
         "- Wenn der Benutzer Englisch schreibt, antworte auf Englisch.\n"
         "- Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die direkten Anhangsdaten im Prompt und die lokal extrahierten Textdaten, statt zu behaupten, du könntest Anhänge nicht lesen.\n"
-        "- Wenn ein gemeinsamer Projektordner konfiguriert ist und Kontext dazu geliefert wurde, behandle diesen Kontext als echte Dateiquelle. Sage dann nicht, dass du keinen Zugriff auf lokale Dateien hast.\n"
+        "- Wenn der gemeinsame Projektordner als pCloud-Quelle konfiguriert ist, lies nur die direkt im Ordner liegenden Dateien; Unterordner werden ignoriert.\n"
         "- Wenn der gemeinsame Projektordner-Kontext leere oder unvollständige Inhalte hat, fordere den Nutzer auf, dem Ordnerzugriff zuzustimmen oder prüfe den Projektkontext erneut, statt zu behaupten, du hättest grundsätzlich keinen Dateizugriff.\n"
         "- Bilder werden direkt in den Chat-Prompt übernommen, wenn verfügbar. Nutze diese Inhalte direkt und stütze dich nicht nur auf OCR, Dateiname oder Metadaten.\n"
         "- Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert werden soll, antworte ausführlicher, mit klaren Abschnitten, Aufzählungen und einer kurzen Schlussbewertung.\n"

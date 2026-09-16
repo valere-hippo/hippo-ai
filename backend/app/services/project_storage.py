@@ -1224,7 +1224,7 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                 "Dieses Projekt ist nur teilweise für pCloud konfiguriert.\n"
                 f"pCloud-Pfad: {str(pcloud_path_raw or 'unbekannt').strip()}\n"
                 f"pCloud folderid: {pcloud_folder_id_raw or 'unbekannt'}\n"
-                "Bitte trage in den Projekteinstellungen sowohl den pCloud-Pfad als auch die folderid ein."
+                "Bitte trage in den Projekteinstellungen sowohl den pCloud-Pfad als auch die folderid ein. Dabei werden nur Dateien im Ordner berücksichtigt; Unterordner werden ignoriert."
             )
         if _project_uses_pcloud(project):
             if not has_pcloud_storage():
@@ -1234,12 +1234,12 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                     "Dieses Projekt ist auf pCloud konfiguriert, aber der pCloud-Zugang ist auf diesem Server noch nicht eingerichtet.\n"
                     f"pCloud-Pfad: {folder or 'unbekannt'}\n"
                     f"pCloud folderid: {folder_id or 'unbekannt'}\n"
-                    "Bitte setze PCLOUD_ACCESS_TOKEN und PCLOUD_API_BASE_URL im Backend."
+                    "Bitte setze PCLOUD_ACCESS_TOKEN und PCLOUD_API_BASE_URL im Backend. Dabei werden nur Dateien im Ordner berücksichtigt; Unterordner werden ignoriert."
                 )
             entries = await asyncio.to_thread(_pcloud_folder_files, project)
             if not include_previews:
                 inventory_lines = [
-                    f"Im pCloud-Projektordner sind {len(entries)} Dateien sichtbar:",
+                    f"Im pCloud-Projektordner sind {len(entries)} Dateien sichtbar (Unterordner ignoriert):",
                 ]
                 for entry in entries:
                     inventory_lines.append(f"- {entry.path}")
@@ -1273,7 +1273,7 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                 f"pCloud-Pfad: {folder or 'unbekannt'}\n"
                 f"pCloud folderid: {folder_id or 'unbekannt'}\n"
                 f"Fehler: {exc}\n"
-                "Bitte prüfe den pCloud-Zugangstoken, die API-Basis-URL und den Pfad im Projekt."
+                "Bitte prüfe den pCloud-Zugangstoken, die API-Basis-URL und den Pfad im Projekt. Unterordner werden ignoriert."
             )
         raise
 
@@ -1287,7 +1287,7 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                 "Im pCloud-Projektpfad sind aktuell keine Dateien sichtbar.\n"
                 f"pCloud-Pfad: {folder or 'unbekannt'}\n"
                 f"pCloud folderid: {folder_id or 'unbekannt'}\n"
-                "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Ordner leer ist oder der Pfad falsch gesetzt ist."
+                "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Ordner leer ist oder der Pfad falsch gesetzt ist. Unterordner werden nicht gelesen."
             )
         folder = str(getattr(project, "watched_folder", "") or "").strip()
         try:

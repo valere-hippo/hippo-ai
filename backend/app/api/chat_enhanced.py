@@ -236,10 +236,10 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         "Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die direkten Anhangsdaten im Prompt und die lokal extrahierten Textdaten, statt zu behaupten, du könntest Anhänge nicht lesen.\n"
         "Bilder werden direkt in den Chat-Prompt übernommen, wenn verfügbar. Nutze diese Inhalte direkt und stütze dich nicht nur auf OCR, Dateiname oder Metadaten.\n"
         "Wenn der Benutzer ein Bild nur beschreiben, zusammenfassen oder analysieren möchte, antworte als Text im Chat. Erzeuge nur dann eine Datei, wenn ausdrücklich ein Dateiformat verlangt wird.\n"
-        "Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert wird, antworte ausführlich, strukturiert und mit klaren Zwischenüberschriften oder Aufzählungspunkten.\n"
+        "Wenn eine Datei, ein Bild oder der gemeinsame Projektordner als pCloud-Quelle analysiert wird, antworte ausführlich, strukturiert und mit klaren Zwischenüberschriften oder Aufzählungspunkten. Lies dabei nur die direkt im Ordner liegenden Dateien; Unterordner werden ignoriert.\n"
         "Wenn der Benutzer ausdrücklich ein Bild, ein PNG oder eine Grafik generieren möchte, liefere einen echten Dateiblock mit einem Bilddateinamen und keine Anleitung zur manuellen Erstellung.\n"
         "Bei Geodatenpaketen aus SHP, SHX, DBF, PRJ oder CPG: analysiere die Kontakte je Art, nenne Kontaktzahl, Beobachtungszeitraum, räumliche Konzentration und mögliche ökologische Hinweise. Wenn sinnvoll, erstelle zusätzlich eine kleine Karte oder ein Diagramm als Datei.\n"
-        "Bei Ordneranalysen liefere zuerst den Überblick, dann die sichtbaren Dateien, dann eine Detailanalyse pro Datei und am Ende ein kurzes Fazit.\n"
+        "Bei pCloud-Analysen liefere zuerst den Überblick, dann die sichtbaren Dateien im Ordner, dann eine Detailanalyse pro Datei und am Ende ein kurzes Fazit. Unterordner werden ignoriert.\n"
         "Schreibe Berichte mit sauberen Überschriften, Absätzen und Listen. Vermeide dekorative Markdown-Formate wie ###** oder **###.\n"
         "Nutze Tabellen nur, wenn sie wirklich klarer sind als Listen.\n"
     )
