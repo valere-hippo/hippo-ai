@@ -4585,6 +4585,20 @@ async function sendChat() {
         showToast('Ein Schritt der PC-Steuerung ist fehlgeschlagen', 'error')
       }
     }
+
+    const docxReportPath = savedArtifacts.find((filePath) => String(filePath || '').toLowerCase().endsWith('.docx'))
+    const shouldOpenWordReport = Boolean(
+      docxReportPath
+      && state.desktopAgentMode
+      && /\b(word|bericht|report|analyse|rapport)\b/i.test(message)
+    )
+    if (shouldOpenWordReport) {
+      const openResult = await window.electron.desktopControl({ action: 'open_file', file: docxReportPath })
+      if (!openResult?.ok) {
+        showToast(openResult?.error || 'Word-Bericht konnte nicht automatisch geöffnet werden', 'error')
+      }
+    }
+
     const savedReportNote = savedArtifacts.length
       ? `Bericht im gemeinsamen Ordner gespeichert:\n${savedArtifacts.map((filePath) => `- ${filePath}`).join('\n')}`
       : ''

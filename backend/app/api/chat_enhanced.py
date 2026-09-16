@@ -50,6 +50,8 @@ class DesktopAction(BaseModel):
     command: str | None = None
     args: str | None = None
     cwd: str | None = None
+    file: str | None = None
+    path: str | None = None
     keys: str | None = None
     text: str | None = None
     button: str | None = None
@@ -89,10 +91,40 @@ def _extract_json_object(text: str) -> dict | None:
     return None
 
 
+def _extract_candidate_open_path(text: str) -> str | None:
+    patterns = [
+        r"(?:[A-Za-z]:\\[^\n\r\t\"']+?\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md))",
+        r"(?:/[^\n\r\t\"']+?\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md))",
+        r"(?:[A-Za-z]:\\[^\n\r\t\"']+)",
+        r"(?:/[^\n\r\t\"']+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            candidate = match.group(0).strip().strip('"').strip("'")
+            if len(candidate) > 1:
+                return candidate
+    return None
+
+
 def _infer_desktop_launch_action(message: str, reply_text: str, profile: str | None = None) -> list[DesktopAction]:
     haystack = f"{message or ''}\n{reply_text or ''}".lower()
-    if not any(keyword in haystack for keyword in ('öffne', 'oeffne', 'open', 'starte', 'start', 'launch', 'run', 'öffnen', 'oeffnen', 'öffnest', 'öffnen', 'öffnet', 'starten')):
+    if not any(keyword in haystack for keyword in ('öffne', 'oeffne', 'open', 'starte', 'start', 'launch', 'run', 'öffnen', 'oeffnen', 'öffnest', 'öffnet', 'starten')):
         return []
+
+    open_path = _extract_candidate_open_path(haystack)
+    actions: list[DesktopAction] = []
+    if open_path:
+        if 'qgis' in haystack or profile == 'qgis':
+            actions.append(DesktopAction(action='launch_app', command='qgis'))
+        elif 'word' in haystack or 'bericht' in haystack or 'report' in haystack:
+            actions.append(DesktopAction(action='launch_app', command='word'))
+        elif 'excel' in haystack:
+            actions.append(DesktopAction(action='launch_app', command='excel'))
+        elif 'libreoffice' in haystack or 'soffice' in haystack:
+            actions.append(DesktopAction(action='launch_app', command='libreoffice'))
+        actions.append(DesktopAction(action='open_file', file=open_path))
+        return actions
 
     candidates: list[tuple[str, list[str]]] = [
         ('hipponalyze', ['hipponalyze', 'hippo analyze', 'hippo-analyze']),
@@ -232,12 +264,13 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         profile_details = {
             'generic': 'Nutze diesen Modus für allgemeine Desktop-Aufgaben. Wenn passende Programme gestartet werden sollen, verwende hipponalyze, QGIS, Word, Excel oder LibreOffice über launch_app oder open_file.',
             'qgis': (
-                'Nutze QGIS für Karten, Layer, GeoPackages, Filter, Auswertungen und Exporte. ' 
-                'Bei geographischen Beobachtungsdaten analysiere immer species by species, ' 
-                'prüfe Koordinaten, Kontakthäufigkeit, Beobachtungsdaten und vorhandene Geo-Metadaten, ' 
-                'erkenne Konzentrationen / Hotspots, leite mögliche Brutreviere oder Territorien ab, ' 
-                'beziehe artspezifische Eigenschaften, Saison und Lebensraum mit ein und erweitere die Analyse ' 
-                'bei Bedarf um weitere Kennzahlen, wenn der Benutzer mehr verlangt.'
+                'Nutze QGIS für Karten, Layer, GeoPackages, Filter, Auswertungen und Exporte. '
+                'Bei geographischen Beobachtungsdaten analysiere immer species by species, '
+                'prüfe Koordinaten, Kontakthäufigkeit, Beobachtungsdaten und vorhandene Geo-Metadaten, '
+                'erkenne Konzentrationen / Hotspots, leite mögliche Brutreviere oder Territorien ab, '
+                'beziehe artspezifische Eigenschaften, Saison und Lebensraum mit ein und erweitere die Analyse '
+                'bei Bedarf um weitere Kennzahlen, wenn der Benutzer mehr verlangt. '
+                'Wenn der Nutzer einen Bericht in Word möchte, liefere die Analyse zunächst kompakt aus, erzeuge danach eine .docx-Datei und, falls sinnvoll, öffne sie per Word- oder LibreOffice-Preset.'
             ),
             'fledermaus': 'Nutze das Fledermaus-Programm für Lautdateien, Spektrogramme, Klassifikation und Auswertung.',
             'bioacoustics': 'Nutze das akustische Analyseprogramm für Bat-Calls, Spektrogramme und Bestimmung.',
@@ -272,8 +305,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "Regeln:\n"
             "- Nutze desktop_actions nur für echte PC-Steuerung.\n"
             "- Wenn der Benutzer ein Programm starten will, verwende launch.\n"
-            "- Wenn eine GUI bedient werden muss, plane mehrere kleine Aktionen statt einer großen.\n"
-            "- Für hipponalyze, QGIS, Word, Excel und LibreOffice nutze launch_app oder open_file statt generischer Shell-Befehle, wenn möglich.\n"
+            "- Wenn der Benutzer einen QGIS-Workflow, eine Datei oder ein Projekt analysieren will, arbeite in dieser Reihenfolge: 1) passende App öffnen, 2) Datei/Projekt laden, 3) Analyse durchführen, 4) Ergebnis als Word-Report liefern.\n"
+            "- Wenn der Benutzer ausdrücklich einen Word-Bericht möchte, erzeuge bevorzugt eine .docx-Datei und ergänze sie mit klarer Zusammenfassung statt nur Text in der Chat-Antwort.\n"
             "- Beim QGIS-Profil solltest du Geodaten immer artweise auswerten, Koordinaten und Kontakte prüfen, Cluster und mögliche Brutreviere erkennen und den Nutzer bei Bedarf nach weiteren Kennzahlen fragen.\n"
             "- Halte reply kurz und sag, was du tust.\n"
             "- Wenn du mehr Kontext brauchst, lege mit reply eine Rückfrage und desktop_actions leer.\n"
