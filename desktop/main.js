@@ -12,15 +12,20 @@ function loadRuntimeConfig() {
     if (fs.existsSync(configPath)) {
       const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'))
       const apiUrl = String(parsed?.apiUrl || '').trim()
+      const appPaths = parsed?.appPaths && typeof parsed.appPaths === 'object' ? parsed.appPaths : {}
       return {
         apiUrl: apiUrl || defaultApiUrl,
+        appPaths,
       }
     }
   } catch (error) {
     console.warn('Failed to load runtime config', error)
   }
 
-  return { apiUrl: defaultApiUrl }
+  return {
+    apiUrl: defaultApiUrl,
+    appPaths: {},
+  }
 }
 
 const runtimeConfig = loadRuntimeConfig()
@@ -313,6 +318,21 @@ function getAppPreset(appKey) {
   return presets[key] || null
 }
 
+function getAppExecutableOverride(appKey) {
+  const key = String(appKey || '').trim().toLowerCase()
+  const runtimeOverride = runtimeConfig?.appPaths?.[key]
+  const envOverride = process.env[`HIPPO_APP_PATH_${key.toUpperCase()}`]
+  const candidate = String(runtimeOverride || envOverride || '').trim()
+  return candidate || null
+}
+
+function isExecutablePath(value) {
+  const target = String(value || '').trim()
+  if (!target) return false
+  if (/^[A-Za-z]:\\/.test(target) || target.startsWith('/')) return true
+  return /\.(exe|app|bat|cmd|com)$/i.test(target)
+}
+
 function escapePowerShellSingleQuoted(value) {
   return String(value || '').replace(/'/g, "''")
 }
@@ -335,7 +355,32 @@ function launchAppByPreset(appKey, options = {}) {
   const candidates = preset[platformKey] || []
   const cwd = String(options.cwd || '').trim() || undefined
   const extraArgs = Array.isArray(options.args) ? options.args.map((item) => String(item)) : []
-  const file = String(options.file || '').trim()
+  const file = String(options.file || options.path || '').trim()
+  const executableOverride = getAppExecutableOverride(appKey) || String(options.executable || options.exePath || options.programPath || options.path || '').trim()
+
+  if (executableOverride && isExecutablePath(executableOverride)) {
+    if (process.platform === 'win32') {
+      const launchArgs = []
+      if (file && file !== executableOverride) launchArgs.push(file)
+      launchArgs.push(...extraArgs)
+      const result = windowsStartProcess(executableOverride, launchArgs, cwd)
+      if (result.ok) {
+        return { ok: true, pid: result.pid || null, launched: executableOverride, app: String(appKey), file: file || null, override: true }
+      }
+    } else if (process.platform === 'darwin') {
+      const args = ['-a', executableOverride]
+      if (file && file !== executableOverride) args.push(file)
+      if (extraArgs.length) args.push(...extraArgs)
+      const pid = spawnDetached('/usr/bin/open', args, { cwd, env: process.env })
+      return { ok: true, pid, launched: executableOverride, app: String(appKey), file: file || null, override: true }
+    } else {
+      const launchArgs = []
+      if (file && file !== executableOverride) launchArgs.push(file)
+      launchArgs.push(...extraArgs)
+      const pid = spawnDetached(executableOverride, launchArgs, { cwd, env: process.env })
+      return { ok: true, pid, launched: executableOverride, app: String(appKey), file: file || null, override: true }
+    }
+  }
 
   for (const candidate of candidates) {
     if (!candidate) continue
@@ -419,8 +464,9 @@ ipcMain.handle('desktop-control', async (event, payload = {}) => {
     if (!appKey) return { ok: false, error: 'Please provide an application name.' }
     const cwd = String(payload.cwd || '').trim() || undefined
     const args = Array.isArray(payload.args) ? payload.args.map((item) => String(item)) : []
-    const file = String(payload.file || '').trim()
-    const result = launchAppByPreset(appKey, { cwd, args, file })
+    const file = String(payload.file || payload.path || '').trim()
+    const executable = String(payload.path || payload.executable || payload.exePath || payload.programPath || '').trim()
+    const result = launchAppByPreset(appKey, { cwd, args, file, path: executable })
     return result
   }
 

@@ -123,6 +123,11 @@ def _extract_candidate_open_path(text: str) -> str | None:
     return f"{prefix}{separator}{filename}"
 
 
+def _looks_like_executable_path(value: str) -> bool:
+    candidate = (value or '').strip().lower()
+    return bool(candidate) and candidate.endswith(('.exe', '.app', '.bat', '.cmd', '.com'))
+
+
 def _infer_desktop_launch_action(message: str, reply_text: str, profile: str | None = None) -> list[DesktopAction]:
     haystack = f"{message or ''}\n{reply_text or ''}".lower()
     if not any(keyword in haystack for keyword in ('öffne', 'oeffne', 'ouvrir', 'ouvre', 'ouvrir le', 'open', 'starte', 'start', 'launch', 'run', 'lance', 'lancer', 'charge', 'charger', 'öffnen', 'oeffnen', 'öffnest', 'öffnet', 'starten')):
@@ -131,7 +136,10 @@ def _infer_desktop_launch_action(message: str, reply_text: str, profile: str | N
     open_path = _extract_candidate_open_path(haystack)
     actions: list[DesktopAction] = []
     if open_path:
-        if 'qgis' in haystack or profile == 'qgis':
+        if _looks_like_executable_path(open_path):
+            app_key = 'qgis' if 'qgis' in haystack or profile == 'qgis' else 'word' if ('word' in haystack or 'bericht' in haystack or 'report' in haystack) else 'excel' if 'excel' in haystack else 'libreoffice' if ('libreoffice' in haystack or 'soffice' in haystack) else 'qgis'
+            actions.append(DesktopAction(action='launch_app', command=app_key, path=open_path))
+        elif 'qgis' in haystack or profile == 'qgis':
             actions.append(DesktopAction(action='launch_app', command='qgis', file=open_path))
         elif 'word' in haystack or 'bericht' in haystack or 'report' in haystack:
             actions.append(DesktopAction(action='launch_app', command='word', file=open_path))
