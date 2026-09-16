@@ -92,24 +92,40 @@ def _extract_json_object(text: str) -> dict | None:
 
 
 def _extract_candidate_open_path(text: str) -> str | None:
-    patterns = [
-        r"(?:[A-Za-z]:\\[^\n\r\t\"']+?\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md))",
-        r"(?:/[^\n\r\t\"']+?\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md))",
-        r"(?:[A-Za-z]:\\[^\n\r\t\"']+)",
-        r"(?:/[^\n\r\t\"']+)",
+    source = text or ''
+    full_patterns = [
+        r"[A-Za-z]:\\[^\s\n\r\t\"']+?\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md)",
+        r"/[^\s\n\r\t\"']+?\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md)",
     ]
-    for pattern in patterns:
-        match = re.search(pattern, text)
+    for pattern in full_patterns:
+        match = re.search(pattern, source, flags=re.IGNORECASE)
         if match:
-            candidate = match.group(0).strip().strip('"').strip("'")
-            if len(candidate) > 1:
-                return candidate
-    return None
+            return match.group(0).strip().strip('"').strip("'")
+
+    filename_pattern = r"[A-Za-z0-9À-ÿ._-]+\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md)"
+    filename_matches = list(re.finditer(filename_pattern, source, flags=re.IGNORECASE))
+    if not filename_matches:
+        return None
+    file_match = filename_matches[-1]
+    folder_starts = [m for m in re.finditer(r"[A-Za-z]:\\|/", source, flags=re.IGNORECASE) if m.start() < file_match.start()]
+    if not folder_starts:
+        return None
+    folder_start = folder_starts[-1].start()
+    prefix = source[folder_start:file_match.start()].rstrip()
+    last_sep = max(prefix.rfind('\\'), prefix.rfind('/'))
+    if last_sep >= 0:
+        head = prefix[:last_sep + 1]
+        tail = re.split(r"\s", prefix[last_sep + 1:], 1)[0]
+        prefix = f"{head}{tail}"
+    prefix = prefix.rstrip('\\/')
+    filename = file_match.group(0).strip().strip('"').strip("'")
+    separator = '\\' if '\\' in prefix else '/'
+    return f"{prefix}{separator}{filename}"
 
 
 def _infer_desktop_launch_action(message: str, reply_text: str, profile: str | None = None) -> list[DesktopAction]:
     haystack = f"{message or ''}\n{reply_text or ''}".lower()
-    if not any(keyword in haystack for keyword in ('öffne', 'oeffne', 'open', 'starte', 'start', 'launch', 'run', 'öffnen', 'oeffnen', 'öffnest', 'öffnet', 'starten')):
+    if not any(keyword in haystack for keyword in ('öffne', 'oeffne', 'ouvrir', 'ouvre', 'ouvrir le', 'open', 'starte', 'start', 'launch', 'run', 'lance', 'lancer', 'charge', 'charger', 'öffnen', 'oeffnen', 'öffnest', 'öffnet', 'starten')):
         return []
 
     open_path = _extract_candidate_open_path(haystack)
