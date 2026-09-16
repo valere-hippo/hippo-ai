@@ -6,27 +6,11 @@ import logging
 import mimetypes
 from typing import Any
 
-import httpx
-
-from app.core.config import settings
+from app.services.attachment_processing import attachment_context_text
 
 logger = logging.getLogger(__name__)
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
-
-
-def _normalize_vision_base_url(value: str | None) -> str | None:
-    raw = (value or "").strip()
-    if not raw:
-        return None
-    if not raw.startswith(("http://", "https://")):
-        raw = f"https://{raw}"
-    raw = raw.rstrip("/")
-    if raw.endswith("/v1/chat/completions"):
-        return raw
-    if raw.endswith("/v1"):
-        return f"{raw}/chat/completions"
-    return f"{raw}/v1/chat/completions"
 
 
 def _attachment_name(attachment: Any) -> str:
@@ -60,90 +44,25 @@ def attachment_is_image(attachment: Any) -> bool:
     return mime_type.startswith("image/") or filename.endswith(tuple(IMAGE_EXTENSIONS)) or data_url.startswith("data:image/")
 
 
-def _build_vision_prompt(user_message: str | None, filename: str | None = None) -> str:
-    parts = [
-        "Analyse l'image de manière précise et factuelle.",
-        "Décris ce qui est visible, l'organisation de la scène, les objets, les couleurs, les textes lisibles, les symboles et la mise en page.",
-        "Si l'image est une carte, un plan, un schéma, une capture d'écran, un graphique ou un document scanné, décris la structure et extrais les informations utiles.",
-        "N'invente pas des détails qui ne sont pas visibles.",
-        "Réponds dans la langue de la demande utilisateur et privilégie des phrases claires ou des puces courtes.",
-    ]
-    if user_message:
-        parts.insert(0, f"Question ou contexte utilisateur: {user_message.strip()}")
-    if filename:
-        parts.append(f"Nom de fichier: {filename}")
-    return "\n".join(parts)
-
-
-def _build_vision_messages(user_message: str | None, attachment: Any) -> list[dict[str, Any]]:
-    data_url = _attachment_data_url(attachment)
-    if not data_url:
-        return []
-    prompt = _build_vision_prompt(user_message, _attachment_name(attachment))
-    return [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": prompt},
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": data_url,
-                        "detail": "high",
-                    },
-                },
-            ],
-        }
-    ]
-
-
-async def _call_vision_model(user_message: str | None, attachment: Any) -> str:
-    vision_url = _normalize_vision_base_url(settings.hippo_vision_url or settings.hippo_api_url)
-    api_key = (settings.hippo_api_key or "").strip()
-    if not vision_url or not attachment_is_image(attachment):
-        return ""
-
-    messages = _build_vision_messages(user_message, attachment)
-    if not messages:
-        return ""
-
-    payload = {
-        "model": settings.hippo_model,
-        "messages": messages,
-        "max_tokens": 700,
-        "temperature": 0.1,
-    }
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            response = await client.post(
-                vision_url,
-                json=payload,
-                headers=headers,
-            )
-            response.raise_for_status()
-            data = response.json()
-            if isinstance(data, dict) and data.get("choices"):
-                content = data["choices"][0]["message"]["content"]
-            else:
-                content = str(data)
-            return str(content).strip()
-    except Exception as exc:
-        logger.warning("Vision analysis failed for %s: %s", _attachment_name(attachment), exc)
-        return ""
-
-
 async def summarize_image_attachment(user_message: str | None, attachment: Any) -> str:
-    summary = await _call_vision_model(user_message, attachment)
-    if not summary:
-        return ""
+    # Local-only fallback: use OCR / metadata extraction and avoid external vision calls.
+    def _temp_attachment() -> Any:
+        return type(
+            "VisionAttachment",
+            (),
+            {
+                "filename": _attachment_name(attachment),
+                "mime_type": _attachment_mime_type(attachment),
+                "data_url": _attachment_data_url(attachment),
+                "raw_base64": getattr(attachment, "raw_base64", None),
+                "ocr_text": getattr(attachment, "ocr_text", None),
+            },
+        )()
 
-    filename = _attachment_name(attachment)
-    mime_type = _attachment_mime_type(attachment) or "image/*"
-    return f"[Attachment: {filename} | {mime_type}]\n[Vision analysis]\n{summary}"
+    summary = attachment_context_text(_temp_attachment())
+    if user_message and user_message.strip() and summary:
+        return f"{summary}\n[Context] {user_message.strip()}"
+    return summary
 
 
 async def build_vision_enriched_text(message: str, attachments: list[Any] | None = None) -> str:
@@ -157,18 +76,17 @@ async def build_vision_enriched_text(message: str, attachments: list[Any] | None
         if attachment_is_image(attachment):
             image_tasks.append((index, attachment, asyncio.create_task(summarize_image_attachment(message, attachment))))
         else:
-            from app.services.attachment_processing import attachment_context_text
-
             lines.append(attachment_context_text(attachment))
 
     if image_tasks:
         for _, attachment, task in image_tasks:
-            summary = await task
+            try:
+                summary = await task
+            except Exception:
+                summary = ""
             if summary:
                 lines.append(summary)
             else:
-                from app.services.attachment_processing import attachment_context_text
-
                 lines.append(attachment_context_text(attachment))
 
     return "\n".join(line for line in lines if line).strip()
@@ -201,4 +119,4 @@ async def summarize_project_image_file(project: Any, filename: str, content_type
             "ocr_text": None,
         },
     )()
-    return await summarize_image_attachment(None, temp_attachment)
+    return attachment_context_text(temp_attachment)

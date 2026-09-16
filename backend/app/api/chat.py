@@ -13,10 +13,12 @@ from sqlalchemy import select, insert, update
 from app.schemas.chat import ChatAttachment
 from app.services.chat_payloads import (
     build_attachment_response_guidance,
+    build_message_content,
     derive_conversation_title,
     looks_like_image_analysis_request,
     looks_like_geodata_visual_request,
     looks_like_image_generation_request,
+    storage_text,
 )
 from app.services.generated_files import GeneratedFile, build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.project_tools import build_tools_context
@@ -99,7 +101,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         conv = result.scalar_one()
         conv_id = conv.id
 
-    stored_message_content = await build_vision_enriched_text(payload.message, payload.attachments)
+    stored_message_content = storage_text(payload.message, payload.attachments)
     if not stored_message_content:
         stored_message_content = (payload.message or "").strip()
 
@@ -159,10 +161,11 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         "- Wenn der Benutzer Deutsch schreibt, antworte auf Deutsch.\n"
         "- Wenn der Benutzer Französisch schreibt, antworte auf Französisch.\n"
         "- Wenn der Benutzer Englisch schreibt, antworte auf Englisch.\n"
-        "- Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die vom Vision-Modell gelieferten Beschreibungen und die lokal extrahierten Textdaten im Prompt und sage nicht, dass du Anhänge nicht lesen kannst.\n"
+        "- Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die direkten Anhangsdaten im Prompt und die lokal extrahierten Textdaten, statt zu behaupten, du könntest Anhänge nicht lesen.\n"
         "- Wenn ein gemeinsamer Projektordner konfiguriert ist und Kontext dazu geliefert wurde, behandle diesen Kontext als echte Dateiquelle. Sage dann nicht, dass du keinen Zugriff auf lokale Dateien hast.\n"
         "- Wenn der gemeinsame Projektordner-Kontext leere oder unvollständige Inhalte hat, fordere den Nutzer auf, dem Ordnerzugriff zuzustimmen oder prüfe den Projektkontext erneut, statt zu behaupten, du hättest grundsätzlich keinen Dateizugriff.\n"
-        "- Bilder werden vorab vom Vision-Modell analysiert. Nutze diese Beschreibung direkt und stütze dich nicht nur auf OCR, Dateiname oder Metadaten.\n"        "- Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert werden soll, antworte ausführlicher, mit klaren Abschnitten, Aufzählungen und einer kurzen Schlussbewertung.\n"
+        "- Bilder werden direkt in den Chat-Prompt übernommen, wenn verfügbar. Nutze diese Inhalte direkt und stütze dich nicht nur auf OCR, Dateiname oder Metadaten.\n"
+        "- Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert werden soll, antworte ausführlicher, mit klaren Abschnitten, Aufzählungen und einer kurzen Schlussbewertung.\n"
         "- Wenn der Benutzer ein Bild nur beschreiben, zusammenfassen oder analysieren möchte, antworte als Text im Chat. Erzeuge nur dann eine Datei, wenn ausdrücklich ein Dateiformat verlangt wird.\n"
         "- Wenn der Benutzer ausdrücklich ein Bild, ein PNG oder eine Grafik generieren möchte, liefere einen echten Dateiblock mit einem Bilddateinamen und keine Anleitung zur manuellen Erstellung.\n"
         "- Bei Geodatenpaketen aus SHP, SHX, DBF, PRJ oder CPG: analysiere die Kontakte je Art, nenne Kontaktzahl, Beobachtungszeitraum, räumliche Konzentration und mögliche ökologische Hinweise. Wenn sinnvoll, erstelle zusätzlich eine kleine Karte oder ein Diagramm als Datei.\n"
@@ -192,7 +195,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "If project_folder_context is present, treat it as the source of truth for the shared folder contents and do not claim you lack local filesystem access.\n"
             "For shared-folder questions, produce a detailed answer with overview, file list, per-file observations, and a short conclusion.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
-            "If an image, screenshot, or document is attached, rely on the supplied vision summary and any locally extracted text; do not claim that you cannot read attachments.\n"
+            "If an image, screenshot, or document is attached, rely on the direct attachment data in the prompt and any locally extracted text; do not claim that you cannot read attachments.\n"
             "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, and spatial clusters.\n"
             f"{build_attachment_response_guidance()}"
         )
@@ -251,7 +254,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             pass
 
     if payload.attachments:
-        hippo_messages[-1]["content"] = stored_message_content
+        hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=True)
 
     # Call Hippo model endpoint if configured (preferred)
     import httpx
