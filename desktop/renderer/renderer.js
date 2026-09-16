@@ -2052,7 +2052,7 @@ function buildProjectForm(defaults = {}) {
 
   const hint = document.createElement('div')
   hint.className = 'muted-copy'
-  hint.textContent = 'Pfad und folderid sind Pflicht. Hippo liest dann den pCloud-Ordner und alle Unterordner rekursiv.'
+  hint.textContent = 'Pfad und folderid sind Pflicht. Hippo liest dann nur die Dateien im pCloud-Ordner; Unterordner werden ignoriert.'
 
   const pcloudField = document.createElement('label')
   pcloudField.className = 'field'

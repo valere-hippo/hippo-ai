@@ -8,6 +8,7 @@ import sqlite3
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 from io import BytesIO
@@ -26,7 +27,7 @@ except Exception:  # pragma: no cover - optional dependency
         pass
 
 from app.core.config import settings
-from app.services.pcloud_storage import get_pcloud_file_bytes, list_pcloud_folder_recursive, has_pcloud_storage, normalize_pcloud_folder_id, normalize_pcloud_path
+from app.services.pcloud_storage import PCloudEntry, get_pcloud_file_bytes, list_pcloud_folder, has_pcloud_storage, normalize_pcloud_folder_id, normalize_pcloud_path
 
 LOCAL_STORAGE_ROOT = Path("/app/uploads")
 
@@ -282,6 +283,41 @@ def _project_uses_pcloud(project: Any) -> bool:
     return bool(getattr(project, "pcloud_path", None) and getattr(project, "pcloud_folder_id", None))
 
 
+def _pcloud_folder_files(project: Any) -> list[PCloudEntry]:
+    pcloud_path, pcloud_folder_id = _project_pcloud_reference(project)
+    items = list_pcloud_folder(pcloud_path, pcloud_folder_id)
+    files: list[PCloudEntry] = []
+    for item in items:
+        if bool(item.get("isfolder")):
+            continue
+        name = str(item.get("name") or "").strip()
+        path_hint = str(item.get("path") or "").strip()
+        if not path_hint:
+            base = pcloud_path or "/"
+            path_hint = str(PurePosixPath(base) / (name or "attachment"))
+        if not name:
+            name = PurePosixPath(path_hint).name or path_hint
+        modified = item.get("modified") or item.get("created")
+        modified_at: datetime | None = None
+        if isinstance(modified, str) and modified:
+            try:
+                modified_at = parsedate_to_datetime(modified)
+            except Exception:
+                modified_at = None
+        files.append(
+            PCloudEntry(
+                filename=name,
+                path=path_hint,
+                size=int(item.get("size") or 0),
+                modified_at=modified_at,
+                is_folder=False,
+                file_id=normalize_pcloud_folder_id(item.get("fileid")),
+                folder_id=None,
+            )
+        )
+    return files
+
+
 def _local_project_dir(project: Any) -> Path:
     project_id = getattr(project, "id", None)
     if project_id is None:
@@ -339,15 +375,12 @@ def store_project_file(project: Any, filename: str, content: bytes, content_type
 def list_project_files(project: Any) -> list[ProjectFile]:
     if _project_uses_pcloud(project):
         try:
-            pcloud_path, pcloud_folder_id = _project_pcloud_reference(project)
-            entries = list_pcloud_folder_recursive(pcloud_path, pcloud_folder_id)
+            files = _pcloud_folder_files(project)
         except Exception:
             return []
 
         items: list[ProjectFile] = []
-        for entry in entries:
-            if entry.is_folder:
-                continue
+        for entry in files:
             items.append(
                 ProjectFile(
                     filename=entry.path,
@@ -1203,15 +1236,13 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                     f"pCloud folderid: {folder_id or 'unbekannt'}\n"
                     "Bitte setze PCLOUD_ACCESS_TOKEN und PCLOUD_API_BASE_URL im Backend."
                 )
-            pcloud_root, pcloud_folder_id = _project_pcloud_reference(project)
-            entries = await asyncio.to_thread(list_pcloud_folder_recursive, pcloud_root, pcloud_folder_id)
+            entries = await asyncio.to_thread(_pcloud_folder_files, project)
             if not include_previews:
                 inventory_lines = [
-                    f"Im pCloud-Projektordner sind {len(entries)} Elemente sichtbar:",
+                    f"Im pCloud-Projektordner sind {len(entries)} Dateien sichtbar:",
                 ]
                 for entry in entries:
-                    prefix = "[Ordner]" if entry.is_folder else "-"
-                    inventory_lines.append(f"{prefix} {entry.path}")
+                    inventory_lines.append(f"- {entry.path}")
                 return "\n".join(inventory_lines)
             files = [
                 ProjectFile(
