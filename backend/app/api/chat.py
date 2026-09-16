@@ -170,7 +170,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
 
         try:
             if conv_project is not None:
-                project_skills_context = await build_project_skills_context(db, conv_project.id, payload.message, limit=5)
+                project_skills_context = await build_project_skills_context(db, conv_project.id, int(current_user.id), payload.message, limit=5)
             else:
                 project_skills_context = await build_shared_skills_context(db, payload.message, limit=5)
             if project_skills_context:
@@ -204,7 +204,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             pass
 
         try:
-            tools_context = await build_tools_context(db, payload.message, limit=6)
+            tools_context = await build_tools_context(db, payload.message, limit=6, user_id=int(current_user.id), project_id=conv_project.id if conv_project is not None else None)
             if tools_context:
                 hippo_messages.insert(
                     4,

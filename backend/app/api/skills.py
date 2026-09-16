@@ -13,7 +13,9 @@ from app.models.permission import PermissionLevel
 from app.models.project import Project
 from app.models.chat import Conversation, ChatMessage
 from app.models.skill import ProjectSkill
+from app.models.user_project_preferences import UserProjectSkillPreference
 from app.schemas.skill import ProjectSkillCreate, ProjectSkillResponse, ProjectSkillUpdate
+from app.services.project_skills import load_project_skills, load_shared_skills
 
 router = APIRouter(prefix="/projects/{project_id}/skills", tags=["skills"])
 library_router = APIRouter(prefix="/skills", tags=["skills-library"])
@@ -66,6 +68,53 @@ async def _load_skill(db: DbSession, skill_id: int, project_id: int | None = Non
     return skill
 
 
+async def _apply_skill_preferences(db: DbSession, skills: list[ProjectSkill], project_id: int | None, user_id: int | None) -> list[ProjectSkill]:
+    if project_id is None or user_id is None or not skills:
+        for skill in skills:
+            setattr(skill, "is_active_for_user", bool(getattr(skill, "is_enabled", False)))
+        return skills
+
+    skill_ids = [int(skill.id) for skill in skills]
+    result = await db.execute(
+        select(UserProjectSkillPreference.skill_id, UserProjectSkillPreference.is_enabled).where(
+            UserProjectSkillPreference.user_id == user_id,
+            UserProjectSkillPreference.project_id == project_id,
+            UserProjectSkillPreference.skill_id.in_(skill_ids),
+        )
+    )
+    prefs = {int(skill_id): bool(is_enabled) for skill_id, is_enabled in result.all()}
+    for skill in skills:
+        setattr(skill, "is_active_for_user", prefs.get(int(skill.id), bool(getattr(skill, "is_enabled", False))))
+    return skills
+
+
+async def _upsert_skill_preference(db: DbSession, user_id: int, project_id: int, skill_id: int, enabled: bool) -> None:
+    existing = await db.execute(
+        select(UserProjectSkillPreference).where(
+            UserProjectSkillPreference.user_id == user_id,
+            UserProjectSkillPreference.project_id == project_id,
+            UserProjectSkillPreference.skill_id == skill_id,
+        )
+    )
+    pref = existing.scalar_one_or_none()
+    if pref is None:
+        await db.execute(
+            insert(UserProjectSkillPreference).values(
+                user_id=user_id,
+                project_id=project_id,
+                skill_id=skill_id,
+                is_enabled=enabled,
+            )
+        )
+    else:
+        await db.execute(
+            UserProjectSkillPreference.__table__.update()
+            .where(UserProjectSkillPreference.id == pref.id)
+            .values(is_enabled=enabled, updated_at=datetime.utcnow())
+        )
+    await db.commit()
+
+
 @router.get("/", response_model=list[ProjectSkillResponse])
 async def list_project_skills(project_id: int, db: DbSession, current_user=Depends(get_current_user)):
     project = await _load_project(db, project_id)
@@ -76,7 +125,9 @@ async def list_project_skills(project_id: int, db: DbSession, current_user=Depen
         .where(or_(ProjectSkill.project_id == project_id, ProjectSkill.project_id.is_(None)))
         .order_by(ProjectSkill.project_id.is_(None).desc(), ProjectSkill.created_at.asc())
     )
-    return result.scalars().all()
+    skills = result.scalars().all()
+    await _apply_skill_preferences(db, skills, project_id, int(current_user.id) if current_user else None)
+    return skills
 
 
 @router.post("/", response_model=ProjectSkillResponse, status_code=status.HTTP_201_CREATED)
@@ -142,8 +193,19 @@ async def delete_project_skill(project_id: int, skill_id: int, db: DbSession, cu
     return {"ok": True}
 
 
+@router.patch("/{skill_id}/activation")
+async def set_project_skill_activation(project_id: int, skill_id: int, payload: dict, db: DbSession, current_user=Depends(get_current_user)):
+    project = await _load_project(db, project_id)
+    await _require_permission(db, current_user, project, PermissionLevel.READ)
+    enabled = bool(payload.get("is_enabled", True))
+    skill = await _load_skill(db, skill_id, project_id=project_id)
+    await _upsert_skill_preference(db, int(current_user.id), project_id, skill.id, enabled)
+    setattr(skill, "is_active_for_user", enabled)
+    return skill
+
+
 @library_router.get("/library", response_model=list[ProjectSkillResponse])
-async def list_skill_library(db: DbSession, current_user=Depends(get_current_user)):
+async def list_skill_library(db: DbSession, project_id: int | None = None, current_user=Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
 
@@ -152,7 +214,23 @@ async def list_skill_library(db: DbSession, current_user=Depends(get_current_use
         .where(ProjectSkill.project_id.is_(None))
         .order_by(ProjectSkill.created_at.asc())
     )
-    return result.scalars().all()
+    skills = result.scalars().all()
+    await _apply_skill_preferences(db, skills, project_id, int(current_user.id))
+    return skills
+
+
+@library_router.patch("/library/{skill_id}/activation")
+async def set_skill_library_activation(skill_id: int, payload: dict, db: DbSession, current_user=Depends(get_current_user)):
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
+    project_id = int(payload.get("project_id") or 0)
+    if project_id <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="project_id fehlt.")
+    enabled = bool(payload.get("is_enabled", True))
+    skill = await _load_skill(db, skill_id, project_id=None)
+    await _upsert_skill_preference(db, int(current_user.id), project_id, skill.id, enabled)
+    setattr(skill, "is_active_for_user", enabled)
+    return skill
 
 
 @library_router.post("/library", response_model=ProjectSkillResponse, status_code=status.HTTP_201_CREATED)

@@ -3421,8 +3421,9 @@ async function openToolModalLegacy() {
     }
 
     rows.forEach((item) => {
+      const isActiveForMe = project ? Boolean(item.is_active_for_user ?? item.is_enabled) : Boolean(item.is_enabled)
       const card = document.createElement('div')
-      card.className = 'skill-card'
+      card.className = `skill-card${isActiveForMe ? ' active' : ''}`
       const title = document.createElement('div')
       title.className = 'skill-card-title'
       title.textContent = item.metadata?.type ? `${item.metadata.type}` : 'Tool'
@@ -3432,14 +3433,44 @@ async function openToolModalLegacy() {
       const instructions = document.createElement('div')
       instructions.className = 'skill-card-instructions'
       instructions.textContent = item.text || ''
-      card.append(title, subtitle, instructions)
+      const actions = document.createElement('div')
+      actions.className = 'skill-card-actions'
+      const toggleButton = document.createElement('button')
+      toggleButton.type = 'button'
+      toggleButton.className = 'ghost-action'
+      toggleButton.textContent = project ? (isActiveForMe ? 'Für mich deaktivieren' : 'Für mich aktivieren') : (item.is_enabled ? 'Deaktivieren' : 'Aktivieren')
+      toggleButton.addEventListener('click', async () => {
+        showLoader('Tool wird aktualisiert...')
+        try {
+          if (project) {
+            await apiJson(`/tools/library/${item.id}/activation`, {
+              method: 'PATCH',
+              body: JSON.stringify({ project_id: project.id, is_enabled: !isActiveForMe }),
+            })
+          } else {
+            await apiJson(`/tools/library/${item.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ is_enabled: !item.is_enabled }),
+            })
+          }
+          await loadLibrary()
+          showToast(project ? 'Tool für dieses Projekt aktualisiert' : 'Tool aktualisiert')
+        } catch (error) {
+          showToast(error.message || 'Tool konnte nicht aktualisiert werden', 'error')
+        } finally {
+          hideLoader()
+        }
+      })
+      actions.appendChild(toggleButton)
+      card.append(title, subtitle, instructions, actions)
       toolList.appendChild(card)
     })
   }
 
   const loadLibrary = async () => {
     try {
-      const items = await apiJson('/tools/library')
+      const projectId = project?.id ? `?project_id=${encodeURIComponent(project.id)}` : ''
+      const items = await apiJson(`/tools/library${projectId}`)
       renderLibrary(items)
     } catch (error) {
       toolList.innerHTML = ''
@@ -3524,7 +3555,9 @@ function buildSkillManagerContent(project) {
 
   const intro = document.createElement('div')
   intro.className = 'muted-copy'
-  intro.textContent = 'Skills sind wiederverwendbare Projektanweisungen. Aktive Skills werden im Projekt-Chat priorisiert.'
+  intro.textContent = project
+    ? 'Skills sind wiederverwendbare Projektanweisungen. Aktiviere oder deaktiviere sie nur für dieses Projekt und deinen Benutzer.'
+    : 'Skills sind wiederverwendbare Projektanweisungen. Aktive Skills werden im Projekt-Chat priorisiert.'
 
   const listSection = document.createElement('div')
   listSection.className = 'skill-manager-section'
@@ -3637,7 +3670,7 @@ function buildSkillManagerContent(project) {
         }
         return response.json()
       })
-      await refreshSkills()
+      await loadLibrary()
       showToast('Markdown als Skill gespeichert')
     } catch (error) {
       showToast(error.message || 'Markdown konnte nicht gespeichert werden', 'error')
@@ -3694,8 +3727,9 @@ function buildSkillManagerContent(project) {
     }
 
     skillCache.forEach((skill) => {
+      const isActiveForMe = project ? Boolean(skill.is_active_for_user ?? skill.is_enabled) : Boolean(skill.is_enabled)
       const card = document.createElement('div')
-      card.className = `skill-card${skill.is_enabled ? ' active' : ''}`
+      card.className = `skill-card${isActiveForMe ? ' active' : ''}`
 
       const cardTop = document.createElement('div')
       cardTop.className = 'skill-card-top'
@@ -3710,8 +3744,8 @@ function buildSkillManagerContent(project) {
       meta.append(title, subtitle)
 
       const chip = document.createElement('span')
-      chip.className = `section-badge${skill.is_enabled ? '' : ' subtle'}`
-      chip.textContent = skill.is_enabled ? 'Aktiv' : 'Inaktiv'
+      chip.className = `section-badge${isActiveForMe ? '' : ' subtle'}`
+      chip.textContent = isActiveForMe ? (project ? 'Aktiv für mich' : 'Aktiv') : (project ? 'Deaktiviert für mich' : 'Inaktiv')
       cardTop.append(meta, chip)
 
       const instructions = document.createElement('div')
@@ -3730,16 +3764,23 @@ function buildSkillManagerContent(project) {
       const toggleButton = document.createElement('button')
       toggleButton.type = 'button'
       toggleButton.className = 'ghost-action'
-      toggleButton.textContent = skill.is_enabled ? 'Deaktivieren' : 'Aktivieren'
+      toggleButton.textContent = project ? (isActiveForMe ? 'Für mich deaktivieren' : 'Für mich aktivieren') : (skill.is_enabled ? 'Deaktivieren' : 'Aktivieren')
       toggleButton.addEventListener('click', async () => {
         showLoader('Skill wird aktualisiert...')
         try {
-          await apiJson(`/skills/library/${skill.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ is_enabled: !skill.is_enabled }),
-          })
-          await refreshSkills()
-          showToast('Skill aktualisiert')
+          if (project) {
+            await apiJson(`/skills/library/${skill.id}/activation`, {
+              method: 'PATCH',
+              body: JSON.stringify({ project_id: project.id, is_enabled: !isActiveForMe }),
+            })
+          } else {
+            await apiJson(`/skills/library/${skill.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ is_enabled: !skill.is_enabled }),
+            })
+          }
+          await loadLibrary()
+          showToast(project ? 'Skill für dieses Projekt aktualisiert' : 'Skill aktualisiert')
         } catch (error) {
           showToast(error.message || 'Skill konnte nicht aktualisiert werden', 'error')
         } finally {
@@ -3770,7 +3811,7 @@ function buildSkillManagerContent(project) {
           if (editingSkillId === skill.id) {
             resetForm()
           }
-          await refreshSkills()
+          await loadLibrary()
           showToast('Skill gelöscht')
         } catch (error) {
           showToast(error.message || 'Skill konnte nicht gelöscht werden', 'error')
@@ -3785,9 +3826,19 @@ function buildSkillManagerContent(project) {
     })
   }
 
-  async function refreshSkills() {
-    skillCache = await apiJson('/skills/library')
-    renderSkills()
+  const loadLibrary = async () => {
+    try {
+      const projectId = project?.id ? `?project_id=${encodeURIComponent(project.id)}` : ''
+      const items = await apiJson(`/skills/library${projectId}`)
+      skillCache = Array.isArray(items) ? items : []
+      renderSkills()
+    } catch (error) {
+      skillList.innerHTML = ''
+      const errorNode = document.createElement('div')
+      errorNode.className = 'muted-copy'
+      errorNode.textContent = error.message || 'Skills konnten nicht geladen werden.'
+      skillList.appendChild(errorNode)
+    }
   }
 
   async function saveSkill() {
@@ -3821,7 +3872,7 @@ function buildSkillManagerContent(project) {
         })
       }
       resetForm()
-      await refreshSkills()
+      await loadLibrary()
       showToast('Skill gespeichert')
     } catch (error) {
       showToast(error.message || 'Skill konnte nicht gespeichert werden', 'error')
@@ -3832,7 +3883,7 @@ function buildSkillManagerContent(project) {
 
   resetButton.addEventListener('click', resetForm)
   saveButton.addEventListener('click', saveSkill)
-  refreshSkills().catch((error) => {
+  loadLibrary().catch((error) => {
     showToast(error.message || 'Skills konnten nicht geladen werden', 'error')
   })
 
@@ -3845,7 +3896,9 @@ function buildToolManagerContent(project) {
 
   const intro = document.createElement('div')
   intro.className = 'muted-copy'
-  intro.textContent = 'Tools sind wiederverwendbare Projektanweisungen. Aktive Tools werden im Projekt-Chat priorisiert.'
+  intro.textContent = project
+    ? 'Tools sind wiederverwendbare Projektanweisungen. Aktiviere oder deaktiviere sie nur für dieses Projekt und deinen Benutzer.'
+    : 'Tools sind wiederverwendbare Projektanweisungen. Aktive Tools werden im Projekt-Chat priorisiert.'
 
   const listSection = document.createElement('div')
   listSection.className = 'tool-manager-section'
@@ -4256,7 +4309,8 @@ function buildToolManagerContent(project) {
   }
 
   async function refreshTools() {
-    toolCache = await apiJson('/tools/library')
+    const projectId = project?.id ? `?project_id=${encodeURIComponent(project.id)}` : ''
+    toolCache = await apiJson(`/tools/library${projectId}`)
     renderTools()
   }
 
@@ -4334,7 +4388,7 @@ function buildToolManagerContent(project) {
 
 
 async function openToolModal() {
-  const content = buildToolManagerContent()
+  const content = buildToolManagerContent(getContextProject())
   await openModal({
     title: 'Tools verwalten',
     copy: 'Hier verwaltest du die geteilte Tool-Bibliothek. Alle Projekte können diese Tools nutzen.',
@@ -4345,7 +4399,7 @@ async function openToolModal() {
 }
 
 async function openProjectSkillsModal() {
-  const content = buildSkillManagerContent()
+  const content = buildSkillManagerContent(getContextProject())
   await openModal({
     title: 'Skills verwalten',
     copy: 'Hier verwaltest du die geteilte Skill-Bibliothek. Alle Projekte können diese Skills nutzen.',

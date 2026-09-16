@@ -55,5 +55,6 @@ class AIToolResponse(BaseModel):
     requires_confirmation: bool
     parameters: dict | None
     is_enabled: bool
+    is_active_for_user: bool | None = None
     created_at: datetime
     updated_at: datetime

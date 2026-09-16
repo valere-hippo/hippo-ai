@@ -26,5 +26,6 @@ class ProjectSkillResponse(BaseModel):
     description: str | None
     instructions: str
     is_enabled: bool
+    is_active_for_user: bool | None = None
     created_at: datetime
     updated_at: datetime

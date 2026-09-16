@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.models.skill import ProjectSkill
-
+from app.models.user_project_preferences import UserProjectSkillPreference
 
 _WORD_RE = re.compile(r"[\wÀ-ÿ]+", re.UNICODE)
 
@@ -30,23 +30,40 @@ def _skill_search_score(skill: ProjectSkill, query_tokens: set[str]) -> float:
         score += 2.5 * len(query_tokens & description_tokens)
     if instruction_tokens:
         score += 1.0 * len(query_tokens & instruction_tokens)
-
     return score
 
 
-async def load_project_skills(db: Any, project_id: int, enabled_only: bool = False) -> list[ProjectSkill]:
-    stmt = select(ProjectSkill).where(
-        (ProjectSkill.project_id == project_id) | (ProjectSkill.project_id.is_(None))
+async def _load_skill_preferences(db: Any, user_id: int | None, project_id: int | None, skill_ids: list[int]) -> dict[int, bool]:
+    if not user_id or not project_id or not skill_ids:
+        return {}
+
+    stmt = select(UserProjectSkillPreference.skill_id, UserProjectSkillPreference.is_enabled).where(
+        UserProjectSkillPreference.user_id == user_id,
+        UserProjectSkillPreference.project_id == project_id,
+        UserProjectSkillPreference.skill_id.in_(skill_ids),
     )
-    if enabled_only:
-        stmt = stmt.where(ProjectSkill.is_enabled.is_(True))
+    result = await db.execute(stmt)
+    return {int(skill_id): bool(is_enabled) for skill_id, is_enabled in result.all()}
+
+
+async def load_project_skills(db: Any, project_id: int, user_id: int | None = None, enabled_only: bool = False) -> list[ProjectSkill]:
+    stmt = select(ProjectSkill).where((ProjectSkill.project_id == project_id) | (ProjectSkill.project_id.is_(None)))
     stmt = stmt.order_by(ProjectSkill.project_id.is_(None).desc(), ProjectSkill.created_at.asc())
     result = await db.execute(stmt)
-    return result.scalars().all()
+    skills = result.scalars().all()
+
+    prefs = await _load_skill_preferences(db, user_id, project_id, [int(skill.id) for skill in skills])
+    for skill in skills:
+        effective_enabled = prefs.get(int(skill.id), bool(getattr(skill, "is_enabled", False)))
+        setattr(skill, "is_active_for_user", effective_enabled)
+
+    if enabled_only:
+        skills = [skill for skill in skills if bool(getattr(skill, "is_active_for_user", False))]
+    return skills
 
 
 def rank_project_skills_for_query(skills: list[ProjectSkill], query: str, limit: int = 5) -> list[ProjectSkill]:
-    active_skills = [skill for skill in skills if getattr(skill, "is_enabled", False)]
+    active_skills = [skill for skill in skills if getattr(skill, "is_active_for_user", getattr(skill, "is_enabled", False))]
     if not active_skills:
         return []
 
@@ -71,7 +88,7 @@ def format_project_skills_context(skills: list[ProjectSkill], query: str | None 
     if not skills:
         return ""
 
-    selected = rank_project_skills_for_query(skills, query or "", limit=limit) if query else [skill for skill in skills if getattr(skill, "is_enabled", False)][:limit]
+    selected = rank_project_skills_for_query(skills, query or "", limit=limit) if query else [skill for skill in skills if getattr(skill, "is_active_for_user", getattr(skill, "is_enabled", False))][:limit]
     if not selected:
         return ""
 
@@ -109,6 +126,6 @@ async def build_shared_skills_context(db: Any, query: str | None = None, limit: 
     return format_project_skills_context(skills, query=query, limit=limit)
 
 
-async def build_project_skills_context(db: Any, project_id: int, query: str | None = None, limit: int = 5) -> str:
-    skills = await load_project_skills(db, project_id, enabled_only=True)
+async def build_project_skills_context(db: Any, project_id: int, user_id: int | None = None, query: str | None = None, limit: int = 5) -> str:
+    skills = await load_project_skills(db, project_id, user_id=user_id, enabled_only=True)
     return format_project_skills_context(skills, query=query, limit=limit)

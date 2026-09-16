@@ -10,9 +10,13 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.dependencies import DbSession, get_current_user
 from app.models.chat import Conversation, ChatMessage
+from app.models.permission import PermissionLevel
+from app.models.project import Project
 from app.models.tool import AITool
+from app.models.user_project_preferences import UserProjectToolPreference
 from app.models.user import User
 from app.schemas.tool import AIToolCreate, AIToolResponse, AIToolUpdate
+from app.services.project_tools import load_shared_tools, load_tools_for_project
 
 router = APIRouter(prefix="/tools", tags=["tools"])
 library_router = APIRouter(prefix="/tools", tags=["tools-library"])
@@ -67,12 +71,80 @@ async def _load_tool(db: DbSession, tool_id: int) -> AITool:
     return tool
 
 
+async def _load_project(db: DbSession, project_id: int) -> Project:
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Projekt nicht gefunden.")
+    return project
+
+
+async def _require_permission(db: DbSession, user, project: Project, level: PermissionLevel):
+    from app.services.permissions import has_project_permission
+
+    allowed = await has_project_permission(db, user, project, level)
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
+
+
+async def _apply_tool_preferences(db: DbSession, tools: list[AITool], project_id: int | None, user_id: int | None) -> list[AITool]:
+    if project_id is None or user_id is None or not tools:
+        for tool in tools:
+            setattr(tool, "is_active_for_user", bool(getattr(tool, "is_enabled", False)))
+        return tools
+
+    tool_ids = [int(tool.id) for tool in tools]
+    result = await db.execute(
+        select(UserProjectToolPreference.tool_id, UserProjectToolPreference.is_enabled).where(
+            UserProjectToolPreference.user_id == user_id,
+            UserProjectToolPreference.project_id == project_id,
+            UserProjectToolPreference.tool_id.in_(tool_ids),
+        )
+    )
+    prefs = {int(tool_id): bool(is_enabled) for tool_id, is_enabled in result.all()}
+    for tool in tools:
+        setattr(tool, "is_active_for_user", prefs.get(int(tool.id), bool(getattr(tool, "is_enabled", False))))
+    return tools
+
+
+async def _upsert_tool_preference(db: DbSession, user_id: int, project_id: int, tool_id: int, enabled: bool) -> None:
+    existing = await db.execute(
+        select(UserProjectToolPreference).where(
+            UserProjectToolPreference.user_id == user_id,
+            UserProjectToolPreference.project_id == project_id,
+            UserProjectToolPreference.tool_id == tool_id,
+        )
+    )
+    pref = existing.scalar_one_or_none()
+    if pref is None:
+        await db.execute(
+            insert(UserProjectToolPreference).values(
+                user_id=user_id,
+                project_id=project_id,
+                tool_id=tool_id,
+                is_enabled=enabled,
+            )
+        )
+    else:
+        await db.execute(
+            UserProjectToolPreference.__table__.update()
+            .where(UserProjectToolPreference.id == pref.id)
+            .values(is_enabled=enabled, updated_at=datetime.utcnow())
+        )
+    await db.commit()
+
+
 @library_router.get("/library", response_model=list[AIToolResponse])
-async def list_tools(db: DbSession, current_user=Depends(get_current_user)):
+async def list_tools(db: DbSession, project_id: int | None = None, current_user=Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
+    if project_id is not None:
+        tools = await load_tools_for_project(db, project_id, user_id=int(current_user.id), enabled_only=False)
+        return tools
     result = await db.execute(select(AITool).order_by(AITool.created_at.asc()))
-    return result.scalars().all()
+    tools = result.scalars().all()
+    await _apply_tool_preferences(db, tools, None, int(current_user.id))
+    return tools
 
 
 @library_router.post("/library", response_model=AIToolResponse, status_code=status.HTTP_201_CREATED)
@@ -206,6 +278,31 @@ async def delete_tool(tool_id: int, db: DbSession, current_user=Depends(get_curr
     if result.rowcount == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tool nicht gefunden.")
     return {"ok": True}
+
+
+@router.patch("/{tool_id}/activation")
+async def set_project_tool_activation(project_id: int, tool_id: int, payload: dict, db: DbSession, current_user=Depends(get_current_user)):
+    project = await _load_project(db, project_id)
+    await _require_permission(db, current_user, project, PermissionLevel.READ)
+    enabled = bool(payload.get("is_enabled", True))
+    tool = await _load_tool(db, tool_id)
+    await _upsert_tool_preference(db, int(current_user.id), project_id, tool.id, enabled)
+    setattr(tool, "is_active_for_user", enabled)
+    return tool
+
+
+@library_router.patch("/library/{tool_id}/activation")
+async def set_tool_library_activation(tool_id: int, payload: dict, db: DbSession, current_user=Depends(get_current_user)):
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
+    project_id = int(payload.get("project_id") or 0)
+    if project_id <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="project_id fehlt.")
+    enabled = bool(payload.get("is_enabled", True))
+    tool = await _load_tool(db, tool_id)
+    await _upsert_tool_preference(db, int(current_user.id), project_id, tool.id, enabled)
+    setattr(tool, "is_active_for_user", enabled)
+    return tool
 
 
 @library_router.post("/library/from-chat", response_model=AIToolResponse, status_code=status.HTTP_201_CREATED)
