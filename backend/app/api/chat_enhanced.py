@@ -93,6 +93,15 @@ def _extract_json_object(text: str) -> dict | None:
 
 def _extract_candidate_open_path(text: str) -> str | None:
     source = text or ''
+    executable_patterns = [
+        r"[A-Za-z]:\\[^\"\n\r]+?\.(?:exe|app|bat|cmd|com)",
+        r"/[^\"\n\r]+?\.(?:exe|app|bat|cmd|com)",
+    ]
+    for pattern in executable_patterns:
+        match = re.search(pattern, source, flags=re.IGNORECASE)
+        if match:
+            return match.group(0).strip().strip('"').strip("'")
+
     full_patterns = [
         r"[A-Za-z]:\\[^\s\n\r\t\"']+?\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md)",
         r"/[^\s\n\r\t\"']+?\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md)",
@@ -123,6 +132,43 @@ def _extract_candidate_open_path(text: str) -> str | None:
     return f"{prefix}{separator}{filename}"
 
 
+def _extract_secondary_data_path(text: str, exclude: str | None = None) -> str | None:
+    source = text or ''
+    full_patterns = [
+        r"[A-Za-z]:\\[^\s\n\r\t\"']+?\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md)",
+        r"/[^\s\n\r\t\"']+?\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md)",
+    ]
+    for pattern in full_patterns:
+        for match in re.finditer(pattern, source, flags=re.IGNORECASE):
+            candidate = match.group(0).strip().strip('"').strip("'")
+            if exclude and candidate.lower() == exclude.lower():
+                continue
+            return candidate
+
+    filename_pattern = r"[A-Za-z0-9À-ÿ._-]+\.(?:qgz|qgs|gpkg|xlsx|xlsm|xls|docx|odt|ods|pdf|csv|shp|geojson|kml|kmz|txt|md)"
+    filename_matches = list(re.finditer(filename_pattern, source, flags=re.IGNORECASE))
+    if not filename_matches:
+        return None
+    filename_match = filename_matches[-1]
+    filename = filename_match.group(0).strip().strip('"').strip("'")
+    if exclude and filename.lower() == exclude.lower():
+        return None
+
+    folder_starts = [m for m in re.finditer(r"[A-Za-z]:\\|/", source, flags=re.IGNORECASE) if m.start() < filename_match.start()]
+    if not folder_starts:
+        return filename
+    folder_start = folder_starts[-1].start()
+    prefix = source[folder_start:filename_match.start()].rstrip()
+    last_sep = max(prefix.rfind('\\'), prefix.rfind('/'))
+    if last_sep >= 0:
+        head = prefix[:last_sep + 1]
+        tail = re.split(r"\s", prefix[last_sep + 1:], 1)[0]
+        prefix = f"{head}{tail}"
+    prefix = prefix.rstrip('\\/')
+    separator = '\\' if '\\' in prefix else '/'
+    return f"{prefix}{separator}{filename}"
+
+
 def _looks_like_executable_path(value: str) -> bool:
     candidate = (value or '').strip().lower()
     return bool(candidate) and candidate.endswith(('.exe', '.app', '.bat', '.cmd', '.com'))
@@ -134,11 +180,12 @@ def _infer_desktop_launch_action(message: str, reply_text: str, profile: str | N
         return []
 
     open_path = _extract_candidate_open_path(haystack)
+    data_path = _extract_secondary_data_path(haystack, exclude=open_path)
     actions: list[DesktopAction] = []
     if open_path:
         if _looks_like_executable_path(open_path):
             app_key = 'qgis' if 'qgis' in haystack or profile == 'qgis' else 'word' if ('word' in haystack or 'bericht' in haystack or 'report' in haystack) else 'excel' if 'excel' in haystack else 'libreoffice' if ('libreoffice' in haystack or 'soffice' in haystack) else 'qgis'
-            actions.append(DesktopAction(action='launch_app', command=app_key, path=open_path))
+            actions.append(DesktopAction(action='launch_app', command=app_key, path=open_path, file=data_path or None))
         elif 'qgis' in haystack or profile == 'qgis':
             actions.append(DesktopAction(action='launch_app', command='qgis', file=open_path))
         elif 'word' in haystack or 'bericht' in haystack or 'report' in haystack:
