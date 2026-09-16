@@ -25,7 +25,10 @@ class Settings(BaseSettings):
     # Hippo model hub
     hippo_api_url: str | None = Field(default=None, validation_alias=AliasChoices("HIPPO_AI_BASE_URL", "HIPPO_API_URL"))
     hippo_api_key: str | None = None
-    hippo_model: str = Field(default="hippo-ai", validation_alias=AliasChoices("HIPPO_AI_MODEL", "HIPPO_MODEL"))
+    hippo_model: str = Field(
+        default="/root/autodl-tmp/hippo-ai-v2/models/Qwen3-Omni-30B-A3B-Instruct",
+        validation_alias=AliasChoices("HIPPO_AI_MODEL", "HIPPO_MODEL"),
+    )
     hippo_vision_url: str | None = None
     hippo_response_max_tokens: int = 4096
     hippo_response_max_tokens_long: int = 8192

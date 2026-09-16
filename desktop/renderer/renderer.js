@@ -2932,7 +2932,7 @@ async function openUserDashboardModal(initialTab = 'profile') {
         recentModels.forEach((item) => {
           const row = document.createElement('div')
           row.className = 'dashboard-overview-row'
-          row.innerHTML = `<strong>${escapeHtml(item.model_id || '')}</strong><span>${escapeHtml(item.provider || '')} · ${escapeHtml(item.status || 'ok')} · ${escapeHtml(String(item.context_window || '—'))}</span>`
+          row.innerHTML = `<strong>${escapeHtml(item.model_id || '')}</strong><span>${escapeHtml(item.provider || '')} · ${escapeHtml(item.display_name || '')}${item.display_name ? ' · ' : ''}${escapeHtml(item.status || 'ok')} · ${escapeHtml(String(item.context_window || '—'))}</span>`
           modelList.appendChild(row)
         })
       } else {

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -22,8 +22,10 @@ class ModelRegistrySource:
 
 MODEL_SYNC_SOURCES: tuple[ModelRegistrySource, ...] = (
     ModelRegistrySource(provider="chat", source_url=settings.hippo_api_url, api_key=settings.hippo_api_key, capability="chat"),
-    ModelRegistrySource(provider="vision", source_url=settings.hippo_vision_url, api_key=settings.hippo_api_key, capability="vision"),
 )
+
+HIPPO_CHAT_MODEL_ID = (settings.hippo_model or "").strip()
+HIPPO_CHAT_MODEL_DISPLAY_NAME = "Hippo AI"
 
 
 def _normalize_base_url(url: str | None) -> str | None:
@@ -71,6 +73,8 @@ def _extract_int(payload: dict[str, Any], keys: tuple[str, ...]) -> int | None:
 def _normalize_model_row(source: ModelRegistrySource, model: dict[str, Any], source_url: str) -> dict[str, Any]:
     model_id = str(model.get("id") or model.get("model") or model.get("name") or model.get("slug") or source.provider)
     display_name = model.get("display_name") or model.get("name") or model.get("owned_by") or model.get("ownedBy")
+    if source.provider == "chat" and HIPPO_CHAT_MODEL_ID and model_id == HIPPO_CHAT_MODEL_ID:
+        display_name = HIPPO_CHAT_MODEL_DISPLAY_NAME
     context_window = _extract_int(
         model,
         (
@@ -129,6 +133,14 @@ async def sync_model_registry(db: AsyncSession) -> dict[str, Any]:
         "sources": [],
     }
 
+    if HIPPO_CHAT_MODEL_ID:
+        await db.execute(
+            delete(ModelRegistry).where(
+                (ModelRegistry.provider == "chat") & (ModelRegistry.model_id != HIPPO_CHAT_MODEL_ID)
+            )
+        )
+    await db.execute(delete(ModelRegistry).where(ModelRegistry.provider == "vision"))
+
     async with httpx.AsyncClient(timeout=20.0) as client:
         for source in MODEL_SYNC_SOURCES:
             base_url = _normalize_base_url(source.source_url)
@@ -153,6 +165,8 @@ async def sync_model_registry(db: AsyncSession) -> dict[str, Any]:
                     payload = None
 
             entries = _extract_model_entries(payload)
+            if source.provider == "chat" and HIPPO_CHAT_MODEL_ID:
+                entries = [entry for entry in entries if str(entry.get("id") or entry.get("model") or entry.get("name") or entry.get("slug") or "") == HIPPO_CHAT_MODEL_ID]
             if not entries:
                 summary["sources"].append(
                     {
