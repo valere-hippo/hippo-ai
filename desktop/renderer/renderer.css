@@ -254,12 +254,25 @@ textarea {
 }
 
 .section-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--line);
   padding: 2px 8px;
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
+}
+
+.section-badge.subtle {
+  opacity: 0.72;
+}
+
+.section-badge.danger {
+  color: rgba(255, 138, 138, 0.96);
+  border-color: rgba(255, 138, 138, 0.28);
+  background: rgba(255, 138, 138, 0.08);
 }
 
 .stack-list {
@@ -1338,6 +1351,21 @@ textarea {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+}
+
+.skill-card-status,
+.tool-card-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 1px;
+  min-width: 0;
+}
+
+.skill-card-status .section-badge,
+.tool-card-status .section-badge {
+  max-width: 100%;
 }
 
 .skill-card-title,

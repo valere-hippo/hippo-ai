@@ -3743,10 +3743,19 @@ function buildSkillManagerContent(project) {
       subtitle.textContent = skill.description || 'Keine Beschreibung'
       meta.append(title, subtitle)
 
+      const statusWrap = document.createElement('div')
+      statusWrap.className = 'skill-card-status'
       const chip = document.createElement('span')
       chip.className = `section-badge${isActiveForMe ? '' : ' subtle'}`
       chip.textContent = isActiveForMe ? (project ? 'Aktiv für mich' : 'Aktiv') : (project ? 'Deaktiviert für mich' : 'Inaktiv')
-      cardTop.append(meta, chip)
+      statusWrap.appendChild(chip)
+      if (project) {
+        const globalChip = document.createElement('span')
+        globalChip.className = `section-badge subtle${skill.is_enabled ? '' : ' danger'}`
+        globalChip.textContent = skill.is_enabled ? 'Global aktiv' : 'Global inaktiv'
+        statusWrap.appendChild(globalChip)
+      }
+      cardTop.append(meta, statusWrap)
 
       const instructions = document.createElement('div')
       instructions.className = 'skill-card-instructions'
@@ -4232,10 +4241,19 @@ function buildToolManagerContent(project) {
       subtitle.textContent = tool.description || 'Keine Beschreibung'
       meta.append(title, subtitle)
 
+      const statusWrap = document.createElement('div')
+      statusWrap.className = 'skill-card-status'
       const chip = document.createElement('span')
       chip.className = `section-badge${tool.is_enabled ? '' : ' subtle'}`
       chip.textContent = tool.is_enabled ? 'Aktiv' : 'Inaktiv'
-      cardTop.append(meta, chip)
+      statusWrap.appendChild(chip)
+      if (project) {
+        const globalChip = document.createElement('span')
+        globalChip.className = `section-badge subtle${tool.is_enabled ? '' : ' danger'}`
+        globalChip.textContent = tool.is_enabled ? 'Global aktiv' : 'Global inaktiv'
+        statusWrap.appendChild(globalChip)
+      }
+      cardTop.append(meta, statusWrap)
 
       const instructions = document.createElement('div')
       instructions.className = 'tool-card-instructions'
