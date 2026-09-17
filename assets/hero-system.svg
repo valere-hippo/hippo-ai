@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">HIPPO AI Systemillustration</title>
+  <desc id="desc">Eine stilisierte dunkle Systemgrafik mit verbundenen Knoten, die Chat, Projekte, Tools und PC-Agent symbolisiert.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1724"/>
+      <stop offset="100%" stop-color="#051018"/>
+    </linearGradient>
+    <linearGradient id="a" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#55d0ba"/>
+      <stop offset="100%" stop-color="#6ca8ff"/>
+    </linearGradient>
+    <linearGradient id="b" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a86dff"/>
+      <stop offset="100%" stop-color="#55d0ba"/>
+    </linearGradient>
+    <filter id="blur" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="860" rx="40" fill="url(#bg)"/>
+  <circle cx="190" cy="150" r="110" fill="#55d0ba" opacity="0.12" filter="url(#blur)"/>
+  <circle cx="995" cy="140" r="130" fill="#6ca8ff" opacity="0.11" filter="url(#blur)"/>
+  <circle cx="985" cy="670" r="170" fill="#a86dff" opacity="0.11" filter="url(#blur)"/>
+
+  <rect x="74" y="84" width="1052" height="692" rx="36" fill="white" fill-opacity="0.03" stroke="white" stroke-opacity="0.08"/>
+
+  <g opacity="0.92">
+    <rect x="470" y="284" width="260" height="150" rx="28" fill="#0f1d2b" stroke="url(#a)" stroke-width="2"/>
+    <text x="600" y="346" text-anchor="middle" fill="#ecf5ff" font-family="Inter, Arial, sans-serif" font-size="33" font-weight="700">HIPPO AI</text>
+    <text x="600" y="382" text-anchor="middle" fill="#aab8c8" font-family="Inter, Arial, sans-serif" font-size="18">Chat · Projekte · Aktionen</text>
+  </g>
+
+  <g>
+    <rect x="120" y="154" width="220" height="104" rx="22" fill="#112131" stroke="white" stroke-opacity="0.08"/>
+    <text x="230" y="199" text-anchor="middle" fill="#ecf5ff" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700">Chat</text>
+    <text x="230" y="227" text-anchor="middle" fill="#aab8c8" font-family="Inter, Arial, sans-serif" font-size="15">Sprache · Kontext · Antwort</text>
+
+    <rect x="118" y="600" width="236" height="108" rx="22" fill="#112131" stroke="white" stroke-opacity="0.08"/>
+    <text x="236" y="646" text-anchor="middle" fill="#ecf5ff" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700">Projekte</text>
+    <text x="236" y="674" text-anchor="middle" fill="#aab8c8" font-family="Inter, Arial, sans-serif" font-size="15">Fälle · Dateien · Berichte</text>
+
+    <rect x="862" y="158" width="220" height="104" rx="22" fill="#112131" stroke="white" stroke-opacity="0.08"/>
+    <text x="972" y="203" text-anchor="middle" fill="#ecf5ff" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700">Tools</text>
+    <text x="972" y="231" text-anchor="middle" fill="#aab8c8" font-family="Inter, Arial, sans-serif" font-size="15">Aktionen · Integrationen</text>
+
+    <rect x="852" y="598" width="244" height="112" rx="22" fill="#112131" stroke="white" stroke-opacity="0.08"/>
+    <text x="974" y="644" text-anchor="middle" fill="#ecf5ff" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700">PC-Agent</text>
+    <text x="974" y="672" text-anchor="middle" fill="#aab8c8" font-family="Inter, Arial, sans-serif" font-size="15">Starten · Klicken · Schreiben</text>
+  </g>
+
+  <g stroke-linecap="round" stroke-width="4" opacity="0.84">
+    <path d="M338 206 C 400 206, 438 242, 488 300" stroke="url(#a)"/>
+    <path d="M338 654 C 400 654, 438 618, 488 420" stroke="url(#b)"/>
+    <path d="M862 210 C 802 210, 758 243, 712 304" stroke="url(#a)"/>
+    <path d="M852 654 C 794 654, 752 620, 713 420" stroke="url(#b)"/>
+  </g>
+
+  <g fill="none" stroke="white" stroke-opacity="0.12" stroke-width="2">
+    <circle cx="112" cy="96" r="8"/>
+    <circle cx="1088" cy="96" r="8"/>
+    <circle cx="112" cy="764" r="8"/>
+    <circle cx="1088" cy="764" r="8"/>
+  </g>
+
+  <g opacity="0.9">
+    <rect x="452" y="470" width="292" height="94" rx="22" fill="#0f1d2b" stroke="white" stroke-opacity="0.08"/>
+    <text x="598" y="513" text-anchor="middle" fill="#ecf5ff" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Skills</text>
+    <text x="598" y="540" text-anchor="middle" fill="#aab8c8" font-family="Inter, Arial, sans-serif" font-size="15">Wissen · Regeln · Workflows</text>
+  </g>
+
+  <g fill="#55d0ba">
+    <circle cx="372" cy="206" r="7"/>
+    <circle cx="826" cy="210" r="7"/>
+    <circle cx="372" cy="654" r="7"/>
+    <circle cx="826" cy="654" r="7"/>
+    <circle cx="600" cy="430" r="7"/>
+    <circle cx="600" cy="284" r="7"/>
+  </g>
+</svg>
