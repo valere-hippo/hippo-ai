@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="HIPPO AI — die deutschsprachige Projekt- und Assistentenplattform für Hipposideros. Vollständiger Überblick über Funktionen, Nutzung und Arbeitsweise.">
+  <title>HIPPO AI — Vollständiger Überblick</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-copy">
+      <div class="eyebrow">HIPPO AI · Hipposideros</div>
+      <h1>Die vollständige Bedienungs- und Überblicksseite für Hippo AI</h1>
+      <p class="lead">
+        Diese Seite erklärt ausführlich, wie Hippo AI arbeitet, wofür das System gedacht ist, wie Projekte organisiert werden,
+        wie Tools und Skills genutzt werden und wie du Hippo im Alltag maximal effektiv einsetzt.
+      </p>
+      <div class="hero-pills">
+        <span>Deutsch als Hauptsprache</span>
+        <span>Personalisierte Projekte</span>
+        <span>Tools + Skills</span>
+        <span>PC-Agent</span>
+        <span>pCloud-Integration</span>
+      </div>
+      <div class="hero-actions">
+        <a href="#start" class="button primary">Schnellstart</a>
+        <a href="#system" class="button secondary">System verstehen</a>
+      </div>
+    </div>
+    <div class="hero-art">
+      <img src="./assets/hero-system.svg" alt="Illustration des Hippo-AI-Systems">
+    </div>
+  </header>
+
+  <main>
+    <section class="panel intro-grid" id="start">
+      <article>
+        <h2>Was ist Hippo AI?</h2>
+        <p>
+          Hippo AI ist der virtuelle Assistent für die Projekte von <strong>Hipposideros</strong>.
+          Er wurde so gebaut, dass er nicht nur antwortet, sondern echte Arbeitsabläufe unterstützt:
+          Informationen verstehen, Dateien aus Projekten auswerten, Berichte erzeugen, Desktop-Programme steuern
+          und projektbezogene Hilfsanweisungen auswerten.
+        </p>
+        <p>
+          Das Ziel ist klar: Nutzer sollen mit möglichst wenig Aufwand aus einem Chat heraus produktiv arbeiten können.
+          Hippo AI soll dabei natürlich, präzise und projektorientiert bleiben.
+        </p>
+      </article>
+      <aside class="fact-box">
+        <h3>Grundidentität</h3>
+        <ul>
+          <li><strong>Name:</strong> HIPPO AI</li>
+          <li><strong>Organisation:</strong> Hipposideros</li>
+          <li><strong>Sitz:</strong> 53547 Breitscheid</li>
+          <li><strong>Inhaber:</strong> Oliver Meier-Ronfeld</li>
+          <li><strong>Entwicklung:</strong> Valère Youbi</li>
+          <li><strong>Fokus:</strong> Artenschutz &amp; Chiroptera</li>
+        </ul>
+      </aside>
+    </section>
+
+    <section class="panel two-column" id="system">
+      <div>
+        <div class="section-kicker">Systemübersicht</div>
+        <h2>Wie das System aufgebaut ist</h2>
+        <p>
+          Hippo AI verbindet Chat, Projekte, Tools, Skills, PC-Agent, Dateikontext und Dokumentausgabe zu einer
+          einzigen Arbeitsoberfläche. Die Architektur ist so gedacht, dass Nutzer mit ihrem Projekt arbeiten können,
+          ohne zwischen vielen Einzelwerkzeugen springen zu müssen.
+        </p>
+        <p>
+          Das aktive Routing setzt heute auf <strong>Tools + Skills</strong> statt auf alte Embedding-Flows.
+          Skills sind wiederverwendbare Arbeitsanweisungen. Tools sind ausführbare Fähigkeiten oder Integrationen.
+          Beide können projektbezogen und benutzerbezogen aktiviert oder deaktiviert werden.
+        </p>
+      </div>
+      <div class="diagram-card">
+        <img src="./assets/architecture-overview.png" alt="Architekturübersicht von HIPPO AI">
+        <p class="caption">Gesamtarchitektur als Überblicksbild. Diese Grafik zeigt die große Systemsicht von Hippo AI.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-kicker">Kernprinzipien</div>
+      <h2>Wofür Hippo AI gebaut wurde</h2>
+      <div class="cards three">
+        <article class="card">
+          <h3>1. Projektorientiert</h3>
+          <p>
+            Jedes Projekt kann seinen eigenen Kontext, seine eigenen Dateien, seine eigenen Regeln und seine eigene
+            Arbeitsweise haben. Hippo denkt immer innerhalb des Projekts und nicht nur allgemein.
+          </p>
+        </article>
+        <article class="card">
+          <h3>2. Benutzerfreundlich</h3>
+          <p>
+            Die Oberfläche ist darauf ausgelegt, direkt aus dem Chat zu arbeiten. Nutzer sollen nicht in technische
+            Details abtauchen müssen, um produktiv zu sein.
+          </p>
+        </article>
+        <article class="card">
+          <h3>3. Automatisierbar</h3>
+          <p>
+            Hippo kann Anfragen strukturieren, Programme öffnen, Dateien laden, Auswertungen starten und Berichte
+            vorbereiten. Das System ist für echte Arbeit gedacht, nicht nur für Textantworten.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-kicker">Begriffe erklärt</div>
+      <h2>Die wichtigsten Bausteine verständlich erklärt</h2>
+      <div class="feature-grid glossary-grid">
+        <article class="feature">
+          <h3>Projekt</h3>
+          <p>Ein abgeschlossener Arbeitskontext mit eigenen Dateien, Chats, Regeln und Ausgaben.</p>
+        </article>
+        <article class="feature">
+          <h3>Tool</h3>
+          <p>Ein ausführbarer Baustein für Aktionen, Integrationen oder Desktop-/API-Aufgaben.</p>
+        </article>
+        <article class="feature">
+          <h3>Skill</h3>
+          <p>Eine wiederverwendbare Anweisung oder ein Wissenspaket für eine bestimmte Arbeitsweise.</p>
+        </article>
+        <article class="feature">
+          <h3>PC-Agent</h3>
+          <p>Der Modus, mit dem Hippo Programme starten und den Desktop aktiv bedienen kann.</p>
+        </article>
+        <article class="feature">
+          <h3>pCloud</h3>
+          <p>Projektquelle für Dateien; Hippo liest daraus dynamisch projektbezogene Inhalte.</p>
+        </article>
+        <article class="feature">
+          <h3>Lokaler Freigabeordner</h3>
+          <p>Der Ordner für Berichte, Exporte und erzeugte Dateien auf dem Computer des Nutzers.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel two-column reverse">
+      <div class="diagram-card compact">
+        <img src="./assets/chat-flow.svg" alt="Illustration des Hippo-AI-Arbeitsflusses">
+        <p class="caption">So läuft eine Anfrage typischerweise durch Hippo AI.</p>
+      </div>
+      <div>
+        <div class="section-kicker">So arbeitet Hippo AI</div>
+        <h2>Vom Chat zur konkreten Aktion</h2>
+        <ol class="steps">
+          <li><strong>Der Nutzer schreibt eine Anfrage.</strong> Hippo erkennt Sprache, Absicht und Projektbezug.</li>
+          <li><strong>Der Kontext wird geladen.</strong> Relevante Projektdaten, Skills, Tools und Dateiinformationen werden berücksichtigt.</li>
+          <li><strong>Das Modell entscheidet.</strong> Es wird beantwortet, zusammengefasst, analysiert oder eine Aktion vorbereitet.</li>
+          <li><strong>Optional: PC-Agent.</strong> Wenn nötig, kann Hippo Programme öffnen, klicken, tippen oder Dateien laden.</li>
+          <li><strong>Ergebnis.</strong> Hippo liefert eine Antwort, ein Dokument, eine Analyse oder eine Folgeaktion.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="panel" id="features">
+      <div class="section-kicker">Funktionen im Detail</div>
+      <h2>Was Hippo AI alles kann</h2>
+      <div class="feature-grid">
+        <article class="feature">
+          <h3>Chat und Projektkontext</h3>
+          <p>
+            Hippo kann in normalen Chats und in Projektchats arbeiten. Im Projektchat werden projektbezogene Dateien,
+            Anweisungen und Regeln automatisch mitgedacht.
+          </p>
+        </article>
+        <article class="feature">
+          <h3>Tools</h3>
+          <p>
+            Tools sind wiederverwendbare Funktionsbausteine. Sie können lokale Programme, HTTP-Endpunkte, Workflows
+            oder Spezialaktionen abbilden. Die Aktivierung ist pro Benutzer und Projekt steuerbar.
+          </p>
+        </article>
+        <article class="feature">
+          <h3>Skills</h3>
+          <p>
+            Skills sind Arbeitsanweisungen und Domänenwissen. Sie geben Hippo Hinweise, wie eine Aufgabe sauber,
+            fachlich und in der richtigen Reihenfolge erledigt werden soll.
+          </p>
+        </article>
+        <article class="feature">
+          <h3>PC-Agent</h3>
+          <p>
+            Wenn PC-Agent aktiviert ist, kann Hippo Desktop-Aktionen ausführen: Programme starten, Dateien öffnen,
+            klicken, scrollen, tippen und Workflows über mehrere Programme hinweg abarbeiten.
+          </p>
+        </article>
+        <article class="feature">
+          <h3>pCloud-Projekte</h3>
+          <p>
+            Projekte können auf pCloud-Daten verweisen. Hippo liest dabei projektbezogene Dateien dynamisch und nutzt
+            diese als Quelle für Auswertung und Kontext. In der aktuellen Logik stehen Dateien im Vordergrund; der lokale
+            Projektordner dient vor allem für erzeugte Ergebnisse.
+          </p>
+        </article>
+        <article class="feature">
+          <h3>Berichte und Dokumente</h3>
+          <p>
+            Hippo kann Ergebnisse in Berichte überführen. Besonders wichtig: der Bericht wird im vorgesehenen
+            Projektordner gespeichert und im Chat klar angekündigt.
+          </p>
+        </article>
+        <article class="feature">
+          <h3>Bild- und Audioverarbeitung</h3>
+          <p>
+            Bild- und Audioeingaben werden über den Haupt-Stack verarbeitet. Hippo arbeitet damit konsistent in einem
+            zentralen System, statt in getrennten Mini-Pipelines zu zerfallen.
+          </p>
+        </article>
+        <article class="feature">
+          <h3>Sprachen und Identität</h3>
+          <p>
+            Die Hauptsprache ist Deutsch, aber Hippo antwortet in der Sprache der Frage. Die Identität ist klar:
+            HIPPO AI für Hipposideros.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel two-column">
+      <div>
+        <div class="section-kicker">Projektarbeit</div>
+        <h2>Wie Projekte gedacht sind</h2>
+        <p>
+          Ein Projekt bündelt die Arbeit an einem Thema oder Kundenfall. Es kann eigene Dateien, eigene Anweisungen,
+          eigene Tools und eigene Skills haben. Dadurch bleibt die Arbeit sauber getrennt und wiederholbar.
+        </p>
+        <ul class="bullets">
+          <li>Jedes Projekt kann seinen eigenen Kontext haben.</li>
+          <li>Tools und Skills können pro Nutzer für dieses Projekt aktiviert werden.</li>
+          <li>Andere Nutzer und andere Projekte bleiben unberührt.</li>
+          <li>Berichte und generierte Dateien landen im vorgesehenen lokalen Projektbereich.</li>
+        </ul>
+      </div>
+      <div class="callout">
+        <h3>Wichtiger Gedanke</h3>
+        <p>
+          Hippo ist nicht nur ein Chatbot. Hippo ist eine Arbeitsumgebung für echte Projekte, in der Wissen,
+          Dateien, Prozesse und Desktop-Aktionen zusammenlaufen.
+        </p>
+      </div>
+    </section>
+
+    <section class="panel" id="workflow">
+      <div class="section-kicker">Praxisbeispiele</div>
+      <h2>Typische Workflows</h2>
+      <div class="workflow-grid">
+        <article class="workflow">
+          <h3>QGIS-Analyse</h3>
+          <p>
+            Hippo kann ein Projekt oder eine Datei öffnen, Daten laden, eine Analyse vorbereiten und am Ende einen
+            Bericht erstellen. Das ist besonders für geodatenbezogene Aufgaben gedacht.
+          </p>
+        </article>
+        <article class="workflow">
+          <h3>Berichtserstellung</h3>
+          <p>
+            Aus einer Analyse kann Hippo einen Bericht erzeugen, der nachvollziehbar strukturiert ist und im richtigen
+            Projektordner gespeichert wird.
+          </p>
+        </article>
+        <article class="workflow">
+          <h3>Office-Arbeit</h3>
+          <p>
+            Hippo kann Word, Excel oder LibreOffice in Workflows einbinden, wenn Dokumente erstellt, geprüft oder
+            weiterverarbeitet werden sollen.
+          </p>
+        </article>
+        <article class="workflow">
+          <h3>Bildgenerierung</h3>
+          <p>
+            Wenn im Chat ein Bild zu einem Thema gewünscht wird, kann Hippo echte, thematisch passende Bilder
+            generieren statt bloßer Textgrafiken.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel two-column reverse">
+      <div class="checklist-card">
+        <div class="section-kicker">Perfekt nutzen</div>
+        <h2>So bekommst du die besten Ergebnisse</h2>
+        <ul class="bullets">
+          <li>Formuliere das Ziel klar: Was soll am Ende herauskommen?</li>
+          <li>Gib wenn möglich Projekt, Datei oder Pfad an.</li>
+          <li>Wenn du eine Analyse willst, sage explizit, ob Hippo nur antworten oder auch handeln soll.</li>
+          <li>Für Desktopaufgaben: nenne die Anwendung oder den ausführbaren Pfad.</li>
+          <li>Für Berichte: nenne, wo das Ergebnis gespeichert werden soll.</li>
+        </ul>
+      </div>
+      <div class="checklist-card soft">
+        <div class="section-kicker">Merksatz</div>
+        <h3>Je konkreter die Aufgabe, desto besser kann Hippo handeln.</h3>
+        <p>
+          Hippo arbeitet am stärksten, wenn Ziel, Kontext und gewünschtes Ergebnis klar beschrieben sind.
+          Dann kann das System sinnvolle Tools, Skills und Desktop-Schritte zusammenführen.
+        </p>
+      </div>
+    </section>
+
+    <section class="panel" id="faq">
+      <div class="section-kicker">Häufige Fragen</div>
+      <h2>Was Nutzer wissen sollten</h2>
+      <div class="faq-grid">
+        <details open>
+          <summary>Sehen alle Nutzer dieselben Tools und Skills?</summary>
+          <p>Ja. Die Bibliothek ist sichtbar für alle. Die Aktivierung kann jedoch pro Benutzer und pro Projekt unterschiedlich sein.</p>
+        </details>
+        <details>
+          <summary>Warum gibt es projektbezogene Aktivierung?</summary>
+          <p>Damit ein Nutzer ein Tool oder einen Skill nur für sein eigenes Projekt aktivieren oder deaktivieren kann, ohne andere Nutzer zu beeinflussen.</p>
+        </details>
+        <details>
+          <summary>Kann Hippo mit dem PC interagieren?</summary>
+          <p>Ja. PC-Agent kann je nach Konfiguration Anwendungen starten und Desktop-Schritte ausführen.</p>
+        </details>
+        <details>
+          <summary>Wie ist die Zeitzone?</summary>
+          <p>Hippo ist auf Deutschland ausgerichtet und soll bei Zeit- und Datumsfragen die deutsche Zeitzone berücksichtigen.</p>
+        </details>
+      </div>
+    </section>
+
+    <section class="panel final-panel">
+      <div>
+        <div class="section-kicker">Abschluss</div>
+        <h2>Hippo AI in einem Satz</h2>
+        <p>
+          Hippo AI ist ein deutschsprachiger, projektorientierter Assistent für Hipposideros, der Chat, Projekte,
+          Tools, Skills, Desktop-Automation und Dokumentenerstellung zu einem praktischen Arbeitswerkzeug verbindet.
+        </p>
+      </div>
+      <a class="button primary" href="#start">Zurück nach oben</a>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>HIPPO AI · für Hipposideros · entwickelt von Valère Youbi</p>
+    <p>Diese Seite ist als GitHub Pages-Startseite für das Repository vorgesehen.</p>
+  </footer>
+</body>
+</html>
