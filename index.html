@@ -247,6 +247,64 @@
       </div>
     </section>
 
+    <section class="panel" id="pcloud">
+      <div class="section-kicker">pCloud richtig einrichten</div>
+      <h2>Folder-ID und pCloud-Pfad verstehen</h2>
+      <div class="feature-grid pcloud-grid">
+        <article class="feature">
+          <h3>So findest du die folderid</h3>
+          <p>
+            Öffne den gewünschten Ordner in der pCloud-Weboberfläche. In der URL steht dann meist ein Parameter wie
+            <code class="inline-code">folder=8972717010</code>. Diese Zahl ist die <strong>folderid</strong>.
+          </p>
+          <p>
+            Beispiel-URL:
+            <code class="inline-code">https://my.pcloud.com/#page=filemanager&folder=8972717010&tpl=foldergrid</code>
+          </p>
+          <p>
+            Die folderid ist die stabile technische ID des Ordners. Sie ändert sich normalerweise nicht, auch wenn der
+            Name des Ordners verändert wird.
+          </p>
+        </article>
+        <article class="feature">
+          <h3>Format für den pCloud-Pfad</h3>
+          <p>
+            Der pCloud-Pfad ist <strong>kein Windows-Pfad</strong>. Er beginnt mit einem Slash und verwendet nur
+            <code class="inline-code">/</code> als Trenner.
+          </p>
+          <p>
+            Richtig:
+            <code class="inline-code">/Projekte/Ober</code>
+            <br>
+            <code class="inline-code">/Gemeinsame Arbeit/2026/Hippo</code>
+          </p>
+          <p>
+            Falsch:
+            <code class="inline-code">C:\Users\...</code>
+            <br>
+            <code class="inline-code">Projekte\Ober</code>
+          </p>
+        </article>
+        <article class="feature">
+          <h3>Wichtig für Hippo-Projekte</h3>
+          <p>
+            Für die Projektkonfiguration sollten <strong>pCloud-Pfad</strong> und <strong>folderid</strong> zusammen
+            gepflegt werden, damit Hippo den Ordner korrekt und zuverlässig zuordnen kann.
+          </p>
+          <p>
+            Der Pfad ist gut für die menschliche Orientierung. Die folderid ist gut für die technische Stabilität.
+          </p>
+        </article>
+        <article class="feature">
+          <h3>Praxis-Tipp</h3>
+          <p>
+            Wenn du unsicher bist, öffne den Ordner in pCloud und kopiere die <strong>folderid</strong> aus der URL.
+            Danach trägst du den Pfad im internen pCloud-Stil ein, damit Hippo beides zusammen kennt.
+          </p>
+        </article>
+      </div>
+    </section>
+
     <section class="panel" id="workflow">
       <div class="section-kicker">Praxisbeispiele</div>
       <h2>Typische Workflows</h2>
