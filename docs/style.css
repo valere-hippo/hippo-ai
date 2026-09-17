@@ -310,8 +310,25 @@ details p {
     grid-template-columns: 1fr;
     display: grid;
   }
-  .hero { padding-top: 18px; }
-  h1 { max-width: none; }
+  .hero {
+    padding-top: 18px;
+    gap: 18px;
+  }
+  .hero-art {
+    order: -1;
+  }
+  .final-panel {
+    justify-content: start;
+    align-items: start;
+  }
+  h1 {
+    max-width: none;
+  }
+  .hero-copy,
+  .panel {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -319,8 +336,113 @@ details p {
   .hero,
   main,
   .footer { width: min(100% - 20px, 1180px); }
-  .panel { padding: 18px; border-radius: 20px; }
-  .hero-copy { padding: 10px 0 0; }
-  .hero-pills span { font-size: 0.85rem; }
-  .button { width: 100%; }
+  .hero {
+    gap: 14px;
+    padding: 12px 0 12px;
+  }
+  .panel {
+    padding: 18px;
+    border-radius: 20px;
+  }
+  .hero-copy {
+    padding: 4px 0 0;
+  }
+  h1 {
+    font-size: clamp(2rem, 12vw, 2.9rem);
+    max-width: none;
+  }
+  h2 {
+    font-size: clamp(1.35rem, 6vw, 2.1rem);
+  }
+  h3 {
+    font-size: 1rem;
+  }
+  .section-kicker,
+  .eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 5px 10px;
+  }
+  .lead {
+    font-size: 0.98rem;
+  }
+  .hero-pills {
+    gap: 8px;
+    margin: 14px 0 18px;
+  }
+  .hero-pills span {
+    font-size: 0.8rem;
+    padding: 7px 10px;
+  }
+  .button {
+    width: 100%;
+  }
+  .timeline-item {
+    grid-template-columns: 34px 1fr;
+    gap: 12px;
+    padding: 12px 13px;
+  }
+  .timeline-item span {
+    width: 34px;
+    height: 34px;
+    font-size: 0.92rem;
+  }
+  .feature-grid,
+  .workflow-grid,
+  .faq-grid,
+  .cards.three {
+    gap: 12px;
+  }
+  .fact-box,
+  .callout,
+  .diagram-card,
+  .checklist-card,
+  .workflow,
+  .feature,
+  .card {
+    padding: 14px;
+    border-radius: 18px;
+  }
+  .feature-grid,
+  .workflow-grid,
+  .faq-grid,
+  .cards.three {
+    grid-template-columns: 1fr;
+  }
+  .final-panel {
+    gap: 14px;
+  }
+  .hero-actions {
+    flex-direction: column;
+  }
+  .hero-actions .button {
+    width: 100%;
+  }
+  .inline-code {
+    display: inline-block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero,
+  main,
+  .footer {
+    width: min(100% - 14px, 1180px);
+  }
+  .panel {
+    padding: 16px;
+    border-radius: 18px;
+  }
+  .timeline-item {
+    grid-template-columns: 30px 1fr;
+    gap: 10px;
+  }
+  .timeline-item span {
+    width: 30px;
+    height: 30px;
+    font-size: 0.88rem;
+  }
 }
