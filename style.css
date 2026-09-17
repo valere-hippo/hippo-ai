@@ -105,6 +105,38 @@ h3 { font-size: 1.1rem; }
   flex-wrap: wrap;
   gap: 12px;
 }
+
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.hero-stat {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.hero-stat strong {
+  color: var(--accent);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.hero-stat span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.hero-caption {
+  margin-top: 10px;
+}
+
 .button {
   display: inline-flex;
   align-items: center;
@@ -190,7 +222,8 @@ main {
 .feature-grid,
 .workflow-grid,
 .faq-grid,
-.timeline {
+.timeline,
+.command-grid {
   display: grid;
   gap: 16px;
 }
@@ -200,6 +233,32 @@ main {
 .faq-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .timeline { grid-template-columns: 1fr; }
 .timeline.compact { gap: 12px; }
+.command-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.command-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+.command-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.command-head span {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(85, 208, 186, 0.08);
+  color: var(--accent);
+  border: 1px solid rgba(85, 208, 186, 0.16);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+}
 .timeline-item {
   display: grid;
   grid-template-columns: 40px 1fr;
@@ -306,7 +365,8 @@ details p {
   .feature-grid,
   .workflow-grid,
   .faq-grid,
-  .final-panel {
+  .final-panel,
+  .command-grid {
     grid-template-columns: 1fr;
     display: grid;
   }
@@ -377,6 +437,21 @@ details p {
   .button {
     width: 100%;
   }
+  .hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .hero-stat {
+    padding: 10px 12px;
+    border-radius: 16px;
+  }
+  .hero-stat strong {
+    font-size: 1.1rem;
+  }
+  .hero-stat span {
+    font-size: 0.8rem;
+  }
   .timeline-item {
     grid-template-columns: 34px 1fr;
     gap: 12px;
@@ -390,7 +465,8 @@ details p {
   .feature-grid,
   .workflow-grid,
   .faq-grid,
-  .cards.three {
+  .cards.three,
+  .command-grid {
     gap: 12px;
   }
   .fact-box,
