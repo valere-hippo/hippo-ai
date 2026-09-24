@@ -5,6 +5,7 @@
   "scripts": {
     "start": "electron .",
     "package:win": "electron-builder --windows",
+    "package:win:portable": "electron-builder --win portable",
     "build:mac-icon": "bash scripts/make-macos-icon.sh",
     "package:mac": "electron-builder --mac"
   },
