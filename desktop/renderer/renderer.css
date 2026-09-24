@@ -460,6 +460,13 @@ textarea {
   gap: 10px;
 }
 
+.db-status-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .db-status-title {
   font-size: 11px;
   font-weight: 700;
@@ -1841,6 +1848,21 @@ select.text-input option {
   max-height: min(36vh, 360px);
   overflow: auto;
   padding-right: 4px;
+}
+
+.log-viewer {
+  margin: 0;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(6, 12, 20, 0.96);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+  max-height: min(60vh, 720px);
 }
 
 .modal-actions {

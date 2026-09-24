@@ -16,6 +16,7 @@ services:
     volumes:
       - ./backend:/app:ro
       - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
     ports:
       - "8000:8000"
     logging:

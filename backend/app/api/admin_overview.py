@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from collections import deque
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
@@ -16,6 +17,31 @@ from app.models.model_registry import ModelRegistry
 from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/admin/overview", tags=["admin-overview"])
+LOG_FILE_PATH = Path("/app/logs/hippo-ai.log")
+
+
+def _read_log_tail(limit: int = 200) -> list[str]:
+    if limit <= 0:
+        limit = 1
+    if not LOG_FILE_PATH.exists():
+        return []
+    try:
+        with LOG_FILE_PATH.open("r", encoding="utf-8", errors="replace") as handle:
+            return [line.rstrip("\n") for line in deque(handle, maxlen=min(limit, 1000))]
+    except Exception as exc:
+        return [f"Fehler beim Lesen der Logdatei: {exc}"]
+
+
+@router.get("/logs")
+async def admin_logs(db: DbSession, lines: int = 200, current_user=Depends(get_current_user)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert.")
+    safe_lines = max(20, min(int(lines or 200), 1000))
+    return {
+        "generated_at": datetime.utcnow().isoformat(),
+        "path": str(LOG_FILE_PATH),
+        "lines": _read_log_tail(safe_lines),
+    }
 
 
 @router.get("/")

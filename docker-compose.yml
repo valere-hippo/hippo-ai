@@ -15,6 +15,7 @@ services:
     volumes:
       - ./backend:/app
       - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
 
   nginx:
     image: nginx:stable-alpine

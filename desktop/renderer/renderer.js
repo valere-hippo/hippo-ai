@@ -1720,6 +1720,34 @@ async function loadAdminOverview() {
   renderDbStatus()
 }
 
+async function openAdminLogs() {
+  if (state.user?.role !== 'ADMIN') return
+  showLoader('Logs werden geladen...')
+  try {
+    const payload = await apiJson('/admin/overview/logs?lines=250')
+    const content = document.createElement('div')
+    content.className = 'modal-grid'
+    const meta = document.createElement('div')
+    meta.className = 'muted-copy'
+    meta.textContent = `${payload.path || 'Logdatei'} · ${payload.generated_at ? new Date(payload.generated_at).toLocaleString() : ''}`
+    const pre = document.createElement('pre')
+    pre.className = 'log-viewer'
+    pre.textContent = (Array.isArray(payload.lines) ? payload.lines : []).join('\n') || 'Keine Logs verfügbar.'
+    content.append(meta, pre)
+    await openModal({
+      title: 'Backend-Logs',
+      copy: 'Letzte Zeilen aus dem Backend-Log.',
+      content,
+      submitLabel: 'Schließen',
+      width: 'min(1200px, 100%)',
+    })
+  } catch (error) {
+    showToast(error.message || 'Logs konnten nicht geladen werden', 'error')
+  } finally {
+    hideLoader()
+  }
+}
+
 function renderDbStatus() {
   if (!els.dbStatus) return
   const overview = state.adminOverview
@@ -1737,7 +1765,10 @@ function renderDbStatus() {
         <div class="db-status-title">Datenbank</div>
         <div class="db-status-subtitle">AI & Backend in Echtzeit · ${overview.generated_at ? new Date(overview.generated_at).toLocaleString() : '—'}</div>
       </div>
-      <button id="db-status-refresh" class="item-action-button" type="button" title="Aktualisieren">↻</button>
+      <div class="db-status-actions">
+        <button id="db-status-refresh" class="item-action-button" type="button" title="Aktualisieren">↻</button>
+        <button id="db-status-logs" class="item-action-button" type="button" title="Logs öffnen">Logs</button>
+      </div>
     </div>
     <div class="db-status-chips">
       <span class="context-pill">U ${counts.users || 0}</span>
@@ -1750,6 +1781,8 @@ function renderDbStatus() {
   `
   const refreshButton = document.getElementById('db-status-refresh')
   refreshButton?.addEventListener('click', () => loadAdminOverview())
+  const logsButton = document.getElementById('db-status-logs')
+  logsButton?.addEventListener('click', () => openAdminLogs())
 }
 
 async function loadWorkspace() {

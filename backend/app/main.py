@@ -2,6 +2,10 @@ from contextlib import suppress
 
 import asyncio
 import logging
+import os
+import sys
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +24,41 @@ app = FastAPI(
 )
 
 logger = logging.getLogger("hippo-ai.api")
+LOG_FILE_PATH = Path(os.getenv("HIPPO_LOG_FILE", "/app/logs/hippo-ai.log"))
+
+
+def configure_logging() -> None:
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+
+    stream_handler = None
+    for handler in root.handlers:
+        if getattr(handler, "_hippo_ai_stream", False):
+            stream_handler = handler
+            break
+    if stream_handler is None:
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler._hippo_ai_stream = True  # type: ignore[attr-defined]
+        root.addHandler(stream_handler)
+    stream_handler.setFormatter(formatter)
+
+    try:
+        LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = None
+        for handler in root.handlers:
+            if getattr(handler, "baseFilename", None) == str(LOG_FILE_PATH):
+                file_handler = handler
+                break
+        if file_handler is None:
+            file_handler = RotatingFileHandler(LOG_FILE_PATH, maxBytes=5_000_000, backupCount=5, encoding="utf-8")
+            root.addHandler(file_handler)
+        file_handler.setFormatter(formatter)
+    except Exception as exc:
+        root.warning("File logging disabled: %s", exc)
+
+
+configure_logging()
 
 
 async def _sync_model_registry_once() -> None:
