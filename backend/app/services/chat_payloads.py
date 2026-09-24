@@ -118,6 +118,14 @@ PROJECT_DETAILED_REPORT_RE = re.compile(
     r"\b(rapport\s+d[ée]taill[ée]|detaill?ier(?:ter|tes|te)?\s+bericht|report\s+details?|full\s+report|komplette?r?\s+bericht|alle\s+dateien\s+und\s+ordner\s+auswerten|alle\s+dateien\s+analysieren|tous\s+les\s+fichiers|analyser\s+tous\s+les\s+fichiers|analyze\s+all\s+files|analyse\s+all\s+files)\b",
     re.IGNORECASE,
 )
+FILE_OUTPUT_HINT_RE = re.compile(
+    r"\b(word|docx|pdf|bericht|report|dokument|document|file|datei|excel|xlsx|pptx|präsentation|presentation|svg|png|jpg|jpeg|bild|image|grafik|poster|karte|map)\b",
+    re.IGNORECASE,
+)
+FILE_OUTPUT_VERB_RE = re.compile(
+    r"\b(erstelle|erzeuge|generiere|schreibe|schreib|schreiben|create|generate|make|produce|exportiere|export|speichere|save|lege(?:n)?\s+als|als)\b",
+    re.IGNORECASE,
+)
 
 
 def looks_like_image_generation_request(message: str, attachments: list[Any] | None = None) -> bool:
@@ -177,3 +185,18 @@ def looks_like_project_detailed_report_request(message: str) -> bool:
     if not text:
         return False
     return bool(PROJECT_DETAILED_REPORT_RE.search(text))
+
+
+def looks_like_file_generation_request(message: str, attachments: list[Any] | None = None) -> bool:
+    text = " ".join(
+        part
+        for part in [
+            (message or "").strip(),
+            " ".join(getattr(att, "filename", "") for att in (attachments or []) if getattr(att, "filename", "")),
+        ]
+        if part
+    ).strip()
+    if not text:
+        return False
+    explicit_output_hint = bool(re.search(r"\b(als\s+datei|im\s+format|dateiblock|file\s+block|als\s+word|als\s+pdf|exportiere|export|speichere|save)\b", text, re.IGNORECASE))
+    return bool(FILE_OUTPUT_VERB_RE.search(text) and (FILE_OUTPUT_HINT_RE.search(text) or explicit_output_hint))

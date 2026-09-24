@@ -19,6 +19,7 @@ from app.services.chat_payloads import (
     looks_like_image_analysis_request,
     looks_like_geodata_visual_request,
     looks_like_image_generation_request,
+    looks_like_file_generation_request,
     looks_like_project_inventory_request,
     storage_text,
 )
@@ -91,6 +92,21 @@ def _extract_json_object(text: str) -> dict | None:
         except Exception:
             return None
     return None
+
+
+def _infer_generated_filename(message: str) -> str:
+    text = (message or '').lower()
+    if 'pdf' in text:
+        return 'hippo-bericht.pdf'
+    if any(token in text for token in ['svg', 'karte', 'map', 'diagramm', 'chart', 'grafik']):
+        return 'hippo-bericht.svg'
+    if any(token in text for token in ['png', 'jpg', 'jpeg', 'bild', 'image', 'foto']):
+        return 'hippo-bericht.png'
+    if 'rtf' in text:
+        return 'hippo-bericht.rtf'
+    return 'hippo-bericht.docx'
+
+
 
 
 def _extract_candidate_open_path(text: str) -> str | None:
@@ -391,14 +407,10 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
     if conv_project is not None:
         project_sys = (
-            "You are assisting a user within a project. The project has a shared folder path where generated files can be saved.\n"
-            "When the user asks for a document, generate one of these file types:\n"
-            "- Word documents: use .docx\n"
-            "- PDF documents: use .pdf\n"
-            "- Images: use .png, .jpg, or .jpeg\n"
-            "- Vector images: use .svg\n"
-            "Return only the file payload wrapped in exact markers and no extra commentary.\n"
-            "Use this format:\n"
+            "You are assisting a user within a project. The project may have a shared folder where generated files are saved.\n"
+            "If the user asks for a deliverable file (Word, PDF, image, SVG, report, exported document), return exactly one file block and no extra commentary.\n"
+            "If the user only asks a question, wants an explanation, or wants a simple answer, respond as plain chat text and do not create a file.\n"
+            "Use this format for files:\n"
             "<<<FILE:filename.ext>>>\n"
             "<file content here>\n"
             "<<<END_FILE>>>\n"
@@ -529,6 +541,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             desktop_actions = _infer_desktop_launch_action(payload.message, reply_text, payload.desktop_profile)
 
     generated_files, cleaned_reply = extract_generated_files(reply_text)
+    file_request = looks_like_file_generation_request(payload.message, payload.attachments)
     image_request = looks_like_image_generation_request(payload.message, payload.attachments)
     geodata_visual_request = looks_like_geodata_visual_request(payload.message, payload.attachments)
     geodata_direct_svg: tuple[str, str] | None = None
@@ -538,6 +551,9 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         if geodata_file:
             generated_files = [GeneratedFile(filename=geodata_file[0], content=geodata_file[1])]
             geodata_direct_svg = geodata_file
+
+    if file_request and not generated_files and (cleaned_reply or reply_text.strip()):
+        generated_files = [GeneratedFile(filename=_infer_generated_filename(payload.message), content=(cleaned_reply or reply_text).strip())]
 
     has_image_attachment = any((getattr(att, 'mime_type', '') or '').lower().startswith('image/') for att in (payload.attachments or []))
     discarded_visual = False
