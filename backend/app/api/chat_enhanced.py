@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 import re
 from pathlib import Path
+import logging
 from app.api.dependencies import get_current_user, DbSession
 from app.models.user import User
 from app.models.chat import Conversation, ChatMessage
@@ -32,7 +33,8 @@ from app.services.hippo_identity import build_hippo_system_prompt
 import base64
 import json
 
-router = APIRouter(prefix="/chat-enhanced", tags=["chat-enhanced"]) 
+router = APIRouter(prefix="/chat-enhanced", tags=["chat"])
+logger = logging.getLogger("hippo-ai.chat")
 
 class ChatRequest(BaseModel):
     conversation_id: int | None = None
@@ -483,6 +485,15 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "max_completion_tokens": max_tokens,
             "max_output_tokens": max_tokens,
         }
+        logger.info(
+            "Calling Hippo model | url=%s | model=%s | max_tokens=%s | auth=%s | project=%s | attachments=%s",
+            settings.hippo_api_url,
+            model_name,
+            max_tokens,
+            bool(settings.hippo_api_key),
+            getattr(conv_project, 'id', None),
+            bool(payload.attachments),
+        )
         try:
             r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=payload_h, headers=headers)
             r.raise_for_status()
