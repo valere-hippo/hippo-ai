@@ -65,6 +65,26 @@ docker compose pull
 docker compose up -d --remove-orphans
 ```
 
+## Exact environment split
+
+### Repo `hippo-ai`
+This repo mainly builds the desktop client and docs.
+- `HIPPO_API_URL` → URL of the running backend API used by the desktop app
+- optional app executable fallbacks: `HIPPO_APP_PATH_QGIS`, `HIPPO_APP_PATH_WORD`, `HIPPO_APP_PATH_EXCEL`, `HIPPO_APP_PATH_LIBREOFFICE`, `HIPPO_APP_PATH_HIPPONALYZE`
+
+### Repo `hippoject-infra`
+This repo should receive the backend runtime secrets and deploy the server stack.
+- `HIPPO_AI_BASE_URL=https://ai.hipposideros-cloud.de`
+- `HIPPO_AI_MODEL=/root/autodl-tmp/hippo-ai-v2/models/Qwen3-Omni-30B-A3B-Instruct`
+- `PCLOUD_API_BASE_URL=https://eapi.pcloud.com`
+- `PCLOUD_ACCESS_TOKEN=[REDACTED]`
+- plus your backend basics: `POSTGRES_*`, `JWT_SECRET_KEY`, etc.
+
+### Deprecated / ignore
+These are not part of the current main flow and should not be relied on anymore:
+- `HIPPO_VISION_URL`
+- `HIPPO_VISION_MODEL`
+
 CI / infra deploy
 - The CI builds the API image and pushes it to ghcr.io/${OWNER}/hippo-ai-api.
 - Required repository secrets for the build workflow:
