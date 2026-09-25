@@ -16,7 +16,7 @@ function summarizeLocalFolder(folderPath, options = {}) {
     .filter(Boolean)
   if (!roots.length) return { ok: false, context: 'Kein Ordnerpfad angegeben.' }
 
-  const lines = [`Lokaler gemeinsamer Ordner (vom Desktop gelesen): ${roots.join(' | ')}`]
+  const lines = [`Lokale Projektordner (vom Desktop gelesen): ${roots.join(' | ')}`]
   let chars = 0
 
   const walk = (root, dir, depth = 0) => {

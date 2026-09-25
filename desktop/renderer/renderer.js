@@ -398,29 +398,30 @@ function hasProjectFolderConsent(folder) {
 }
 
 async function requestProjectFolderConsent(project) {
-  const folder = String(project?.watched_folder || '').trim()
-  if (!folder) return false
-  if (hasProjectFolderConsent(folder)) return true
+  const folders = normalizeProjectFolderInput(project?.watched_folder)
+  if (!folders.length) return false
+  const consentKey = folders.join('\n')
+  if (hasProjectFolderConsent(consentKey)) return true
 
   const consentContent = document.createElement('div')
   consentContent.className = 'modal-grid'
   consentContent.innerHTML = `
-    <div class="muted-copy">Hippo AI benötigt den gemeinsamen Ordner, um Dateien und Unterordner lesen zu können und Berichte dort zu speichern.</div>
+    <div class="muted-copy">Hippo AI benötigt die beim Projekt ausgewählten lokalen Ordner, um Dateien zu lesen und Berichte dort zu speichern. Es wird nur der Projektkontext verwendet, nicht der gesamte Rechner.</div>
     <div class="storage-summary">
-      <div class="storage-summary-line"><span>Ordner</span><strong>${escapeHtml(folder)}</strong></div>
+      <div class="storage-summary-line"><span>Lokale Ordner</span><strong>${escapeHtml(folders.join(' | '))}</strong></div>
       <div class="storage-summary-line"><span>Zugriff</span><strong>Lese- und Schreibzugriff anfragen</strong></div>
     </div>
   `
 
   return openModal({
     title: 'Ordnerzugriff erlauben?',
-    copy: 'Ohne deine Zustimmung liest Hippo AI den gemeinsamen Ordner nicht.',
+    copy: 'Ohne deine Zustimmung liest Hippo AI diese Projektordner nicht.',
     content: consentContent,
     submitLabel: 'Zugriff erlauben',
   }).then((result) => {
     const accepted = Boolean(result)
     if (accepted) {
-      localStorage.setItem(projectFolderConsentKey(folder), '1')
+      localStorage.setItem(projectFolderConsentKey(consentKey), '1')
     }
     return accepted
   })
@@ -434,7 +435,8 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
   }
   const cached = state.projectFolderContextCache.get(project.id)
   if (cached && !force) return cached
-  if (!project.watched_folder || !window.electron?.inspectProjectFolder) {
+  const folders = normalizeProjectFolderInput(project.watched_folder)
+  if (!folders.length || !window.electron?.inspectProjectFolder) {
     state.projectFolderContextCache.set(project.id, '')
     state.projectFolderScanState.set(project.id, 'idle')
     return ''
@@ -447,7 +449,7 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
   state.projectFolderScanState.set(project.id, 'loading')
   try {
     const folderInfo = await window.electron.inspectProjectFolder({
-      folder: project.watched_folder,
+      folder: folders.join('\n'),
       maxDepth: 999,
       maxEntries: 999999,
       maxTextChars: 20000,
@@ -2152,7 +2154,7 @@ async function openCreateProjectModal() {
 
   showLoader('Projekt wird erstellt...')
   try {
-    await apiJson('/projects/', {
+    const createdProject = await apiJson('/projects/', {
       method: 'POST',
       body: JSON.stringify({
         name: result.name,
@@ -2163,6 +2165,14 @@ async function openCreateProjectModal() {
       }),
     })
     await loadWorkspace()
+    if (createdProject?.id) {
+      state.selectedProjectId = createdProject.id
+      syncSelectedProjectConversation()
+      renderProjects()
+      renderConversations()
+      renderContext()
+      await queueProjectFolderRefresh(createdProject)
+    }
     showToast('Projekt erstellt')
   } catch (error) {
     showToast(error.message || 'Projekt konnte nicht erstellt werden', 'error')
@@ -2225,6 +2235,12 @@ async function openEditProjectModal(project) {
     })
     await loadProjects()
     await loadConversations()
+    if (state.selectedProjectId === project.id) {
+      const refreshedProject = state.projects.find((item) => item.id === project.id) || null
+      if (refreshedProject) {
+        await queueProjectFolderRefresh(refreshedProject)
+      }
+    }
     showToast('Projekt gespeichert')
   } catch (error) {
     showToast(error.message || 'Projekt konnte nicht gespeichert werden', 'error')
@@ -4656,6 +4672,10 @@ async function sendChat() {
     await queueProjectFolderRefresh(project)
   }
   const projectFolderContext = project && !(project?.pcloud_path && project?.pcloud_folder_id) ? (state.projectFolderContextCache.get(project.id) || '') : ''
+  if (project && projectFolder && !projectFolderContext.trim()) {
+    showToast('Projektordner wird noch geladen oder benötigt Zugriff. Bitte den Ordnerzugriff erlauben.', 'error')
+    return
+  }
   const attachments = state.draftAttachments.map((attachment) => ({
     filename: attachment.filename,
     mime_type: attachment.mime_type,
