@@ -160,7 +160,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     # If conversation is tied to a project, inform the assistant it may generate files for that project
     if conv_project is not None:
         project_sys = (
-            "You are assisting a user within a project. The project may have a shared folder where generated files are saved.\n"
+            "You are assisting a user within a project. The project may have local project folders where generated files are saved.\n"
             "If the user asks for a deliverable file (Word, PDF, image, SVG, report, exported document), return exactly one file block and no extra commentary.\n"
             "If the user only asks a question, wants an explanation, or wants a simple answer, respond as plain chat text and do not create a file.\n"
             "Use this format for files:\n"
@@ -169,9 +169,9 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "<<<END_FILE>>>\n"
             "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
             "If the user explicitly requests an image or PNG, return a real file block with an image filename instead of prose instructions. If the user only wants analysis or a textual answer, respond in text and do not create an image file.\n"
-            "If the user asks to analyze documents from the shared folder, use the project context and answer in the user's language.\n"
-            "If project_folder_context is present, treat it as the source of truth for the shared folder contents and do not claim you lack local filesystem access.\n"
-            "For shared-folder questions, produce a detailed answer with overview, file list, per-file observations, and a short conclusion.\n"
+            "If the user asks to analyze documents from the project folders, use the project context and answer in the user's language.\n"
+            "If project_folder_context is present, treat it as the source of truth for the project folder contents and do not claim you lack local filesystem access.\n"
+            "For project-folder questions, produce a detailed answer with overview, file list, per-file observations, and a short conclusion.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
             "If an image, screenshot, or document is attached, rely on the direct attachment data in the prompt and any locally extracted text; do not claim that you cannot read attachments.\n"
             "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, and spatial clusters.\n"
@@ -199,13 +199,21 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             pass
 
         try:
-            project_files_context = await build_project_files_context(conv_project, include_previews=not looks_like_project_inventory_request(payload.message), question=payload.message)
+            if payload.project_folder_context and payload.project_folder_context.strip():
+                project_files_context = payload.project_folder_context.strip()
+            elif conv_project is not None and getattr(conv_project, 'pcloud_path', None) and getattr(conv_project, 'pcloud_folder_id', None):
+                project_files_context = await build_project_files_context(conv_project, include_previews=not looks_like_project_inventory_request(payload.message), question=payload.message)
+            else:
+                project_files_context = (
+                    "Kein lokaler Projektordner-Kontext vom Desktop erhalten. "
+                    "Antworte nicht mit erfundenen Dateinamen und fordere bei Bedarf den Benutzer auf, den lokalen Ordner im Desktop zu verbinden."
+                )
             hippo_messages.insert(
                 3,
                 {
                     "role": "system",
                     "content": (
-                        "Kontext des gemeinsamen Projektordners:\n"
+                        "Kontext der lokalen Projektordner:\n"
                         f"{project_files_context}\n\n"
                         "Nutze diesen Kontext, wenn der Benutzer die Dateien oder den Ordner analysieren möchte, antworte ausführlich auf Deutsch und vermeide Tabellen oder übertriebenes Markdown."
                     ),

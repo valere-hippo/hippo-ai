@@ -4614,7 +4614,7 @@ async function saveGeneratedArtifacts(artifacts, projectFolder) {
   for (const artifact of artifacts) {
     if (!artifact?.filename || !artifact?.data_base64) continue
     // Save the binary payload that the backend prepared for this file.
-    // The shared folder lives on the desktop machine, so Electron writes it locally.
+    // The project folder lives on the desktop machine, so Electron writes it locally.
     // eslint-disable-next-line no-await-in-loop
     const result = await window.electron.saveFile({
       folder: projectFolder,
@@ -4727,7 +4727,7 @@ async function sendChat() {
     }
 
     const savedReportNote = savedArtifacts.length
-      ? `Bericht im gemeinsamen Ordner gespeichert:\n${savedArtifacts.map((filePath) => `- ${filePath}`).join('\n')}`
+      ? `Bericht im Projektordner gespeichert:\n${savedArtifacts.map((filePath) => `- ${filePath}`).join('\n')}`
       : ''
     const assistantReply = savedReportNote
       ? `${response.reply ? `${response.reply}\n\n` : ''}${savedReportNote}`
