@@ -4765,6 +4765,11 @@ async function syncProjectSourcesToS3(project, sourceFolders = null) {
         uploaded += 1
       }
     }
+    try {
+      await apiJson(`/tools/library/projects/${project.id}/sync-file-tools`, { method: 'POST' })
+    } catch (toolError) {
+      console.warn('Project file tool sync failed:', toolError)
+    }
     return { ok: true, uploaded, skipped }
   } catch (error) {
     return { ok: false, error: error.message || String(error) }

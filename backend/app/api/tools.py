@@ -16,6 +16,7 @@ from app.models.tool import AITool
 from app.models.user_project_preferences import UserProjectToolPreference
 from app.models.user import User
 from app.schemas.tool import AIToolCreate, AIToolResponse, AIToolUpdate
+from app.services.project_file_tools import ensure_project_file_tools
 from app.services.project_tools import load_shared_tools, load_tools_for_project
 
 router = APIRouter(prefix="/tools", tags=["tools"])
@@ -174,6 +175,16 @@ async def create_tool(payload: AIToolCreate, db: DbSession, current_user=Depends
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ein Tool mit diesem Namen existiert bereits.")
+
+
+@library_router.post("/library/projects/{project_id}/sync-file-tools")
+async def sync_project_file_tools(project_id: int, db: DbSession, current_user=Depends(get_current_user)):
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
+    project = await _load_project(db, project_id)
+    await _require_permission(db, current_user, project, PermissionLevel.READ)
+    created = await ensure_project_file_tools(db, project_id)
+    return {"project_id": project_id, "created_tools": created, "count": len(created)}
 
 
 @library_router.post("/library/upload", response_model=AIToolResponse, status_code=status.HTTP_201_CREATED)

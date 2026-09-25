@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.models.tool import AITool
 from app.models.user_project_preferences import UserProjectToolPreference
+from app.services.project_file_tools import ensure_project_file_tools
 
 _WORD_RE = re.compile(r"[\wÀ-ÿ]+", re.UNICODE)
 
@@ -120,5 +121,10 @@ def format_tools_context(tools: list[AITool], query: str | None = None, limit: i
 
 
 async def build_tools_context(db: Any, query: str | None = None, limit: int = 5, user_id: int | None = None, project_id: int | None = None) -> str:
+    if project_id is not None:
+        try:
+            await ensure_project_file_tools(db, project_id)
+        except Exception:
+            pass
     tools = await load_tools_for_project(db, project_id, user_id=user_id, enabled_only=True) if project_id is not None else await load_shared_tools(db, enabled_only=True)
     return format_tools_context(tools, query=query, limit=limit)

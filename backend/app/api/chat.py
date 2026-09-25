@@ -233,6 +233,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                         "content": (
                             f"{tools_context}\n\n"
                             "Diese Tools stehen dem Agenten zur Verfügung. Nutze sie nur, wenn sie zur aktuellen Frage passen. "
+                            "Bevorzuge klar formatbezogene Tools für PDFs, Tabellen, Präsentationen, Bilder und Geodaten, wenn solche Dateien im Projekt vorhanden sind. "
                             "Bevorzuge klare, ausführbare Workflows statt allgemeiner Vermutungen."
                         ),
                     },

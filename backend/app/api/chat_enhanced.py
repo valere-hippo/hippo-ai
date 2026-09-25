@@ -479,7 +479,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                     "role": "system",
                     "content": (
                         f"{tools_context}\n\n"
-                        "Diese Tools stehen dem Agenten zur Verfügung. Nutze sie als Arbeitsmittel und beschreibe danach klar die Ergebnisse."
+                        "Diese Tools stehen dem Agenten zur Verfügung. Nutze sie als Arbeitsmittel und beschreibe danach klar die Ergebnisse. "
+                        "Bevorzuge klar formatbezogene Tools für PDFs, Tabellen, Präsentationen, Bilder und Geodaten, wenn solche Dateien im Projekt vorhanden sind."
                     ),
                 },
             )

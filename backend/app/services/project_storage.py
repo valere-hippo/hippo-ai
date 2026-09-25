@@ -802,6 +802,121 @@ def _extract_text_from_docx_bytes(data: bytes) -> str:
     return f"DOCX mit {len(paragraphs)} Absätzen."
 
 
+def _extract_text_from_xlsx_bytes(data: bytes) -> str:
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            names = set(archive.namelist())
+            if not names:
+                return ""
+            shared_strings: list[str] = []
+            if "xl/sharedStrings.xml" in names:
+                try:
+                    shared_root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+                    ns = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+                    for si in shared_root.findall(".//main:si", ns):
+                        text_parts = [node.text or "" for node in si.findall(".//main:t", ns)]
+                        shared_strings.append("".join(text_parts).strip())
+                except Exception:
+                    shared_strings = []
+
+            ns = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+            parts: list[str] = []
+            sheet_names = [name for name in sorted(names) if name.startswith("xl/worksheets/sheet") and name.endswith(".xml")]
+            for sheet_name in sheet_names:
+                try:
+                    sheet_root = ET.fromstring(archive.read(sheet_name))
+                except Exception:
+                    continue
+                rows: list[str] = []
+                for row in sheet_root.findall(".//main:row", ns):
+                    cells: list[str] = []
+                    for cell in row.findall("main:c", ns):
+                        ref = cell.attrib.get("r", "")
+                        cell_type = cell.attrib.get("t", "")
+                        value = ""
+                        if cell_type == "inlineStr":
+                            value = "".join(node.text or "" for node in cell.findall(".//main:t", ns)).strip()
+                        else:
+                            value_node = cell.find("main:v", ns)
+                            if value_node is not None and value_node.text is not None:
+                                raw = value_node.text.strip()
+                                if cell_type == "s" and raw.isdigit():
+                                    index = int(raw)
+                                    if 0 <= index < len(shared_strings):
+                                        value = shared_strings[index]
+                                    else:
+                                        value = raw
+                                else:
+                                    value = raw
+                        if value:
+                            cells.append(f"{ref}={value}")
+                    if cells:
+                        rows.append("; ".join(cells[:20]))
+                if rows:
+                    parts.append(f"[{Path(sheet_name).name}]\n" + _truncate("\n".join(rows), 6000))
+            preview = _truncate("\n\n".join(parts))
+            if preview:
+                return f"XLSX mit {len(sheet_names)} Arbeitsblättern.\nTextauszug:\n{preview}"
+            return f"XLSX mit {len(sheet_names)} Arbeitsblättern."
+    except (BadZipFile, OSError):
+        return ""
+    except Exception:
+        return ""
+
+
+
+def _extract_text_from_ods_bytes(data: bytes) -> str:
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            xml_bytes = archive.read("content.xml")
+            root = ET.fromstring(xml_bytes)
+    except (BadZipFile, KeyError, OSError, ET.ParseError):
+        return ""
+
+    ns = {
+        "office": "urn:oasis:names:tc:opendocument:xmlns:office:1.0",
+        "text": "urn:oasis:names:tc:opendocument:xmlns:text:1.0",
+    }
+    paragraphs = []
+    for node in root.findall(".//text:p", ns):
+        line = "".join(node.itertext()).strip()
+        if line:
+            paragraphs.append(line)
+    preview = _truncate("\n\n".join(paragraphs))
+    if preview:
+        return f"ODS mit {len(paragraphs)} Textabschnitten.\nTextauszug:\n{preview}"
+    return f"ODS mit {len(paragraphs)} Textabschnitten."
+
+
+
+def _extract_text_from_pptx_bytes(data: bytes) -> str:
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            names = [name for name in sorted(archive.namelist()) if name.startswith("ppt/slides/slide") and name.endswith(".xml")]
+            if not names:
+                return ""
+            ns = {"a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
+            slides: list[str] = []
+            for slide_name in names:
+                try:
+                    slide_root = ET.fromstring(archive.read(slide_name))
+                except Exception:
+                    continue
+                texts = ["".join(node.itertext()).strip() for node in slide_root.findall(".//a:t", ns)]
+                texts = [text for text in texts if text]
+                if texts:
+                    slides.append(f"[{Path(slide_name).name}]\n" + _truncate("\n".join(texts), 4000))
+            preview = _truncate("\n\n".join(slides))
+            if preview:
+                return f"PPTX mit {len(names)} Folien.\nTextauszug:\n{preview}"
+            return f"PPTX mit {len(names)} Folien."
+    except (BadZipFile, OSError):
+        return ""
+    except Exception:
+        return ""
+
+
+
 def _extract_text_from_plain_bytes(data: bytes) -> str:
     for encoding in ("utf-8", "utf-16", "latin-1"):
         try:
@@ -1231,7 +1346,31 @@ def extract_project_file_preview(filename: str, data: bytes, content_type: str |
     if mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or safe_filename.endswith(".docx"):
         return _extract_text_from_docx_bytes(data)
 
-    if mime_type.startswith("text/") or safe_filename.endswith((".txt", ".md", ".csv", ".log", ".rtf")):
+    if mime_type in {
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel",
+        "application/vnd.oasis.opendocument.spreadsheet",
+    } or safe_filename.endswith((".xlsx", ".xlsm", ".xls", ".ods", ".csv")):
+        if safe_filename.endswith((".ods",)):
+            return _extract_text_from_ods_bytes(data)
+        if safe_filename.endswith((".xls",)):
+            return _extract_text_from_plain_bytes(data)
+        if safe_filename.endswith((".csv",)):
+            for encoding in ("utf-8", "utf-16", "latin-1"):
+                try:
+                    return _truncate(data.decode(encoding))
+                except UnicodeDecodeError:
+                    continue
+            return ""
+        return _extract_text_from_xlsx_bytes(data)
+
+    if mime_type in {
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.oasis.opendocument.presentation",
+    } or safe_filename.endswith((".pptx", ".odp")):
+        return _extract_text_from_pptx_bytes(data)
+
+    if mime_type.startswith("text/") or safe_filename.endswith((".txt", ".md", ".log", ".rtf")):
         for encoding in ("utf-8", "utf-16", "latin-1"):
             try:
                 return _truncate(data.decode(encoding))
@@ -1268,6 +1407,7 @@ IMAGE_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif
 
 
 async def build_project_files_context(project: Any, max_files: int | None = None, include_previews: bool = True, question: str | None = None, source_prefixes: list[str] | None = None) -> str:
+    detailed_report = looks_like_project_detailed_report_request(question or "")
     try:
         pcloud_path_raw = getattr(project, "pcloud_path", None)
         pcloud_folder_id_raw = getattr(project, "pcloud_folder_id", None)
@@ -1296,8 +1436,8 @@ async def build_project_files_context(project: Any, max_files: int | None = None
             pcloud_lines = [
                 f"Im pCloud-Projektordner sind {len(files)} Dateien sichtbar (Unterordner ignoriert).",
             ]
-            preview_budget = 8 if detailed_report else (5 if include_previews else 0)
-            preview_max_chars = 180 if detailed_report else 120
+            preview_budget = 10 if detailed_report else (5 if include_previews else 0)
+            preview_max_chars = 800 if detailed_report else 120
             for index, entry in enumerate(files):
                 line = f"- {entry.path}"
                 if index < preview_budget:
@@ -1324,8 +1464,30 @@ async def build_project_files_context(project: Any, max_files: int | None = None
             if not files:
                 return "Im ausgewählten Ordnersatz sind aktuell keine Dateien sichtbar."
             lines = [f"Im ausgewählten Ordnersatz des Projekts sind {len(files)} sichtbare Dateien vorhanden:"]
-            for item in sorted(files, key=lambda entry: entry.filename.lower()):
-                lines.append(f"- {item.filename} ({item.size} bytes, Speicherung {item.storage})")
+            if not _project_uses_pcloud(project):
+                try:
+                    lines.append(_build_local_project_tree_context(project))
+                except Exception:
+                    pass
+            preview_budget = 10 if detailed_report else (5 if include_previews else 0)
+            preview_max_chars = 800 if detailed_report else 180
+            for index, item in enumerate(sorted(files, key=lambda entry: entry.filename.lower())):
+                line = f"- {item.filename} ({item.size} bytes, Speicherung {item.storage})"
+                if index < preview_budget:
+                    try:
+                        if _project_uses_pcloud(project):
+                            content, content_type, _storage = await asyncio.to_thread(read_project_file, project, item.filename)
+                        else:
+                            content, content_type, _storage = read_project_file(project, item.filename)
+                        summary = extract_project_file_preview(item.filename, content, content_type)
+                    except Exception:
+                        summary = ""
+                    if summary:
+                        line += f" — {_truncate(summary, preview_max_chars)}"
+                lines.append(line)
+                if sum(len(part) + 1 for part in lines) > 12000:
+                    lines[-1] = "- … Kontext wegen Länge gekürzt."
+                    break
             return "\n".join(lines)
 
         files = list_project_files(project)
