@@ -19,29 +19,32 @@ function summarizeLocalFolder(folderPath, options = {}) {
   const lines = [`Lokale Projektordner (vom Desktop gelesen): ${roots.join(' | ')}`]
   let chars = 0
 
-  const walk = (root, dir, depth = 0) => {
+  for (const root of roots) {
+    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+      lines.push(`- Der Ordner ist nicht erreichbar: ${root}`)
+      continue
+    }
+
+    lines.push(`[Ordner] ${path.basename(root)}`)
     let entries = []
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true })
+      entries = fs.readdirSync(root, { withFileTypes: true })
     } catch (error) {
-      lines.push(`${'  '.repeat(depth)}- [Fehler beim Lesen] ${dir}: ${error.message}`)
-      return
+      lines.push(`- [Fehler beim Lesen] ${root}: ${error.message}`)
+      continue
     }
 
     const sorted = entries.slice().sort((a, b) => a.name.localeCompare(b.name, 'de'))
-    const relDir = path.relative(root, dir) || '.'
-    lines.push(`${'  '.repeat(depth)}[Ordner] ${path.basename(root)} / ${relDir}`)
-
     for (const entry of sorted) {
-      const absPath = path.join(dir, entry.name)
-      const relPath = path.relative(root, absPath) || entry.name
-      if (entry.isDirectory()) {
-        walk(root, absPath, depth + 1)
+      const absPath = path.join(root, entry.name)
+      if (!entry.isFile()) {
+        if (entry.isDirectory()) {
+          lines.push(`  - [Ordner] ${entry.name}`)
+        }
         continue
       }
-      if (!entry.isFile()) continue
 
-      let line = `${'  '.repeat(depth + 1)}- ${path.basename(root)}/${relPath}`
+      let line = `  - ${entry.name}`
       try {
         const stat = fs.statSync(absPath)
         line += ` (${stat.size} bytes)`
@@ -58,14 +61,6 @@ function summarizeLocalFolder(folderPath, options = {}) {
       }
       lines.push(line)
     }
-  }
-
-  for (const root of roots) {
-    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
-      lines.push(`- Der Ordner ist nicht erreichbar: ${root}`)
-      continue
-    }
-    walk(root, root, 0)
   }
   if (lines.length === 1) lines.push('Keine Dateien gefunden.')
   if (chars === 0) lines.push('Hinweis: Es wurden keine direkt lesbaren Textinhalte gefunden, aber die Dateistruktur wurde vollständig erfasst.')

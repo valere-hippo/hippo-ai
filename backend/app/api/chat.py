@@ -248,51 +248,58 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     if not settings.hippo_api_url:
         raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        headers = {"Content-Type": "application/json"}
-        if settings.hippo_api_key:
-            headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
-        model_name = settings.hippo_model
-        max_tokens = await resolve_chat_max_tokens(db, settings.hippo_response_max_tokens, settings.hippo_response_max_tokens_long)
-        if payload.attachments or conv_project is not None:
-            max_tokens = max(512, min(max_tokens, settings.hippo_response_max_tokens_long))
-        model_payload = {
-            "model": model_name,
-            "messages": hippo_messages,
-            "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
-            "max_tokens": max_tokens,
-            "max_completion_tokens": max_tokens,
-            "max_output_tokens": max_tokens,
-        }
-        logger.info(
-            "Calling Hippo model | url=%s | model=%s | max_tokens=%s | auth=%s | project=%s | attachments=%s",
-            settings.hippo_api_url,
-            model_name,
-            max_tokens,
-            bool(settings.hippo_api_key),
-            getattr(conv_project, 'id', None),
-            bool(payload.attachments),
-        )
-        try:
-            r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=model_payload, headers=headers)
-            r.raise_for_status()
-            data = r.json()
-            if isinstance(data, dict) and data.get('choices'):
-                reply_text = data['choices'][0]['message']['content']
-            else:
-                reply_text = str(data)
-        except httpx.HTTPStatusError as exc:
-            body = ""
-            try:
-                body = exc.response.text[:500]
-            except Exception:
-                pass
-            raise HTTPException(
-                status_code=502,
-                detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
+    direct_project_reply = None
+    if conv_project is not None and looks_like_project_inventory_request(payload.message):
+        direct_project_reply = project_files_context.strip()
+
+    if direct_project_reply:
+        reply_text = direct_project_reply
+    else:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            headers = {"Content-Type": "application/json"}
+            if settings.hippo_api_key:
+                headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
+            model_name = settings.hippo_model
+            max_tokens = await resolve_chat_max_tokens(db, settings.hippo_response_max_tokens, settings.hippo_response_max_tokens_long)
+            if payload.attachments or conv_project is not None:
+                max_tokens = max(512, min(max_tokens, settings.hippo_response_max_tokens_long))
+            model_payload = {
+                "model": model_name,
+                "messages": hippo_messages,
+                "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
+                "max_tokens": max_tokens,
+                "max_completion_tokens": max_tokens,
+                "max_output_tokens": max_tokens,
+            }
+            logger.info(
+                "Calling Hippo model | url=%s | model=%s | max_tokens=%s | auth=%s | project=%s | attachments=%s",
+                settings.hippo_api_url,
+                model_name,
+                max_tokens,
+                bool(settings.hippo_api_key),
+                getattr(conv_project, 'id', None),
+                bool(payload.attachments),
             )
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"Hippo API error: {e}")
+            try:
+                r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=model_payload, headers=headers)
+                r.raise_for_status()
+                data = r.json()
+                if isinstance(data, dict) and data.get('choices'):
+                    reply_text = data['choices'][0]['message']['content']
+                else:
+                    reply_text = str(data)
+            except httpx.HTTPStatusError as exc:
+                body = ""
+                try:
+                    body = exc.response.text[:500]
+                except Exception:
+                    pass
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
+                )
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=f"Hippo API error: {e}")
 
     # sanitize assistant reply: remove any <think>...</think> reasoning tags
     try:
