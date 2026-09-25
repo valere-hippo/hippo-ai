@@ -450,9 +450,10 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
   try {
     const folderInfo = await window.electron.inspectProjectFolder({
       folder: folders.join('\n'),
-      maxDepth: 999,
-      maxEntries: 999999,
-      maxTextChars: 20000,
+      maxDepth: 3,
+      maxEntries: 250,
+      maxTextChars: 8000,
+      timeoutMs: 15000,
     })
     const context = String(folderInfo?.context || '')
     state.projectFolderContextCache.set(project.id, context)
@@ -833,11 +834,15 @@ function renderContext() {
     action.addEventListener('click', async () => {
       showLoader('Projektordner wird geprüft...')
       try {
-        await refreshProjectFolderContext(project, { force: true })
-        if (state.currentConversationId) {
+        const context = await refreshProjectFolderContext(project, { force: true })
+        if (!context.trim()) {
+          showToast('Der Projektordner konnte nicht gelesen werden oder ist zu groß. Bitte prüfe den Ordnerpfad.', 'error')
+        } else if (state.currentConversationId) {
           await openConversationById(state.currentConversationId)
         }
         renderContext()
+      } catch (error) {
+        showToast(error.message || 'Projektordner konnte nicht geprüft werden', 'error')
       } finally {
         hideLoader()
       }

@@ -127,18 +127,38 @@ function inspectProjectFolderAsync(folder, options = {}) {
     })
     let stdout = ''
     let stderr = ''
+    let settled = false
+    const finish = (payload) => {
+      if (settled) return
+      settled = true
+      resolve(payload)
+    }
+    const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 15000
+    const timer = setTimeout(() => {
+      try {
+        child.kill('SIGKILL')
+      } catch (error) {
+        // ignore
+      }
+      finish({ ok: false, context: `Der Projektordner-Scan hat das Zeitlimit von ${Math.round(timeoutMs / 1000)} Sekunden überschritten.` })
+    }, timeoutMs)
     child.stdout.on('data', (chunk) => { stdout += String(chunk || '') })
     child.stderr.on('data', (chunk) => { stderr += String(chunk || '') })
-    child.on('error', (error) => resolve({ ok: false, context: `Fehler beim Lesen des Ordners: ${error.message}` }))
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      finish({ ok: false, context: `Fehler beim Lesen des Ordners: ${error.message}` })
+    })
     child.on('close', (code) => {
+      clearTimeout(timer)
+      if (settled) return
       if (code !== 0) {
-        resolve({ ok: false, context: `Fehler beim Lesen des Ordners: ${stderr.trim() || `child exited with code ${code}`}` })
+        finish({ ok: false, context: `Fehler beim Lesen des Ordners: ${stderr.trim() || `child exited with code ${code}`}` })
         return
       }
       try {
-        resolve(JSON.parse(stdout || '{}'))
+        finish(JSON.parse(stdout || '{}'))
       } catch (error) {
-        resolve({ ok: false, context: `Fehler beim Lesen des Ordners: ${error.message}` })
+        finish({ ok: false, context: `Fehler beim Lesen des Ordners: ${error.message}` })
       }
     })
   })
