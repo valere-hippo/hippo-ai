@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     hippo_vision_url: str | None = None
     hippo_response_max_tokens: int = 4096
     hippo_response_max_tokens_long: int = 8192
+    hippo_response_timeout_seconds: int = 600
+    hippo_response_timeout_seconds_long: int = 900
     # Deprecated: local attachment parsing now covers images/screenshots/documents.
     hippo_vision_model: str | None = None
 

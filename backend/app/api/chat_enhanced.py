@@ -21,6 +21,7 @@ from app.services.chat_payloads import (
     looks_like_image_generation_request,
     looks_like_file_generation_request,
     looks_like_project_inventory_request,
+    looks_like_project_detailed_report_request,
     storage_text,
 )
 from app.services.generated_files import GeneratedFile, SCENE_PREFIX, build_generated_file_bytes_with_fallback, extract_generated_files
@@ -28,6 +29,7 @@ from app.services.project_tools import build_tools_context
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
+from app.services.project_report_fallback import build_project_report_fallback
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.image_generation import build_image_scene_spec
 from app.services.hippo_identity import build_hippo_system_prompt
@@ -446,6 +448,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             pass
 
+        project_files_context = ''
         try:
             if payload.project_folder_context and payload.project_folder_context.strip():
                 project_files_context = payload.project_folder_context.strip()
@@ -498,7 +501,9 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     if direct_project_reply:
         reply_text = direct_project_reply
     else:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        request_timeout = int(getattr(settings, 'hippo_response_timeout_seconds_long' if (payload.attachments or conv_project is not None) else 'hippo_response_timeout_seconds', 600) or 600)
+        request_timeout = max(120, request_timeout)
+        async with httpx.AsyncClient(timeout=httpx.Timeout(request_timeout, connect=15.0)) as client:
             headers = {"Content-Type": "application/json"}
             if settings.hippo_api_key:
                 headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
@@ -515,10 +520,11 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 "max_output_tokens": max_tokens,
             }
             logger.info(
-                "Calling Hippo model | url=%s | model=%s | max_tokens=%s | auth=%s | project=%s | attachments=%s",
+                "Calling Hippo model | url=%s | model=%s | max_tokens=%s | timeout=%s | auth=%s | project=%s | attachments=%s",
                 settings.hippo_api_url,
                 model_name,
                 max_tokens,
+                request_timeout,
                 bool(settings.hippo_api_key),
                 getattr(conv_project, 'id', None),
                 bool(payload.attachments),
@@ -537,12 +543,20 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                     body = exc.response.text[:500]
                 except Exception:
                     pass
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
-                )
+                report_request = conv_project is not None and (looks_like_file_generation_request(payload.message, payload.attachments) or looks_like_project_detailed_report_request(payload.message))
+                if report_request:
+                    reply_text = build_project_report_fallback(payload.message, project_files_context, getattr(conv_project, 'name', None))
+                else:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
+                    )
             except Exception as e:
-                raise HTTPException(status_code=502, detail=f'Fehler der Hippo-API: {e}')
+                report_request = conv_project is not None and (looks_like_file_generation_request(payload.message, payload.attachments) or looks_like_project_detailed_report_request(payload.message))
+                if report_request:
+                    reply_text = build_project_report_fallback(payload.message, project_files_context, getattr(conv_project, 'name', None))
+                else:
+                    raise HTTPException(status_code=502, detail=f'Fehler der Hippo-API: {e}')
 
     # sanitize & store
     try:
