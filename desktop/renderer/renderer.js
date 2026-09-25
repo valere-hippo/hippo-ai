@@ -2171,13 +2171,17 @@ async function openCreateProjectModal() {
       renderProjects()
       renderConversations()
       renderContext()
-      await queueProjectFolderRefresh(createdProject)
     }
     showToast('Projekt erstellt')
-  } catch (error) {
-    showToast(error.message || 'Projekt konnte nicht erstellt werden', 'error')
-  } finally {
     hideLoader()
+    if (createdProject?.id) {
+      void queueProjectFolderRefresh(createdProject).catch((error) => {
+        console.warn('Projektordner konnte nach Erstellung nicht aktualisiert werden', error)
+      })
+    }
+  } catch (error) {
+    hideLoader()
+    showToast(error.message || 'Projekt konnte nicht erstellt werden', 'error')
   }
 }
 
