@@ -12,6 +12,8 @@ try {
 
 contextBridge.exposeInMainWorld('electron', {
   selectFolder: () => ipcRenderer.invoke('select-folder'),
+  scanProjectFolderFiles: (args) => ipcRenderer.invoke('scan-project-folder-files', args),
+  readLocalFile: (args) => ipcRenderer.invoke('read-local-file', args),
   logError: (msg) => ipcRenderer.send('renderer-log', msg),
   copyText: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   desktopControl: (payload) => ipcRenderer.invoke('desktop-control', payload),

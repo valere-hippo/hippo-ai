@@ -6,7 +6,8 @@ from datetime import datetime
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
-    watched_folder: str | None = Field(default=None, max_length=1000)
+    watched_folder: str | None = Field(default=None, max_length=2000)
+    delivery_folder: str | None = Field(default=None, max_length=1000)
     pcloud_path: str | None = Field(default=None, max_length=1000)
     pcloud_folder_id: int | None = Field(default=None, ge=1)
 
@@ -20,6 +21,7 @@ class ProjectResponse(BaseModel):
     owner_id: int
     is_active: bool
     watched_folder: str | None = None
+    delivery_folder: str | None = None
     pcloud_path: str | None = None
     pcloud_folder_id: int | None = None
     created_at: datetime

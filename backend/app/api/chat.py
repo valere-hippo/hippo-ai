@@ -43,6 +43,7 @@ class ChatRequest(BaseModel):
     message: str
     attachments: list[ChatAttachment] | None = None
     project_folder_context: str | None = None
+    project_source_prefixes: list[str] | None = None
 
 class ChatResponse(BaseModel):
     reply: str
@@ -201,8 +202,8 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         try:
             if payload.project_folder_context and payload.project_folder_context.strip():
                 project_files_context = payload.project_folder_context.strip()
-            elif conv_project is not None and getattr(conv_project, 'pcloud_path', None) and getattr(conv_project, 'pcloud_folder_id', None):
-                project_files_context = await build_project_files_context(conv_project, include_previews=not looks_like_project_inventory_request(payload.message), question=payload.message)
+            elif conv_project is not None:
+                project_files_context = await build_project_files_context(conv_project, include_previews=not looks_like_project_inventory_request(payload.message), question=payload.message, source_prefixes=payload.project_source_prefixes)
             else:
                 project_files_context = (
                     "Kein lokaler Projektordner-Kontext vom Desktop erhalten. "

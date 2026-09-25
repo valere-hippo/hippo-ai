@@ -811,7 +811,7 @@ function renderContext() {
             : ''
   const localFolders = normalizeProjectFolderInput(project?.watched_folder)
   const projectLabel = project
-    ? `Projekt: ${project.name}${localFolders.length ? ` · Lokal: ${localFolders.join(' | ')}` : ''}${project.pcloud_path ? ` · pCloud: ${project.pcloud_path}` : ''}${project.pcloud_folder_id ? ` · folderid: ${project.pcloud_folder_id}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}`
+    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${project.pcloud_path ? ` · pCloud: ${project.pcloud_path}` : ''}${project.pcloud_folder_id ? ` · folderid: ${project.pcloud_folder_id}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}`
     : ''
   els.selectedInfo.innerHTML = ''
   if (state.currentConversationId) {
@@ -892,7 +892,8 @@ function renderProjects() {
     subtitle.className = 'item-subtitle'
     const parts = []
     const localFolders = normalizeProjectFolderInput(project.watched_folder)
-    if (localFolders.length) parts.push(`Lokal: ${localFolders.join(' · ')}`)
+    if (localFolders.length) parts.push(`Quellen: ${localFolders.join(' · ')}`)
+    if (project.delivery_folder) parts.push(`Lieferung: ${project.delivery_folder}`)
     if (project.pcloud_path && project.pcloud_folder_id) parts.push(`pCloud: ${project.pcloud_path} #${project.pcloud_folder_id}`)
     subtitle.textContent = parts.length ? parts.join(' · ') : 'Kein Ordner verknüpft'
     main.append(title, subtitle)
@@ -1896,8 +1897,6 @@ async function selectProject(projectId) {
   if (project?.pcloud_path && project?.pcloud_folder_id) {
     state.projectFolderScanState.set(project.id, 'pcloud')
     renderContext()
-  } else if (project) {
-    await queueProjectFolderRefresh(project)
   }
 
   if (state.currentConversationId) {
@@ -1931,8 +1930,6 @@ async function openConversation(conversation) {
   if (project?.pcloud_path && project?.pcloud_folder_id) {
     state.projectFolderScanState.set(project.id, 'pcloud')
     renderContext()
-  } else if (project) {
-    await queueProjectFolderRefresh(project)
   }
   await openConversationById(conversation.id)
 }
@@ -2074,6 +2071,7 @@ async function persistAttachment(projectId, attachment) {
   if (!projectId || !attachment?.file) return
   const formData = new FormData()
   formData.append('file', attachment.file, attachment.filename)
+  formData.append('storage_path', `attachments/${attachment.filename}`)
   try {
     await apiBlob(`/files/projects/${projectId}/upload`, {
       method: 'POST',
@@ -2101,7 +2099,7 @@ function buildProjectForm(defaults = {}) {
 
   const folderField = document.createElement('label')
   folderField.className = 'field'
-  folderField.innerHTML = '<span>Lokale Datenordner für Berichte</span>'
+  folderField.innerHTML = '<span>Quellordner für den Projektkontext</span>'
   const folderRow = document.createElement('div')
   folderRow.style.display = 'flex'
   folderRow.style.gap = '10px'
@@ -2110,13 +2108,13 @@ function buildProjectForm(defaults = {}) {
   folderInput.id = 'folder'
   folderInput.className = 'text-input'
   folderInput.rows = 4
-  folderInput.placeholder = 'Mehrere Ordner möglich, je Zeile ein Pfad'
+  folderInput.placeholder = 'Mehrere Quellordner möglich, je Zeile ein Pfad'
   folderInput.style.flex = '1'
   folderInput.value = defaults.folder || ''
   const folderButton = document.createElement('button')
   folderButton.type = 'button'
   folderButton.className = 'ghost-action'
-  folderButton.textContent = 'Ordner wählen'
+  folderButton.textContent = 'Quellordner wählen'
   folderButton.addEventListener('click', async () => {
     const selected = await window.electron.selectFolder()
     if (!selected) return
@@ -2136,7 +2134,36 @@ function buildProjectForm(defaults = {}) {
 
   const hint = document.createElement('div')
   hint.className = 'muted-copy'
-  hint.textContent = 'Lokale Ordner sind optional. Du kannst mehrere Ordner auswählen; pCloud ist nur noch optional.'
+  hint.textContent = 'Die Quellordner werden in S3 synchronisiert. Der Lieferordner ist lokal und wird für Word/PDF/Bild-Lieferungen verwendet.'
+
+  const deliveryField = document.createElement('label')
+  deliveryField.className = 'field'
+  deliveryField.innerHTML = '<span>Lieferordner (lokal, Pflicht)</span>'
+  const deliveryRow = document.createElement('div')
+  deliveryRow.style.display = 'flex'
+  deliveryRow.style.gap = '10px'
+  deliveryRow.style.alignItems = 'flex-start'
+  const deliveryInput = document.createElement('textarea')
+  deliveryInput.id = 'delivery_folder'
+  deliveryInput.className = 'text-input'
+  deliveryInput.rows = 3
+  deliveryInput.placeholder = 'Pfad zum Lieferordner, eine Zeile'
+  deliveryInput.style.flex = '1'
+  deliveryInput.value = defaults.delivery_folder || ''
+  const deliveryButton = document.createElement('button')
+  deliveryButton.type = 'button'
+  deliveryButton.className = 'ghost-action'
+  deliveryButton.textContent = 'Lieferordner wählen'
+  deliveryButton.addEventListener('click', async () => {
+    const selected = await window.electron.selectFolder()
+    if (!selected) return
+    const chosen = Array.isArray(selected) ? selected[0] : selected
+    deliveryInput.value = String(chosen || '').trim()
+    deliveryInput.dispatchEvent(new Event('input', { bubbles: true }))
+    deliveryInput.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  deliveryRow.append(deliveryInput, deliveryButton)
+  deliveryField.appendChild(deliveryRow)
 
   const pcloudField = document.createElement('label')
   pcloudField.className = 'field'
@@ -2162,7 +2189,7 @@ function buildProjectForm(defaults = {}) {
   folderIdInput.value = defaults.pcloud_folder_id || ''
   folderIdField.appendChild(folderIdInput)
 
-  wrapper.append(nameField, pcloudField, folderIdField, folderField, hint)
+  wrapper.append(nameField, deliveryField, pcloudField, folderIdField, folderField, hint)
   return wrapper
 }
 
@@ -2170,14 +2197,14 @@ async function openCreateProjectModal() {
   const form = buildProjectForm()
   const result = await openModal({
     title: 'Projekt erstellen',
-    copy: 'Wähle bei Bedarf lokale Ordner; pCloud ist optional. Du kannst mehrere Ordner auswählen. Es werden nur Dateien im Ordner gelesen, keine Unterordner.',
+    copy: 'Wähle die Quellordner für den Projektkontext und den lokalen Lieferordner. Die Quellordner werden nach S3 synchronisiert.',
     content: form,
     submitLabel: 'Erstellen',
-    validate: (values) => Boolean(values.name?.trim()),
+    validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.delivery_folder?.trim()),
   })
 
   if (!result || !result.name) {
-    showToast('Du musst nur den Projektnamen angeben. Ordner und pCloud sind optional.', 'error')
+    showToast('Du musst Name, Quellordner und Lieferordner angeben.', 'error')
     return
   }
 
@@ -2189,6 +2216,7 @@ async function openCreateProjectModal() {
         name: result.name,
         description: '',
         watched_folder: result.folder || null,
+        delivery_folder: result.delivery_folder || null,
         pcloud_path: result.pcloud_path?.trim() || null,
         pcloud_folder_id: result.pcloud_folder_id ? Number(result.pcloud_folder_id) : null,
       }),
@@ -2201,13 +2229,14 @@ async function openCreateProjectModal() {
       renderConversations()
       renderContext()
     }
-    showToast('Projekt erstellt')
     hideLoader()
     if (createdProject?.id) {
-      void queueProjectFolderRefresh(createdProject).catch((error) => {
-        console.warn('Projektordner konnte nach Erstellung nicht aktualisiert werden', error)
-      })
+      const syncResult = await syncProjectSourcesToS3(createdProject)
+      if (!syncResult.ok) {
+        showToast(syncResult.error || 'Quellordner konnten nach der Erstellung nicht synchronisiert werden', 'error')
+      }
     }
+    showToast('Projekt erstellt')
   } catch (error) {
     hideLoader()
     showToast(error.message || 'Projekt konnte nicht erstellt werden', 'error')
@@ -2220,15 +2249,17 @@ async function openEditProjectModal(project) {
   const form = buildProjectForm({
     name: project.name,
     folder: project.watched_folder || '',
+    delivery_folder: project.delivery_folder || '',
     pcloud_path: project.pcloud_path || '',
     pcloud_folder_id: project.pcloud_folder_id || '',
   })
 
   const result = await openModal({
     title: 'Projekt bearbeiten',
-    copy: 'Hier siehst und änderst du die lokalen Ordner sowie den optionalen pCloud-Pfad und die folderid des Projekts. Es werden nur Dateien im Ordner gelesen, keine Unterordner.',
+    copy: 'Hier bearbeitest du die Quellordner, den Lieferordner sowie den optionalen pCloud-Pfad und die folderid des Projekts.',
     content: form,
     submitLabel: 'Speichern',
+    validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.delivery_folder?.trim()),
     extraActions: [
       {
         label: 'Dateien',
@@ -2250,7 +2281,7 @@ async function openEditProjectModal(project) {
   })
 
   if (!result || !result.name) {
-    showToast('Du musst beim Speichern nur den Projektnamen behalten. Ordner und pCloud sind optional.', 'error')
+    showToast('Du musst Name, Quellordner und Lieferordner angeben.', 'error')
     return
   }
 
@@ -2262,6 +2293,7 @@ async function openEditProjectModal(project) {
         name: result.name,
         description: project.description || '',
         watched_folder: result.folder || null,
+        delivery_folder: result.delivery_folder || null,
         pcloud_path: result.pcloud_path?.trim() || null,
         pcloud_folder_id: result.pcloud_folder_id ? Number(result.pcloud_folder_id) : null,
       }),
@@ -2271,7 +2303,10 @@ async function openEditProjectModal(project) {
     if (state.selectedProjectId === project.id) {
       const refreshedProject = state.projects.find((item) => item.id === project.id) || null
       if (refreshedProject) {
-        await queueProjectFolderRefresh(refreshedProject)
+        const syncResult = await syncProjectSourcesToS3(refreshedProject)
+        if (!syncResult.ok) {
+          showToast(syncResult.error || 'Quellordner konnten nach dem Speichern nicht synchronisiert werden', 'error')
+        }
       }
     }
     showToast('Projekt gespeichert')
@@ -4626,19 +4661,131 @@ function openModal({ title, copy, content, submitLabel, extraActions = [], width
   })
 }
 
-function showGeneratedFile(message, projectFolder) {
+function normalizeSourceFolderKey(folder) {
+  return String(folder || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+}
+
+async function promptProjectSourceScope(project) {
+  const folders = normalizeProjectFolderInput(project?.watched_folder)
+  if (!folders.length) return null
+
+  const content = document.createElement('div')
+  content.className = 'modal-grid'
+
+  const modeField = document.createElement('label')
+  modeField.className = 'field'
+  modeField.innerHTML = '<span>Seit der Projekterstellung Dateien geändert oder hinzugefügt?</span>'
+  const modeSelect = document.createElement('select')
+  modeSelect.id = 'refresh_mode'
+  modeSelect.className = 'text-input'
+  ;[
+    ['refresh', 'Ja, alle Quellordner neu scannen und in S3 aktualisieren'],
+    ['all', 'Nein, alle Quellordner verwenden'],
+    ['selected', 'Nein, nur bestimmte Quellordner verwenden'],
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = label
+    modeSelect.appendChild(option)
+  })
+  modeSelect.value = 'all'
+  modeField.appendChild(modeSelect)
+  content.appendChild(modeField)
+
+  const folderField = document.createElement('div')
+  folderField.className = 'modal-grid'
+  folderField.style.gap = '8px'
+  folders.forEach((folder, index) => {
+    const row = document.createElement('label')
+    row.className = 'field'
+    row.style.display = 'grid'
+    row.style.gridTemplateColumns = 'auto 1fr'
+    row.style.alignItems = 'center'
+    row.style.gap = '8px'
+    const checkbox = document.createElement('input')
+    checkbox.type = 'checkbox'
+    checkbox.id = `source_${index}`
+    checkbox.checked = true
+    const text = document.createElement('span')
+    text.textContent = folder
+    row.append(checkbox, text)
+    folderField.appendChild(row)
+  })
+  content.appendChild(folderField)
+
+  const result = await openModal({
+    title: 'Quellordner für die Antwort auswählen',
+    copy: 'Hippo fragt zuerst nach dem Änderungszustand und danach nach den Ordnern, die für die Antwort verwendet werden sollen.',
+    content,
+    submitLabel: 'Weiter',
+    validate: (values) => Boolean(values.refresh_mode),
+  })
+
+  if (!result) return null
+  const mode = result.refresh_mode || 'all'
+  if (mode === 'refresh' || mode === 'all') {
+    return { refresh: mode === 'refresh', sourceFolders: folders }
+  }
+  const selected = folders.filter((folder, index) => result[`source_${index}`])
+  return { refresh: false, sourceFolders: selected.length ? selected : folders }
+}
+
+async function syncProjectSourcesToS3(project, sourceFolders = null) {
+  if (!project?.id) return { ok: false, error: 'Kein Projekt ausgewählt' }
+  const folders = (sourceFolders && sourceFolders.length ? sourceFolders : normalizeProjectFolderInput(project?.watched_folder))
+  if (!folders.length) return { ok: false, error: 'Keine Quellordner ausgewählt' }
+
+  showLoader('Quellordner werden gescannt und nach S3 hochgeladen...')
+  try {
+    await apiJson(`/files/projects/${project.id}/storage`, { method: 'DELETE' })
+    let uploaded = 0
+    let skipped = 0
+    for (const folder of folders) {
+      const scan = await window.electron.scanProjectFolderFiles({ folder, maxDepth: 999, maxFiles: 50000 })
+      if (!scan?.ok) {
+        throw new Error(scan?.error || `Ordner konnte nicht gescannt werden: ${folder}`)
+      }
+      for (const file of scan.files || []) {
+        const read = await window.electron.readLocalFile({ path: file.path })
+        if (!read?.ok) {
+          skipped += 1
+          continue
+        }
+        const payload = {
+          source_folder: normalizeSourceFolderKey(folder),
+          relative_path: file.relative_path,
+          filename: file.relative_path.split('/').pop() || file.relative_path,
+          content_base64: read.base64,
+          content_type: read.contentType || 'application/octet-stream',
+        }
+        await apiJson(`/files/projects/${project.id}/source-upload`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+        uploaded += 1
+      }
+    }
+    return { ok: true, uploaded, skipped }
+  } catch (error) {
+    return { ok: false, error: error.message || String(error) }
+  } finally {
+    hideLoader()
+  }
+}
+
+function showGeneratedFile(message, deliveryFolder) {
   const fileMatch = message.match(/<<<FILE:([^>]+)>>>\s*([\s\S]*?)\s*<<<END_FILE>>>/m)
   if (!fileMatch) return false
 
-  if (!projectFolder) {
-    showToast('Wähle zuerst ein Projekt mit zugeordnetem Ordner aus.', 'error')
+  if (!deliveryFolder) {
+    showToast('Wähle zuerst ein Projekt mit einem Lieferordner aus.', 'error')
     return true
   }
 
   const filename = fileMatch[1].trim()
   const content = fileMatch[2]
   showLoader('Datei wird gespeichert...')
-  window.electron.saveFile({ folder: projectFolder, filename, data: content })
+  window.electron.saveFile({ folder: deliveryFolder, filename, data: content })
     .then((result) => {
       hideLoader()
       if (result?.ok) {
@@ -4656,9 +4803,9 @@ function showGeneratedFile(message, projectFolder) {
   return true
 }
 
-async function saveGeneratedArtifacts(artifacts, projectFolder) {
+async function saveGeneratedArtifacts(artifacts, deliveryFolder) {
   if (!Array.isArray(artifacts) || !artifacts.length) return []
-  if (!projectFolder) return []
+  if (!deliveryFolder) return []
 
   const saved = []
   for (const artifact of artifacts) {
@@ -4667,7 +4814,7 @@ async function saveGeneratedArtifacts(artifacts, projectFolder) {
     // The project folder lives on the desktop machine, so Electron writes it locally.
     // eslint-disable-next-line no-await-in-loop
     const result = await window.electron.saveFile({
-      folder: projectFolder,
+      folder: deliveryFolder,
       filename: artifact.filename,
       data: { base64: artifact.data_base64 },
     })
@@ -4698,17 +4845,23 @@ async function sendChat() {
   )
 
   const project = getContextProject()
-  const projectFolder = getPrimaryProjectFolder(project) || null
-  if (project?.pcloud_path && project?.pcloud_folder_id) {
-    state.projectFolderScanState.set(project.id, 'pcloud')
-  } else if (projectFolder) {
-    await queueProjectFolderRefresh(project)
+  const deliveryFolder = project?.delivery_folder || null
+  let projectSourcePrefixes = null
+
+  if (project) {
+    const scope = await promptProjectSourceScope(project)
+    if (!scope) return
+    projectSourcePrefixes = scope.sourceFolders
+    if (scope.refresh) {
+      const syncResult = await syncProjectSourcesToS3(project, projectSourcePrefixes)
+      if (!syncResult.ok) {
+        showToast(syncResult.error || 'Quellordner konnten nicht synchronisiert werden', 'error')
+        return
+      }
+      showToast(`Quellordner synchronisiert: ${syncResult.uploaded || 0} Dateien hochgeladen${syncResult.skipped ? `, ${syncResult.skipped} übersprungen` : ''}`)
+    }
   }
-  const projectFolderContext = project && !(project?.pcloud_path && project?.pcloud_folder_id) ? (state.projectFolderContextCache.get(project.id) || '') : ''
-  if (project && projectFolder && !projectFolderContext.trim()) {
-    showToast('Projektordner wird noch geladen oder benötigt Zugriff. Bitte den Ordnerzugriff erlauben.', 'error')
-    return
-  }
+
   const attachments = state.draftAttachments.map((attachment) => ({
     filename: attachment.filename,
     mime_type: attachment.mime_type,
@@ -4735,7 +4888,7 @@ async function sendChat() {
         attachments,
         desktop_agent: state.desktopAgentMode,
         desktop_profile: state.desktopAgentProfile,
-        project_folder_context: projectFolderContext,
+        project_source_prefixes: projectSourcePrefixes,
       }),
     })
 
@@ -4755,7 +4908,7 @@ async function sendChat() {
     await loadConversations()
     renderContext()
 
-    const savedArtifacts = await saveGeneratedArtifacts(response.generated_files, projectFolder)
+    const savedArtifacts = await saveGeneratedArtifacts(response.generated_files, deliveryFolder)
     if (response.desktop_actions?.length) {
       showLoader('Hippo steuert den PC...')
       const actionResult = await executeDesktopActions(response.desktop_actions)
@@ -4781,7 +4934,7 @@ async function sendChat() {
     }
 
     const savedReportNote = savedArtifacts.length
-      ? `Bericht im Projektordner gespeichert:\n${savedArtifacts.map((filePath) => `- ${filePath}`).join('\n')}`
+      ? `Bericht im Lieferordner gespeichert:\n${savedArtifacts.map((filePath) => `- ${filePath}`).join('\n')}`
       : ''
     const assistantReply = savedReportNote
       ? `${response.reply ? `${response.reply}\n\n` : ''}${savedReportNote}`
@@ -4791,7 +4944,7 @@ async function sendChat() {
     } else if (response.generated_files?.length) {
       renderMessage('assistant', 'Datei wurde erstellt.', { generatedFiles: response.generated_files })
     } else {
-      const legacySaved = showGeneratedFile(response.reply || '', projectFolder)
+      const legacySaved = showGeneratedFile(response.reply || '', deliveryFolder)
       if (legacySaved) return
     }
   } catch (error) {

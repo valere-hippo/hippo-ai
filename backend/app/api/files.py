@@ -1,6 +1,7 @@
-import json
+import base64
+from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
@@ -23,8 +24,50 @@ from app.services.project_storage import (
 router = APIRouter(prefix="/files", tags=["files"]) 
 
 
+class ProjectSourceUpload(BaseModel):
+    source_folder: str = Field(min_length=1, max_length=1000)
+    relative_path: str = Field(min_length=1, max_length=2000)
+    filename: str = Field(min_length=1, max_length=1000)
+    content_base64: str = Field(min_length=1)
+    content_type: str | None = Field(default=None, max_length=200)
+
+
+@router.post("/projects/{project_id}/source-upload", status_code=status.HTTP_201_CREATED)
+async def upload_project_source_file(project_id: int, payload: ProjectSourceUpload, db: DbSession, current_user=Depends(get_current_user)):
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
+
+    from app.services.permissions import has_project_permission
+    has = await has_project_permission(db, current_user, project, PermissionLevel.WRITE)
+    if not has:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert.")
+
+    try:
+        content = base64.b64decode(payload.content_base64)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Ungültige Dateidaten: {exc}")
+
+    storage_path = f"sources/{payload.source_folder.strip().strip('/')}/{payload.relative_path.strip().lstrip('/')}"
+    storage_result = store_project_file(
+        project,
+        payload.filename,
+        content,
+        payload.content_type,
+        storage_path=storage_path,
+    )
+    return {
+        "filename": storage_result["filename"],
+        "storage": storage_result["storage"],
+        "bucket": storage_result.get("bucket"),
+        "path": storage_result.get("path"),
+        "key": storage_result.get("key"),
+    }
+
+
 @router.post("/projects/{project_id}/upload", status_code=status.HTTP_201_CREATED)
-async def upload_file(project_id: int, db: DbSession, current_user=Depends(get_current_user), file: UploadFile = File(...)):
+async def upload_file(project_id: int, db: DbSession, current_user=Depends(get_current_user), file: UploadFile = File(...), storage_path: str | None = Form(None)):
     # Verify project access
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -38,7 +81,7 @@ async def upload_file(project_id: int, db: DbSession, current_user=Depends(get_c
         raise HTTPException(status_code=403, detail="Zugriff verweigert.")
 
     content = await file.read()
-    storage_result = store_project_file(project, file.filename, content, file.content_type)
+    storage_result = store_project_file(project, file.filename, content, file.content_type, storage_path=storage_path)
 
     # attempt to auto-index text files (txt, md)
     # embeddings have been removed from Hippo AI; files are stored directly only.
@@ -85,6 +128,7 @@ async def get_project_storage(project_id: int, db: DbSession, current_user=Depen
         "bucket": project_bucket_name(project) if can_use_s3_storage() else None,
         "key_prefix": project_object_prefix(project) if can_use_s3_storage() else None,
         "watched_folder": project.watched_folder,
+        "delivery_folder": getattr(project, "delivery_folder", None),
         "files": [
             {
                 "filename": item.filename,

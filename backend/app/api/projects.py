@@ -17,12 +17,16 @@ from app.services.project_storage import delete_project_bucket, ensure_project_b
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
-def _normalize_shared_folder(folder: str | None) -> str | None:
+def _normalize_folder_list(folder: str | None, *, required: bool = False) -> str | None:
     raw = (folder or '').strip()
     if not raw:
+        if required:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte mindestens einen Ordner auswählen.")
         return None
     parts = [part.strip() for part in raw.replace(';', '\n').splitlines() if part.strip()]
     if not parts:
+        if required:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte mindestens einen Ordner auswählen.")
         return None
     normalized: list[str] = []
     for part in parts:
@@ -53,7 +57,8 @@ async def _load_project(db: DbSession, project_id: int) -> Project:
 
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(payload: ProjectCreate, db: DbSession, current_user=Depends(get_current_user)):
-    watched_folder = _normalize_shared_folder(payload.watched_folder)
+    watched_folder = _normalize_folder_list(payload.watched_folder, required=True)
+    delivery_folder = _normalize_folder_list(payload.delivery_folder, required=True)
     pcloud_path, pcloud_folder_id = _normalize_pcloud_reference(payload.pcloud_path, payload.pcloud_folder_id)
 
     stmt = insert(Project).values(
@@ -61,6 +66,7 @@ async def create_project(payload: ProjectCreate, db: DbSession, current_user=Dep
         description=payload.description,
         owner_id=current_user.id,
         watched_folder=watched_folder,
+        delivery_folder=delivery_folder,
         pcloud_path=pcloud_path,
         pcloud_folder_id=pcloud_folder_id,
     ).returning(Project)
@@ -121,12 +127,14 @@ async def update_project(project_id: int, payload: ProjectCreate, db: DbSession,
     if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
 
-    watched_folder = _normalize_shared_folder(payload.watched_folder)
+    watched_folder = _normalize_folder_list(payload.watched_folder, required=True)
+    delivery_folder = _normalize_folder_list(payload.delivery_folder, required=True)
     pcloud_path, pcloud_folder_id = _normalize_pcloud_reference(payload.pcloud_path, payload.pcloud_folder_id)
     updates = {
         "name": payload.name.strip(),
         "description": payload.description,
         "watched_folder": watched_folder,
+        "delivery_folder": delivery_folder,
         "pcloud_path": pcloud_path,
         "pcloud_folder_id": pcloud_folder_id,
     }

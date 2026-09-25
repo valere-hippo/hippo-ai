@@ -47,26 +47,35 @@ def _safe_name(value: str | None) -> str:
     return candidate[:240] or "attachment"
 
 
-def _safe_relative_project_path(value: str | None) -> Path:
+def _normalize_storage_path(value: str | None) -> str:
     raw = str(value or "").strip().replace("\\", "/")
     if not raw:
         raise ValueError("filename is required")
-    candidate = Path(raw)
-    if candidate.is_absolute():
-        raise ValueError("absolute paths are not allowed")
+    raw = raw.lstrip("/")
     parts: list[str] = []
-    for part in candidate.parts:
+    for part in raw.split("/"):
         if part in ("", "."):
             continue
         if part == "..":
             raise ValueError("path traversal is not allowed")
-        cleaned = re.sub(r"[^A-Za-z0-9._ -]+", "_", part).strip()
+        cleaned = re.sub(r"[^A-Za-z0-9._: -]+", "_", part).strip()
         if not cleaned:
             cleaned = "attachment"
         parts.append(cleaned[:240])
     if not parts:
         raise ValueError("filename is required")
-    return Path(*parts)
+    return "/".join(parts)
+
+
+def _safe_relative_project_path(value: str | None) -> Path:
+    return Path(_normalize_storage_path(value))
+
+
+def _s3_project_object_path(filename: str) -> str:
+    normalized = _normalize_storage_path(filename)
+    if normalized.startswith(("sources/", "attachments/")):
+        return normalized
+    return f"sources/{normalized}"
 
 
 def _local_project_root(project: Any) -> Path:
@@ -189,8 +198,7 @@ def has_s3_storage() -> bool:
 
 
 def can_use_s3_storage() -> bool:
-    # Shared-folder mode uses the local project directory as the single source of truth.
-    return False
+    return has_s3_storage()
 
 
 def s3_client():
@@ -238,9 +246,6 @@ def ensure_project_bucket(project: Any) -> str | None:
 
 
 def delete_project_bucket(project: Any) -> None:
-    if getattr(project, "watched_folder", None):
-        return
-
     client = s3_client()
     if client is None:
         return
@@ -259,9 +264,6 @@ def delete_project_bucket(project: Any) -> None:
 
 
 def clear_project_storage(project: Any) -> dict[str, int]:
-    if getattr(project, "watched_folder", None):
-        return {"deleted_remote": 0, "deleted_local": 0}
-
     deleted_remote = 0
     deleted_local = 0
 
@@ -374,7 +376,7 @@ def _local_project_dir(project: Any) -> Path:
     return path
 
 
-def store_project_file(project: Any, filename: str, content: bytes, content_type: str | None = None) -> dict[str, Any]:
+def store_project_file(project: Any, filename: str, content: bytes, content_type: str | None = None, storage_path: str | None = None) -> dict[str, Any]:
     safe_filename = _safe_name(filename)
     if can_use_s3_storage():
         client = s3_client()
@@ -383,7 +385,8 @@ def store_project_file(project: Any, filename: str, content: bytes, content_type
             pass
         else:
             ensure_project_bucket(project)
-            key = f"{project_object_prefix(project)}{safe_filename}"
+            object_path = _normalize_storage_path(storage_path or filename)
+            key = f"{project_object_prefix(project)}{object_path}"
             client.put_object(
                 Bucket=project_bucket_name(project),
                 Key=key,
@@ -391,17 +394,17 @@ def store_project_file(project: Any, filename: str, content: bytes, content_type
                 ContentType=content_type or mimetypes.guess_type(safe_filename)[0] or "application/octet-stream",
             )
             return {
-                "filename": safe_filename,
+                "filename": object_path,
                 "storage": "s3",
                 "bucket": project_bucket_name(project),
                 "key": key,
             }
 
     try:
-        path, rel_name = _resolve_local_project_file(project, filename)
+        path, rel_name = _resolve_local_project_file(project, storage_path or filename)
     except Exception:
-        path = _local_project_root(project) / safe_filename
-        rel_name = safe_filename
+        path = _local_project_root(project) / _safe_relative_project_path(storage_path or filename)
+        rel_name = _normalize_storage_path(storage_path or filename)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
     return {
@@ -411,7 +414,12 @@ def store_project_file(project: Any, filename: str, content: bytes, content_type
     }
 
 
-def list_project_files(project: Any) -> list[ProjectFile]:
+def list_project_files(project: Any, source_prefixes: list[str] | None = None) -> list[ProjectFile]:
+    normalized_prefixes = [
+        _normalize_storage_path(prefix).rstrip('/')
+        for prefix in (source_prefixes or [])
+        if str(prefix or '').strip()
+    ]
     if _project_uses_pcloud(project):
         try:
             files = _pcloud_folder_files(project)
@@ -420,6 +428,8 @@ def list_project_files(project: Any) -> list[ProjectFile]:
 
         items: list[ProjectFile] = []
         for entry in files:
+            if normalized_prefixes and not any(entry.path.lstrip('/').startswith(f'{prefix}/') or entry.path.lstrip('/') == prefix for prefix in normalized_prefixes):
+                continue
             items.append(
                 ProjectFile(
                     filename=entry.path,
@@ -435,17 +445,20 @@ def list_project_files(project: Any) -> list[ProjectFile]:
         if client is None:
             return []
         try:
-            result = client.list_objects_v2(Bucket=project_bucket_name(project), Prefix=project_object_prefix(project))
+            result = client.list_objects_v2(Bucket=project_bucket_name(project), Prefix=f"{project_object_prefix(project)}sources/")
         except ClientError:
             return []
         items: list[ProjectFile] = []
+        prefix = f"{project_object_prefix(project)}sources/"
         for entry in result.get("Contents", []) or []:
             key = entry.get("Key")
-            if not key:
+            if not key or not key.startswith(prefix):
                 continue
             if key.endswith("/"):
                 continue
-            filename = key.split("/")[-1]
+            filename = key[len(prefix):]
+            if normalized_prefixes and not any(filename == source or filename.startswith(f'{source}/') for source in normalized_prefixes):
+                continue
             items.append(
                 ProjectFile(
                     filename=filename,
@@ -476,7 +489,7 @@ def read_project_file(project: Any, filename: str) -> tuple[bytes, str, str]:
         client = s3_client()
         if client is None:
             raise RuntimeError("S3 client unavailable")
-        key = f"{project_object_prefix(project)}{safe_filename}"
+        key = f"{project_object_prefix(project)}{_s3_project_object_path(filename)}"
         response = client.get_object(Bucket=project_bucket_name(project), Key=key)
         body = response["Body"].read()
         return body, response.get("ContentType") or content_type, "s3"
@@ -496,7 +509,7 @@ def delete_project_file(project: Any, filename: str) -> dict[str, int | str]:
     if can_use_s3_storage():
         client = s3_client()
         if client is not None:
-            key = f"{project_object_prefix(project)}{safe_filename}"
+            key = f"{project_object_prefix(project)}{_s3_project_object_path(filename)}"
             try:
                 client.delete_object(Bucket=project_bucket_name(project), Key=key)
                 deleted_remote = 1
@@ -1254,7 +1267,7 @@ def extract_project_file_preview(filename: str, data: bytes, content_type: str |
 IMAGE_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 
 
-async def build_project_files_context(project: Any, max_files: int | None = None, include_previews: bool = True, question: str | None = None) -> str:
+async def build_project_files_context(project: Any, max_files: int | None = None, include_previews: bool = True, question: str | None = None, source_prefixes: list[str] | None = None) -> str:
     try:
         pcloud_path_raw = getattr(project, "pcloud_path", None)
         pcloud_folder_id_raw = getattr(project, "pcloud_folder_id", None)
@@ -1303,8 +1316,19 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                     pcloud_lines[-1] = "- … Kontext wegen Länge gekürzt."
                     break
             return "\n".join(pcloud_lines)
-        else:
-            files = list_project_files(project)
+
+        if source_prefixes is not None:
+            files = list_project_files(project, source_prefixes=source_prefixes)
+            if max_files is not None:
+                files = files[:max_files]
+            if not files:
+                return "Im ausgewählten Ordnersatz sind aktuell keine Dateien sichtbar."
+            lines = [f"Im ausgewählten Ordnersatz des Projekts sind {len(files)} sichtbare Dateien vorhanden:"]
+            for item in sorted(files, key=lambda entry: entry.filename.lower()):
+                lines.append(f"- {item.filename} ({item.size} bytes, Speicherung {item.storage})")
+            return "\n".join(lines)
+
+        files = list_project_files(project)
     except FileNotFoundError as exc:
         folder = str(getattr(project, "watched_folder", "") or "").strip()
         return (

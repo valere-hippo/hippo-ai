@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, ipcMain, dialog, clipboard } = require('electr
 const { spawn, spawnSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
+const mime = require('mime-types')
 const Tesseract = require('tesseract.js')
 
 function loadRuntimeConfig() {
@@ -164,6 +165,68 @@ function inspectProjectFolderAsync(folder, options = {}) {
   })
 }
 
+function scanProjectFolderFilesAsync(folder, options = {}) {
+  const raw = String(folder || '').trim()
+  const roots = raw.split(/[\n;]+/).map((value) => value.trim()).filter(Boolean)
+  const maxDepth = Number.isFinite(options.maxDepth) ? options.maxDepth : Infinity
+  const maxFiles = Number.isFinite(options.maxFiles) ? options.maxFiles : Infinity
+  const files = []
+
+  const walk = (root, dir, depth = 0) => {
+    if (files.length >= maxFiles || depth > maxDepth) return
+    let entries = []
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch (error) {
+      return
+    }
+    for (const entry of entries) {
+      const absPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(root, absPath, depth + 1)
+      } else if (entry.isFile()) {
+        try {
+          const stat = fs.statSync(absPath)
+          files.push({
+            root,
+            path: absPath,
+            relative_path: path.relative(root, absPath).split(path.sep).join('/'),
+            size: stat.size,
+            modified_at: stat.mtime.toISOString(),
+          })
+        } catch (error) {
+          // ignore unreadable entries
+        }
+      }
+      if (files.length >= maxFiles) return
+    }
+  }
+
+  for (const root of roots) {
+    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) continue
+    walk(root, root, 0)
+    if (files.length >= maxFiles) break
+  }
+
+  return { ok: true, files }
+}
+
+function readLocalFileBase64(filePath) {
+  const absPath = String(filePath || '').trim()
+  if (!absPath) return { ok: false, error: 'No file path provided' }
+  try {
+    const data = fs.readFileSync(absPath)
+    return {
+      ok: true,
+      base64: data.toString('base64'),
+      size: data.length,
+      contentType: mime.lookup(absPath) || 'application/octet-stream',
+    }
+  } catch (error) {
+    return { ok: false, error: error.message }
+  }
+}
+
 function createWindow () {
   const win = new BrowserWindow({
     width: 1440,
@@ -206,6 +269,22 @@ ipcMain.handle('select-folder', async () => {
   const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'multiSelections'] })
   if (result.canceled) return null
   return result.filePaths.length > 1 ? result.filePaths : result.filePaths[0]
+})
+
+ipcMain.handle('scan-project-folder-files', async (event, { folder, maxDepth = 999, maxFiles = 50000 } = {}) => {
+  try {
+    return scanProjectFolderFilesAsync(folder, { maxDepth, maxFiles })
+  } catch (error) {
+    return { ok: false, error: error.message }
+  }
+})
+
+ipcMain.handle('read-local-file', async (event, { path: filePath } = {}) => {
+  try {
+    return readLocalFileBase64(filePath)
+  } catch (error) {
+    return { ok: false, error: error.message }
+  }
 })
 
 ipcMain.handle('copy-to-clipboard', async (event, text) => {
