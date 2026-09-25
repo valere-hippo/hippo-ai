@@ -25,7 +25,22 @@ DOCUMENT_EXTENSIONS = frozenset({".pdf", ".docx", ".odt", ".rtf", ".txt", ".md"}
 SPREADSHEET_EXTENSIONS = frozenset({".xlsx", ".xls", ".xlsm", ".ods", ".csv"})
 PRESENTATION_EXTENSIONS = frozenset({".pptx", ".odp"})
 GEODATA_EXTENSIONS = frozenset({".shp", ".shx", ".dbf", ".prj", ".cpg", ".gpkg", ".geojson", ".kml", ".kmz", ".qgz", ".qgs"})
+AUDIO_EXTENSIONS = frozenset({".wav", ".mp3", ".m4a", ".aac", ".ogg", ".oga", ".webm", ".flac", ".opus"})
+VIDEO_EXTENSIONS = frozenset({".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v", ".mpg", ".mpeg"})
 ARCHIVE_EXTENSIONS = frozenset({".zip", ".7z", ".rar", ".tar", ".gz", ".tgz"})
+
+KNOWN_EXTENSIONS = frozenset().union(
+    IMAGE_EXTENSIONS,
+    DOCUMENT_EXTENSIONS,
+    SPREADSHEET_EXTENSIONS,
+    PRESENTATION_EXTENSIONS,
+    GEODATA_EXTENSIONS,
+    AUDIO_EXTENSIONS,
+    VIDEO_EXTENSIONS,
+    ARCHIVE_EXTENSIONS,
+)
+
+
 
 
 AUTO_TOOL_DEFINITIONS: tuple[AutoToolDefinition, ...] = (
@@ -87,6 +102,18 @@ AUTO_TOOL_DEFINITIONS: tuple[AutoToolDefinition, ...] = (
         parameters={"auto_generated": True, "kind": "geodata", "supported_extensions": sorted(GEODATA_EXTENSIONS)},
     ),
     AutoToolDefinition(
+        name="Medienleser",
+        description="Liest Audio- und Videodateien technisch aus und bereitet sie für die Inhaltsanalyse vor.",
+        instructions=(
+            "Nutze dieses Tool für Audio- und Videodateien wie WAV, MP3, M4A, MP4, MKV, MOV, AVI und WebM. "
+            "Erfasse zuerst technische Metadaten wie Dauer, Streams, Auflösung, Codecs und Tonspuren. "
+            "Wenn Sprachanteile vorhanden sind, transkribiere oder extrahiere sie, bevor du eine inhaltliche Zusammenfassung schreibst. "
+            "Wenn ein Video visuell relevant ist, arbeite mit extrahierten Einzelbildern oder einem visuellen Tool weiter."
+        ),
+        extensions=AUDIO_EXTENSIONS | VIDEO_EXTENSIONS,
+        parameters={"auto_generated": True, "kind": "media", "supported_extensions": sorted(AUDIO_EXTENSIONS | VIDEO_EXTENSIONS)},
+    ),
+    AutoToolDefinition(
         name="Archiv-Inspektor",
         description="Erkennt komprimierte Anhänge und behandelt sie als Quellen für weitere Dateitypen.",
         instructions=(
@@ -97,6 +124,28 @@ AUTO_TOOL_DEFINITIONS: tuple[AutoToolDefinition, ...] = (
         parameters={"auto_generated": True, "kind": "archive", "supported_extensions": sorted(ARCHIVE_EXTENSIONS)},
     ),
 )
+
+
+def _generic_tool_definition(extension: str) -> AutoToolDefinition:
+    normalized = extension.lower().strip()
+    normalized = normalized if normalized.startswith('.') else f'.{normalized}'
+    name = f"Dateityp-Inspektor {normalized}"
+    description = f"Liest und bewertet Dateien mit der Erweiterung {normalized}."
+    instructions = (
+        f"Nutze dieses Tool für Dateien mit der Endung {normalized}. "
+        "Versuche zuerst Metadaten, Text, Header, Containerstrukturen und eingebettete Inhalte auszulesen. "
+        "Wenn das Format unbekannt ist, beschreibe Dateigröße, grobe Struktur, mögliche Unterdateien und erkennbare Hinweise. "
+        "Erzeuge daraus eine technische, lesbare Zusammenfassung für Berichte."
+    )
+    return AutoToolDefinition(
+        name=name,
+        description=description,
+        instructions=instructions,
+        extensions=frozenset({normalized}),
+        parameters={"auto_generated": True, "kind": "generic_format", "extension": normalized, "supported_extensions": [normalized]},
+    )
+
+
 
 
 async def ensure_project_file_tools(db: Any, project_id: int, source_prefixes: list[str] | None = None) -> list[str]:
@@ -138,6 +187,31 @@ async def ensure_project_file_tools(db: Any, project_id: int, source_prefixes: l
             created_or_updated.append(definition.name)
             continue
 
+        stmt = insert(AITool).values(
+            name=definition.name,
+            description=definition.description,
+            instructions=definition.instructions,
+            tool_type="workflow",
+            command=None,
+            arguments=None,
+            working_directory=None,
+            endpoint=None,
+            method=None,
+            platform=None,
+            timeout_seconds=None,
+            requires_confirmation=False,
+            parameters=definition.parameters,
+            is_enabled=True,
+        )
+        await db.execute(stmt)
+        existing_names.add(definition.name)
+        created_or_updated.append(definition.name)
+
+    unknown_extensions = sorted({ext for ext in detected_extensions if ext and ext not in KNOWN_EXTENSIONS})
+    for ext in unknown_extensions[:6]:
+        definition = _generic_tool_definition(ext)
+        if definition.name in existing_names:
+            continue
         stmt = insert(AITool).values(
             name=definition.name,
             description=definition.description,

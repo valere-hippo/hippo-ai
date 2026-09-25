@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import mimetypes
 import os
 import re
 import sqlite3
 import shutil
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from email.utils import parsedate_to_datetime
@@ -916,6 +918,111 @@ def _extract_text_from_pptx_bytes(data: bytes) -> str:
         return ""
 
 
+AUDIO_FILE_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".oga", ".webm", ".flac", ".opus"}
+VIDEO_FILE_EXTENSIONS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v", ".mpg", ".mpeg"}
+MEDIA_FILE_EXTENSIONS = AUDIO_FILE_EXTENSIONS | VIDEO_FILE_EXTENSIONS
+
+
+def _probe_media_metadata(path: Path) -> str:
+    try:
+        command = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration,size,bit_rate:stream=index,codec_type,codec_name,width,height,channels,sample_rate,avg_frame_rate",
+            "-of",
+            "json",
+            str(path),
+        ]
+        proc = subprocess.run(command, capture_output=True, text=True, timeout=20)
+        if proc.returncode != 0 or not proc.stdout.strip():
+            return ""
+        data = json.loads(proc.stdout)
+    except Exception:
+        return ""
+
+    lines: list[str] = []
+    fmt = data.get("format") or {}
+    duration = fmt.get("duration")
+    if duration:
+        try:
+            seconds = float(duration)
+            minutes = int(seconds // 60)
+            secs = seconds - minutes * 60
+            lines.append(f"Dauer: {minutes:02d}:{secs:05.2f}")
+        except Exception:
+            lines.append(f"Dauer: {duration}s")
+    size = fmt.get("size")
+    if size:
+        try:
+            megabytes = int(size) / (1024 * 1024)
+            lines.append(f"Größe: {megabytes:.2f} MB")
+        except Exception:
+            pass
+    streams = data.get("streams") or []
+    if streams:
+        stream_lines = []
+        for stream in streams[:8]:
+            ctype = stream.get("codec_type") or "stream"
+            codec = stream.get("codec_name") or "unknown"
+            details = [f"{ctype}:{codec}"]
+            if stream.get("width") and stream.get("height"):
+                details.append(f"{stream.get('width')}x{stream.get('height')}")
+            if stream.get("channels"):
+                details.append(f"{stream.get('channels')} ch")
+            if stream.get("sample_rate"):
+                details.append(f"{stream.get('sample_rate')} Hz")
+            if stream.get("avg_frame_rate") and stream.get("avg_frame_rate") != "0/0":
+                details.append(f"fps {stream.get('avg_frame_rate')}")
+            stream_lines.append(" ".join(details))
+        if stream_lines:
+            lines.append("Streams: " + "; ".join(stream_lines))
+    return "\n".join(lines)
+
+
+async def _summarize_media_file(project: Any, filename: str) -> str:
+    try:
+        if _project_uses_pcloud(project):
+            data, content_type, _storage = await asyncio.to_thread(read_project_file, project, filename)
+        else:
+            data, content_type, _storage = read_project_file(project, filename)
+    except Exception:
+        return ""
+
+    ext = Path(filename).suffix.lower()
+    safe_filename = Path(filename).name
+    with TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir) / safe_filename
+        try:
+            tmp_path.write_bytes(data)
+        except Exception:
+            return ""
+
+        meta = _probe_media_metadata(tmp_path)
+        if ext in AUDIO_FILE_EXTENSIONS:
+            try:
+                from app.services.speech_to_text import transcribe_audio_file
+
+                transcript = await transcribe_audio_file(tmp_path)
+            except Exception:
+                transcript = ""
+            parts = ["[Audio]"]
+            if meta:
+                parts.append(meta)
+            if transcript:
+                parts.append(f"Transkript: {_truncate(transcript, 1500)}")
+            return "\n".join(parts).strip()
+
+        if ext in VIDEO_FILE_EXTENSIONS:
+            parts = ["[Video]"]
+            if meta:
+                parts.append(meta)
+            parts.append("Hinweis: Video wurde technisch über die Streams und Metadaten erfasst. Für eine inhaltliche Bildanalyse können Einzelbilder aus dem Video extrahiert werden.")
+            return "\n".join(parts).strip()
+
+        return meta
+
 
 def _extract_text_from_plain_bytes(data: bytes) -> str:
     for encoding in ("utf-8", "utf-16", "latin-1"):
@@ -1000,6 +1107,25 @@ def _extract_shapefile_context(project: Any, stem: str, files_by_name: dict[str,
                         "- Bounding Box: "
                         f"{bbox[0]:.6f}, {bbox[1]:.6f}, {bbox[2]:.6f}, {bbox[3]:.6f}"
                     )
+                try:
+                    shapes = list(reader.shapes())
+                except Exception:
+                    shapes = []
+                if shapes:
+                    parts.append(f"- Geometrien: {len(shapes)} Objekte")
+                    sample_summaries = []
+                    for idx, shape in enumerate(shapes[:3], start=1):
+                        points = _shape_points(shape)
+                        if not points:
+                            sample_summaries.append(f"Objekt {idx}: keine Punktliste verfügbar")
+                            continue
+                        first_points = ", ".join(f"{x:.5f}/{y:.5f}" for x, y in points[:3])
+                        summary = f"Objekt {idx}: {len(points)} Punkte"
+                        if first_points:
+                            summary += f"; Startpunkte {first_points}"
+                        sample_summaries.append(summary)
+                    if sample_summaries:
+                        parts.append("- Geometrie-Beispiele: " + " | ".join(sample_summaries))
                 if fields:
                     formatted_fields = ", ".join(f"{field[0]} ({field[1]})" for field in fields[:10])
                     parts.append(f"- Felder: {formatted_fields}")
@@ -1543,6 +1669,7 @@ async def build_project_files_context(project: Any, max_files: int | None = None
     files_by_name = {item.filename: item for item in files}
     processed: set[str] = set()
     image_summaries: dict[str, asyncio.Task[str]] = {}
+    media_summaries: dict[str, asyncio.Task[str]] = {}
 
     from app.services.vision_analysis import summarize_project_image_file
 
@@ -1551,6 +1678,8 @@ async def build_project_files_context(project: Any, max_files: int | None = None
         ext = Path(item.filename).suffix.lower()
         if ext in IMAGE_FILE_EXTENSIONS or lower_name.endswith(tuple(IMAGE_FILE_EXTENSIONS)):
             image_summaries[item.filename] = asyncio.create_task(summarize_project_image_file(project, item.filename))
+        elif ext in MEDIA_FILE_EXTENSIONS:
+            media_summaries[item.filename] = asyncio.create_task(_summarize_media_file(project, item.filename))
 
     lines = [
         f"Im gemeinsamen Ordner des Projekts sind {len(files)} sichtbare Dateien vorhanden:",
@@ -1589,6 +1718,22 @@ async def build_project_files_context(project: Any, max_files: int | None = None
         summary = ""
         if ext in IMAGE_FILE_EXTENSIONS or lower_name.endswith(tuple(IMAGE_FILE_EXTENSIONS)):
             task = image_summaries.get(item.filename)
+            if task is not None:
+                try:
+                    summary = (await task).strip()
+                except Exception:
+                    summary = ""
+            if not summary:
+                try:
+                    if _project_uses_pcloud(project):
+                        content, content_type, _storage = await asyncio.to_thread(read_project_file, project, item.filename)
+                    else:
+                        content, content_type, _storage = read_project_file(project, item.filename)
+                    summary = extract_project_file_preview(item.filename, content, content_type)
+                except Exception:
+                    summary = ""
+        elif ext in MEDIA_FILE_EXTENSIONS:
+            task = media_summaries.get(item.filename)
             if task is not None:
                 try:
                     summary = (await task).strip()
