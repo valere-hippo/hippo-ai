@@ -174,7 +174,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "If the user explicitly requests an image or PNG, return a real file block with an image filename instead of prose instructions. If the user only wants analysis or a textual answer, respond in text and do not create an image file.\n"
             "If the user asks to analyze documents from the project folders, use the project context and answer in the user's language.\n"
             "If project_folder_context is present, treat it as the source of truth for the project folder contents and do not claim you lack local filesystem access.\n"
-            "For project-folder questions, produce a detailed answer with overview, file list, per-file observations, and a short conclusion.\n"
+            "For project-folder questions, produce a detailed answer that is content-first: describe what the files contain, what the extracted text / geometry / OCR / transcript says, and what technical conclusions follow. Do not lead with file size or filename inventory unless it is genuinely relevant.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
             "If an image, screenshot, or document is attached, rely on the direct attachment data in the prompt and any locally extracted text; do not claim that you cannot read attachments.\n"
             "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, and spatial clusters.\n"

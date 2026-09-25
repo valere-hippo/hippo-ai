@@ -466,7 +466,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                     "content": (
                         "Kontext der lokalen Projektordner:\n"
                         f"{project_files_context}\n\n"
-                        "Nutze diesen Kontext, wenn der Benutzer die Dateien oder den Ordner analysieren möchte, antworte ausführlich auf Deutsch und vermeide Tabellen oder übertriebenes Markdown."
+                        "Nutze diesen Kontext, wenn der Benutzer die Dateien oder den Ordner analysieren möchte, antworte ausführlich auf Deutsch und bleibe content-first: erst Inhalt, Extraktion und technische Schlussfolgerung, dann erst optional Dateinamen. Vermeide Tabellen oder übertriebenes Markdown."
                     ),
                 },
             )

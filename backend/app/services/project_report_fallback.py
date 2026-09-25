@@ -16,10 +16,17 @@ def _strip_bullet_prefix(line: str) -> str:
     return re.sub(r"^[\s•\-–]+", "", (line or "")).strip()
 
 
+def _is_file_marker(line: str) -> bool:
+    stripped = _strip_bullet_prefix(line)
+    return stripped.lower().startswith(("datei:", "dateien:", "dateiliste:", "enthaltende dateien:", "enthält"))
+
+
 def _summarize_context_lines(context_text: str, max_items: int = 14) -> list[str]:
     lines = _normalize_lines(context_text)
     bullets: list[str] = []
     for line in lines:
+        if _is_file_marker(line):
+            continue
         stripped = _strip_bullet_prefix(line)
         if not stripped:
             continue
@@ -73,6 +80,8 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
 
     if context_lines:
         for line in context_lines[:60]:
+            if _is_file_marker(line):
+                continue
             report.append(f"- {_strip_bullet_prefix(line)}")
     else:
         report.append("- Kein detaillierter Projektkontext verfügbar.")

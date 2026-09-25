@@ -1565,17 +1565,23 @@ async def build_project_files_context(project: Any, max_files: int | None = None
             preview_budget = 10 if detailed_report else (5 if include_previews else 0)
             preview_max_chars = 800 if detailed_report else 120
             for index, entry in enumerate(files):
-                line = f"- {entry.path}"
-                if index < preview_budget:
-                    try:
-                        if _project_uses_pcloud(project):
-                            content, content_type, _storage = await asyncio.to_thread(read_project_file, project, entry.path)
-                        else:
-                            content, content_type, _storage = read_project_file(project, entry.path)
-                        summary = extract_project_file_preview(entry.path, content, content_type)
-                    except Exception:
-                        summary = ""
+                try:
+                    if _project_uses_pcloud(project):
+                        content, content_type, _storage = await asyncio.to_thread(read_project_file, project, entry.path)
+                    else:
+                        content, content_type, _storage = read_project_file(project, entry.path)
+                    summary = extract_project_file_preview(entry.path, content, content_type)
+                except Exception:
+                    summary = ""
+                if detailed_report:
+                    line_parts = []
                     if summary:
+                        line_parts.append(summary)
+                    line_parts.append(f"Datei: {entry.path}")
+                    line = "\n".join(line_parts)
+                else:
+                    line = f"- {entry.path}"
+                    if index < preview_budget and summary:
                         line += f" — {_truncate(summary, preview_max_chars)}"
                 pcloud_lines.append(line)
                 if sum(len(part) + 1 for part in pcloud_lines) > 12000:
@@ -1598,17 +1604,23 @@ async def build_project_files_context(project: Any, max_files: int | None = None
             preview_budget = 10 if detailed_report else (5 if include_previews else 0)
             preview_max_chars = 800 if detailed_report else 180
             for index, item in enumerate(sorted(files, key=lambda entry: entry.filename.lower())):
-                line = f"- {item.filename} ({item.size} bytes, Speicherung {item.storage})"
-                if index < preview_budget:
-                    try:
-                        if _project_uses_pcloud(project):
-                            content, content_type, _storage = await asyncio.to_thread(read_project_file, project, item.filename)
-                        else:
-                            content, content_type, _storage = read_project_file(project, item.filename)
-                        summary = extract_project_file_preview(item.filename, content, content_type)
-                    except Exception:
-                        summary = ""
+                try:
+                    if _project_uses_pcloud(project):
+                        content, content_type, _storage = await asyncio.to_thread(read_project_file, project, item.filename)
+                    else:
+                        content, content_type, _storage = read_project_file(project, item.filename)
+                    summary = extract_project_file_preview(item.filename, content, content_type)
+                except Exception:
+                    summary = ""
+                if detailed_report:
+                    line_parts = []
                     if summary:
+                        line_parts.append(summary)
+                    line_parts.append(f"Datei: {item.filename}")
+                    line = "\n".join(line_parts)
+                else:
+                    line = f"- {item.filename} ({item.size} bytes, Speicherung {item.storage})"
+                    if index < preview_budget and summary:
                         line += f" — {_truncate(summary, preview_max_chars)}"
                 lines.append(line)
                 if sum(len(part) + 1 for part in lines) > 12000:
