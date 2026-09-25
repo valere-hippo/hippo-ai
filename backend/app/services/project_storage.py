@@ -125,27 +125,33 @@ def _iter_local_project_files(project: Any) -> list[ProjectFile]:
 
 
 def _build_local_project_tree_context(project: Any) -> str:
-    root = _local_project_root(project)
-    lines = [f"Ordnerbaum des gemeinsamen Projektordners: {root}"]
-    for current_root, dirs, files in os.walk(root):
-        dirs.sort()
-        files.sort()
-        current = Path(current_root)
-        rel = current.relative_to(root)
-        depth = 0 if rel == Path(".") else len(rel.parts)
-        indent = "  " * depth
-        label = "." if rel == Path(".") else rel.as_posix()
-        lines.append(f"{indent}[Ordner] {label}")
-        for directory in dirs:
-            rel_dir = (rel / directory) if rel != Path(".") else Path(directory)
-            lines.append(f"{indent}  [Ordner] {rel_dir.as_posix()}")
-        for filename in files:
-            rel_file = (rel / filename) if rel != Path(".") else Path(filename)
-            try:
-                size = (current / filename).stat().st_size
-            except OSError:
-                size = 0
-            lines.append(f"{indent}  - {rel_file.as_posix()} ({size} bytes)")
+    folders = _local_project_folders(project)
+    if not folders:
+        root = _local_project_root(project)
+        folders = [root]
+    lines = [f"Ordnerbaum des gemeinsamen Projektordners: {', '.join(str(folder) for folder in folders)}"]
+    for folder_index, root in enumerate(folders, start=1):
+        folder_label = root.name or f"folder-{folder_index}"
+        lines.append(f"[Ordnerquelle] {folder_label}: {root}")
+        for current_root, dirs, files in os.walk(root):
+            dirs.sort()
+            files.sort()
+            current = Path(current_root)
+            rel = current.relative_to(root)
+            depth = 0 if rel == Path(".") else len(rel.parts)
+            indent = "  " * depth
+            label = "." if rel == Path(".") else rel.as_posix()
+            lines.append(f"{indent}[Ordner] {label}")
+            for directory in dirs:
+                rel_dir = (rel / directory) if rel != Path(".") else Path(directory)
+                lines.append(f"{indent}  [Ordner] {rel_dir.as_posix()}")
+            for filename in files:
+                rel_file = (rel / filename) if rel != Path(".") else Path(filename)
+                try:
+                    size = (current / filename).stat().st_size
+                except OSError:
+                    size = 0
+                lines.append(f"{indent}  - {folder_label}/{rel_file.as_posix()} ({size} bytes)")
     return "\n".join(lines)
 
 

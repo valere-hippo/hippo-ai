@@ -378,15 +378,15 @@ function getContextProject() {
   return state.projects.find((project) => project.id === state.selectedProjectId) || null
 }
 
-function splitProjectFolders(folderValue) {
+function normalizeProjectFolderInput(folderValue) {
   return String(folderValue || '')
-    .split(/\n+/)
+    .split(/[\n;]+/)
     .map((value) => value.trim())
     .filter(Boolean)
 }
 
 function getPrimaryProjectFolder(project) {
-  return splitProjectFolders(project?.watched_folder)[0] || ''
+  return normalizeProjectFolderInput(project?.watched_folder)[0] || ''
 }
 
 function projectFolderConsentKey(folder) {
@@ -398,7 +398,7 @@ function hasProjectFolderConsent(folder) {
 }
 
 async function requestProjectFolderConsent(project) {
-  const folder = getPrimaryProjectFolder(project)
+  const folder = String(project?.watched_folder || '').trim()
   if (!folder) return false
   if (hasProjectFolderConsent(folder)) return true
 
@@ -447,7 +447,7 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
   state.projectFolderScanState.set(project.id, 'loading')
   try {
     const folderInfo = await window.electron.inspectProjectFolder({
-      folder: getPrimaryProjectFolder(project),
+      folder: project.watched_folder,
       maxDepth: 999,
       maxEntries: 999999,
       maxTextChars: 20000,
@@ -465,7 +465,7 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
 }
 
 function queueProjectFolderRefresh(project) {
-  if (!project?.id || !getPrimaryProjectFolder(project) || (project.pcloud_path && project.pcloud_folder_id)) return
+  if (!project?.id || !project.watched_folder || (project.pcloud_path && project.pcloud_folder_id)) return
   if (state.projectFolderScanState.get(project.id) === 'loading') return
   void refreshProjectFolderContext(project, { force: true }).then(() => {
     if (state.selectedProjectId === project.id) {
@@ -805,7 +805,7 @@ function renderContext() {
           : scanState === 'error'
             ? 'Ordneranalyse fehlgeschlagen'
             : ''
-  const localFolders = splitProjectFolders(project?.watched_folder)
+  const localFolders = normalizeProjectFolderInput(project?.watched_folder)
   const projectLabel = project
     ? `Projekt: ${project.name}${localFolders.length ? ` · Lokal: ${localFolders.join(' | ')}` : ''}${project.pcloud_path ? ` · pCloud: ${project.pcloud_path}` : ''}${project.pcloud_folder_id ? ` · folderid: ${project.pcloud_folder_id}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}`
     : ''
@@ -859,7 +859,7 @@ function renderProjects() {
     const subtitle = document.createElement('div')
     subtitle.className = 'item-subtitle'
     const parts = []
-    const localFolders = splitProjectFolders(project.watched_folder)
+    const localFolders = normalizeProjectFolderInput(project.watched_folder)
     if (localFolders.length) parts.push(`Lokal: ${localFolders.join(' · ')}`)
     if (project.pcloud_path && project.pcloud_folder_id) parts.push(`pCloud: ${project.pcloud_path} #${project.pcloud_folder_id}`)
     subtitle.textContent = parts.length ? parts.join(' · ') : 'Kein Ordner verknüpft'
