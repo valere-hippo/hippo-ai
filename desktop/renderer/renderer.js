@@ -812,13 +812,37 @@ function renderContext() {
   const projectLabel = project
     ? `Projekt: ${project.name}${localFolders.length ? ` · Lokal: ${localFolders.join(' | ')}` : ''}${project.pcloud_path ? ` · pCloud: ${project.pcloud_path}` : ''}${project.pcloud_folder_id ? ` · folderid: ${project.pcloud_folder_id}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}`
     : ''
+  els.selectedInfo.innerHTML = ''
   if (state.currentConversationId) {
     const conversation = state.conversations.find((item) => item.id === state.currentConversationId)
     els.pageTitle.textContent = getConversationTitle(conversation)
-    els.selectedInfo.textContent = projectLabel || 'Globale Unterhaltung'
   } else {
     els.pageTitle.textContent = project ? `Neuer Chat in ${project.name}` : 'Neuer Chat'
-    els.selectedInfo.textContent = projectLabel || 'Kein Projekt gewählt'
+  }
+  const label = document.createElement('span')
+  label.textContent = projectLabel || (state.currentConversationId ? 'Globale Unterhaltung' : 'Kein Projekt gewählt')
+  els.selectedInfo.appendChild(label)
+
+  if (project && localFolders.length && !(project?.pcloud_path && project?.pcloud_folder_id)) {
+    const action = document.createElement('button')
+    action.type = 'button'
+    action.className = 'ghost-action'
+    action.style.marginLeft = '8px'
+    action.style.padding = '4px 10px'
+    action.textContent = scanState === 'consent' ? 'Zugriff erlauben' : 'Projektordner prüfen'
+    action.addEventListener('click', async () => {
+      showLoader('Projektordner wird geprüft...')
+      try {
+        await refreshProjectFolderContext(project, { force: true })
+        if (state.currentConversationId) {
+          await openConversationById(state.currentConversationId)
+        }
+        renderContext()
+      } finally {
+        hideLoader()
+      }
+    })
+    els.selectedInfo.appendChild(action)
   }
 }
 
