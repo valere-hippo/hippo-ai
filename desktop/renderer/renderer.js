@@ -465,12 +465,13 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
 }
 
 function queueProjectFolderRefresh(project) {
-  if (!project?.id || !project.watched_folder || (project.pcloud_path && project.pcloud_folder_id)) return
-  if (state.projectFolderScanState.get(project.id) === 'loading') return
-  void refreshProjectFolderContext(project, { force: true }).then(() => {
+  if (!project?.id || !project.watched_folder || (project.pcloud_path && project.pcloud_folder_id)) return Promise.resolve('')
+  if (state.projectFolderScanState.get(project.id) === 'loading') return Promise.resolve(state.projectFolderContextCache.get(project.id) || '')
+  return refreshProjectFolderContext(project, { force: true }).then(() => {
     if (state.selectedProjectId === project.id) {
       renderContext()
     }
+    return state.projectFolderContextCache.get(project.id) || ''
   })
 }
 
@@ -1865,7 +1866,7 @@ async function selectProject(projectId) {
     state.projectFolderScanState.set(project.id, 'pcloud')
     renderContext()
   } else if (project) {
-    queueProjectFolderRefresh(project)
+    await queueProjectFolderRefresh(project)
   }
 
   if (state.currentConversationId) {
@@ -1900,7 +1901,7 @@ async function openConversation(conversation) {
     state.projectFolderScanState.set(project.id, 'pcloud')
     renderContext()
   } else if (project) {
-    queueProjectFolderRefresh(project)
+    await queueProjectFolderRefresh(project)
   }
   await openConversationById(conversation.id)
 }
@@ -4652,7 +4653,7 @@ async function sendChat() {
   if (project?.pcloud_path && project?.pcloud_folder_id) {
     state.projectFolderScanState.set(project.id, 'pcloud')
   } else if (projectFolder) {
-    queueProjectFolderRefresh(project)
+    await queueProjectFolderRefresh(project)
   }
   const projectFolderContext = project && !(project?.pcloud_path && project?.pcloud_folder_id) ? (state.projectFolderContextCache.get(project.id) || '') : ''
   const attachments = state.draftAttachments.map((attachment) => ({
