@@ -6,9 +6,9 @@ from datetime import datetime
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
-    watched_folder: str = Field(min_length=1, max_length=1000)
-    pcloud_path: str = Field(min_length=1, max_length=1000)
-    pcloud_folder_id: int = Field(ge=1)
+    watched_folder: str | None = Field(default=None, max_length=1000)
+    pcloud_path: str | None = Field(default=None, max_length=1000)
+    pcloud_folder_id: int | None = Field(default=None, ge=1)
 
 
 class ProjectResponse(BaseModel):

@@ -74,32 +74,53 @@ def _local_project_root(project: Any) -> Path:
 
 
 def _resolve_local_project_file(project: Any, filename: str) -> tuple[Path, str]:
-    root = _local_project_root(project)
-    rel_path = _safe_relative_project_path(filename)
-    candidate = (root / rel_path).resolve(strict=False)
+    folders = _local_project_folders(project) or [_local_project_dir(project)]
+    rel_input = _safe_relative_project_path(filename)
+    filename_text = rel_input.as_posix()
+
+    if len(folders) > 1 and '/' in filename_text:
+        prefix, remainder = filename_text.split('/', 1)
+        for root in folders:
+            if root.name == prefix:
+                candidate = (root / remainder).resolve(strict=False)
+                if candidate != root and root not in candidate.parents:
+                    raise ValueError("path escapes the project folder")
+                return candidate, filename_text
+
+    for root in folders:
+        candidate = (root / rel_input).resolve(strict=False)
+        if candidate == root or root in candidate.parents:
+            if candidate.exists():
+                return candidate, filename_text if len(folders) == 1 else f"{root.name}/{rel_input.as_posix()}"
+
+    root = folders[0]
+    candidate = (root / rel_input).resolve(strict=False)
     if candidate != root and root not in candidate.parents:
         raise ValueError("path escapes the project folder")
-    return candidate, rel_path.as_posix()
+    return candidate, filename_text if len(folders) == 1 else f"{root.name}/{rel_input.as_posix()}"
 
 
 def _iter_local_project_files(project: Any) -> list[ProjectFile]:
-    root = _local_project_root(project)
+    folders = _local_project_folders(project) or [_local_project_dir(project)]
     items: list[ProjectFile] = []
-    for entry in sorted(root.rglob("*"), key=lambda path: path.as_posix().lower()):
-        if not entry.is_file():
-            continue
-        try:
-            stat = entry.stat()
-        except OSError:
-            continue
-        items.append(
-            ProjectFile(
-                filename=entry.relative_to(root).as_posix(),
-                size=stat.st_size,
-                modified_at=datetime.fromtimestamp(stat.st_mtime),
-                storage="local",
+    for folder_index, root in enumerate(folders, start=1):
+        folder_label = root.name or f"folder-{folder_index}"
+        for entry in sorted(root.rglob("*"), key=lambda path: path.as_posix().lower()):
+            if not entry.is_file():
+                continue
+            try:
+                stat = entry.stat()
+            except OSError:
+                continue
+            rel = entry.relative_to(root).as_posix()
+            items.append(
+                ProjectFile(
+                    filename=f"{folder_label}/{rel}" if len(folders) > 1 else rel,
+                    size=stat.st_size,
+                    modified_at=datetime.fromtimestamp(stat.st_mtime),
+                    storage="local",
+                )
             )
-        )
     return items
 
 
@@ -319,17 +340,28 @@ def _pcloud_folder_files(project: Any) -> list[PCloudEntry]:
     return files
 
 
+def _local_project_folders(project: Any) -> list[Path]:
+    raw = str(getattr(project, "watched_folder", "") or "").strip()
+    if not raw:
+        return []
+    candidates = [part.strip() for part in re.split(r"[\n;]+", raw) if part.strip()]
+    folders: list[Path] = []
+    for candidate in candidates:
+        path = Path(candidate).expanduser()
+        if not path.exists() or not path.is_dir():
+            raise FileNotFoundError(candidate)
+        folders.append(path)
+    return folders
+
+
 def _local_project_dir(project: Any) -> Path:
     project_id = getattr(project, "id", None)
     if project_id is None:
         raise ValueError("project.id is required")
 
-    folder = str(getattr(project, "watched_folder", "") or "").strip()
-    if folder:
-        path = Path(folder).expanduser()
-        if not path.exists() or not path.is_dir():
-            raise FileNotFoundError(folder)
-        return path
+    folders = _local_project_folders(project)
+    if folders:
+        return folders[0]
 
     path = LOCAL_STORAGE_ROOT / str(project_id)
     path.mkdir(parents=True, exist_ok=True)

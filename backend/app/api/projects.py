@@ -17,29 +17,31 @@ from app.services.project_storage import delete_project_bucket, ensure_project_b
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
-def _normalize_shared_folder(folder: str) -> str:
+def _normalize_shared_folder(folder: str | None) -> str | None:
     raw = (folder or '').strip()
     if not raw:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen Ordnerpfad auswählen.")
+        return None
+    parts = [part.strip() for part in raw.replace(';', '\n').splitlines() if part.strip()]
+    if not parts:
+        return None
+    normalized: list[str] = []
+    for part in parts:
+        path = Path(part).expanduser()
+        if not (path.is_absolute() or PureWindowsPath(part).is_absolute()):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen absoluten Ordnerpfad auswählen.")
+        normalized.append(str(path))
+    return '\n'.join(dict.fromkeys(normalized))
 
-    path = Path(raw).expanduser()
-    if not (path.is_absolute() or PureWindowsPath(raw).is_absolute()):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen absoluten Ordnerpfad auswählen.")
 
-    return str(path)
-
-
-def _normalize_pcloud_reference(path: str | None, folder_id: int | str | None) -> tuple[str, int]:
-    if path in (None, ''):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte einen pCloud-Pfad auswählen.")
-    if folder_id in (None, ''):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte eine pCloud folderid auswählen.")
-
-    normalized_path = normalize_pcloud_path(path)
-    normalized_folder_id = normalize_pcloud_folder_id(folder_id)
-    if normalized_folder_id is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte eine gültige pCloud folderid auswählen.")
-    return normalized_path, normalized_folder_id
+def _normalize_pcloud_reference(path: str | None, folder_id: int | str | None) -> tuple[str | None, int | None]:
+    path_value = (path or '').strip() or None
+    folder_value = normalize_pcloud_folder_id(folder_id)
+    if path_value is None and folder_value is None:
+        return None, None
+    if not path_value or folder_value is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte entweder beide pCloud-Felder ausfüllen oder beide leer lassen.")
+    normalized_path = normalize_pcloud_path(path_value)
+    return normalized_path, folder_value
 
 async def _load_project(db: DbSession, project_id: int) -> Project:
     result = await db.execute(select(Project).where(Project.id == project_id))

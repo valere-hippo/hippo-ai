@@ -183,9 +183,9 @@ ipcMain.on('get-runtime-config', (event) => {
 })
 
 ipcMain.handle('select-folder', async () => {
-  const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+  const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'multiSelections'] })
   if (result.canceled) return null
-  return result.filePaths[0]
+  return result.filePaths.length > 1 ? result.filePaths : result.filePaths[0]
 })
 
 ipcMain.handle('copy-to-clipboard', async (event, text) => {

@@ -378,6 +378,17 @@ function getContextProject() {
   return state.projects.find((project) => project.id === state.selectedProjectId) || null
 }
 
+function splitProjectFolders(folderValue) {
+  return String(folderValue || '')
+    .split(/\n+/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+function getPrimaryProjectFolder(project) {
+  return splitProjectFolders(project?.watched_folder)[0] || ''
+}
+
 function projectFolderConsentKey(folder) {
   return `hippo.folder.consent:${String(folder || '').trim()}`
 }
@@ -387,7 +398,7 @@ function hasProjectFolderConsent(folder) {
 }
 
 async function requestProjectFolderConsent(project) {
-  const folder = String(project?.watched_folder || '').trim()
+  const folder = getPrimaryProjectFolder(project)
   if (!folder) return false
   if (hasProjectFolderConsent(folder)) return true
 
@@ -436,7 +447,7 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
   state.projectFolderScanState.set(project.id, 'loading')
   try {
     const folderInfo = await window.electron.inspectProjectFolder({
-      folder: project.watched_folder,
+      folder: getPrimaryProjectFolder(project),
       maxDepth: 999,
       maxEntries: 999999,
       maxTextChars: 20000,
@@ -454,7 +465,7 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
 }
 
 function queueProjectFolderRefresh(project) {
-  if (!project?.id || !project.watched_folder || (project.pcloud_path && project.pcloud_folder_id)) return
+  if (!project?.id || !getPrimaryProjectFolder(project) || (project.pcloud_path && project.pcloud_folder_id)) return
   if (state.projectFolderScanState.get(project.id) === 'loading') return
   void refreshProjectFolderContext(project, { force: true }).then(() => {
     if (state.selectedProjectId === project.id) {
@@ -794,8 +805,9 @@ function renderContext() {
           : scanState === 'error'
             ? 'Ordneranalyse fehlgeschlagen'
             : ''
+  const localFolders = splitProjectFolders(project?.watched_folder)
   const projectLabel = project
-    ? `Projekt: ${project.name}${project.watched_folder ? ` · Lokal: ${project.watched_folder}` : ''}${project.pcloud_path ? ` · pCloud: ${project.pcloud_path}` : ''}${project.pcloud_folder_id ? ` · folderid: ${project.pcloud_folder_id}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}`
+    ? `Projekt: ${project.name}${localFolders.length ? ` · Lokal: ${localFolders.join(' | ')}` : ''}${project.pcloud_path ? ` · pCloud: ${project.pcloud_path}` : ''}${project.pcloud_folder_id ? ` · folderid: ${project.pcloud_folder_id}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}`
     : ''
   if (state.currentConversationId) {
     const conversation = state.conversations.find((item) => item.id === state.currentConversationId)
@@ -847,7 +859,8 @@ function renderProjects() {
     const subtitle = document.createElement('div')
     subtitle.className = 'item-subtitle'
     const parts = []
-    if (project.watched_folder) parts.push(`Lokal: ${project.watched_folder}`)
+    const localFolders = splitProjectFolders(project.watched_folder)
+    if (localFolders.length) parts.push(`Lokal: ${localFolders.join(' · ')}`)
     if (project.pcloud_path && project.pcloud_folder_id) parts.push(`pCloud: ${project.pcloud_path} #${project.pcloud_folder_id}`)
     subtitle.textContent = parts.length ? parts.join(' · ') : 'Kein Ordner verknüpft'
     main.append(title, subtitle)
@@ -2056,16 +2069,16 @@ function buildProjectForm(defaults = {}) {
 
   const folderField = document.createElement('label')
   folderField.className = 'field'
-  folderField.innerHTML = '<span>Lokaler gemeinsamer Ordner für Berichte</span>'
+  folderField.innerHTML = '<span>Lokale Datenordner für Berichte</span>'
   const folderRow = document.createElement('div')
   folderRow.style.display = 'flex'
   folderRow.style.gap = '10px'
-  const folderInput = document.createElement('input')
+  folderRow.style.alignItems = 'flex-start'
+  const folderInput = document.createElement('textarea')
   folderInput.id = 'folder'
-  folderInput.type = 'text'
   folderInput.className = 'text-input'
-  folderInput.placeholder = 'Ordner auswählen'
-  folderInput.readOnly = true
+  folderInput.rows = 4
+  folderInput.placeholder = 'Mehrere Ordner möglich, je Zeile ein Pfad'
   folderInput.style.flex = '1'
   folderInput.value = defaults.folder || ''
   const folderButton = document.createElement('button')
@@ -2074,22 +2087,28 @@ function buildProjectForm(defaults = {}) {
   folderButton.textContent = 'Ordner wählen'
   folderButton.addEventListener('click', async () => {
     const selected = await window.electron.selectFolder()
-    if (selected) {
-      folderInput.value = selected
-      folderInput.dispatchEvent(new Event('input', { bubbles: true }))
-      folderInput.dispatchEvent(new Event('change', { bubbles: true }))
+    if (!selected) return
+    const selectedFolders = Array.isArray(selected) ? selected : [selected]
+    const existing = folderInput.value.split(/\n+/).map((value) => value.trim()).filter(Boolean)
+    const merged = [...existing]
+    for (const folder of selectedFolders) {
+      const normalized = String(folder || '').trim()
+      if (normalized && !merged.includes(normalized)) merged.push(normalized)
     }
+    folderInput.value = merged.join('\n')
+    folderInput.dispatchEvent(new Event('input', { bubbles: true }))
+    folderInput.dispatchEvent(new Event('change', { bubbles: true }))
   })
   folderRow.append(folderInput, folderButton)
   folderField.appendChild(folderRow)
 
   const hint = document.createElement('div')
   hint.className = 'muted-copy'
-  hint.textContent = 'Pfad und folderid sind Pflicht. Hippo liest nur die Dateien im pCloud-Ordner; Unterordner werden ignoriert.'
+  hint.textContent = 'Lokale Ordner sind optional. Du kannst mehrere Ordner auswählen; pCloud ist nur noch optional.'
 
   const pcloudField = document.createElement('label')
   pcloudField.className = 'field'
-  pcloudField.innerHTML = '<span>pCloud-Pfad</span>'
+  pcloudField.innerHTML = '<span>pCloud-Pfad (optional)</span>'
   const pcloudInput = document.createElement('input')
   pcloudInput.id = 'pcloud_path'
   pcloudInput.type = 'text'
@@ -2100,7 +2119,7 @@ function buildProjectForm(defaults = {}) {
 
   const folderIdField = document.createElement('label')
   folderIdField.className = 'field'
-  folderIdField.innerHTML = '<span>pCloud folderid</span>'
+  folderIdField.innerHTML = '<span>pCloud folderid (optional)</span>'
   const folderIdInput = document.createElement('input')
   folderIdInput.id = 'pcloud_folder_id'
   folderIdInput.type = 'number'
@@ -2119,14 +2138,14 @@ async function openCreateProjectModal() {
   const form = buildProjectForm()
   const result = await openModal({
     title: 'Projekt erstellen',
-    copy: 'Wähle den lokalen gemeinsamen Ordner sowie den pCloud-Pfad und die folderid für die Projektquelle aus. Es werden nur Dateien im Ordner gelesen, keine Unterordner.',
+    copy: 'Wähle bei Bedarf lokale Ordner; pCloud ist optional. Du kannst mehrere Ordner auswählen. Es werden nur Dateien im Ordner gelesen, keine Unterordner.',
     content: form,
     submitLabel: 'Erstellen',
-    validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.pcloud_path?.trim() && values.pcloud_folder_id?.trim()),
+    validate: (values) => Boolean(values.name?.trim()),
   })
 
-  if (!result || !result.folder || !result.pcloud_path || !result.pcloud_folder_id) {
-    showToast('Du musst einen lokalen Ordner, den pCloud-Pfad und die pCloud folderid auswählen. Unterordner werden nicht gelesen.', 'error')
+  if (!result || !result.name) {
+    showToast('Du musst nur den Projektnamen angeben. Ordner und pCloud sind optional.', 'error')
     return
   }
 
@@ -2137,8 +2156,8 @@ async function openCreateProjectModal() {
       body: JSON.stringify({
         name: result.name,
         description: '',
-        watched_folder: result.folder,
-        pcloud_path: result.pcloud_path || null,
+        watched_folder: result.folder || null,
+        pcloud_path: result.pcloud_path?.trim() || null,
         pcloud_folder_id: result.pcloud_folder_id ? Number(result.pcloud_folder_id) : null,
       }),
     })
@@ -2163,7 +2182,7 @@ async function openEditProjectModal(project) {
 
   const result = await openModal({
     title: 'Projekt bearbeiten',
-    copy: 'Hier siehst und änderst du den lokalen gemeinsamen Ordner sowie den pCloud-Pfad und die folderid des Projekts. Es werden nur Dateien im Ordner gelesen, keine Unterordner.',
+    copy: 'Hier siehst und änderst du die lokalen Ordner sowie den optionalen pCloud-Pfad und die folderid des Projekts. Es werden nur Dateien im Ordner gelesen, keine Unterordner.',
     content: form,
     submitLabel: 'Speichern',
     extraActions: [
@@ -2186,8 +2205,8 @@ async function openEditProjectModal(project) {
     ],
   })
 
-  if (!result || !result.folder || !result.pcloud_path || !result.pcloud_folder_id) {
-    showToast('Du musst beim Speichern den lokalen Ordner, den pCloud-Pfad und die pCloud folderid beibehalten oder auswählen. Unterordner werden nicht gelesen.', 'error')
+  if (!result || !result.name) {
+    showToast('Du musst beim Speichern nur den Projektnamen behalten. Ordner und pCloud sind optional.', 'error')
     return
   }
 
@@ -2198,8 +2217,8 @@ async function openEditProjectModal(project) {
       body: JSON.stringify({
         name: result.name,
         description: project.description || '',
-        watched_folder: result.folder,
-        pcloud_path: result.pcloud_path || null,
+        watched_folder: result.folder || null,
+        pcloud_path: result.pcloud_path?.trim() || null,
         pcloud_folder_id: result.pcloud_folder_id ? Number(result.pcloud_folder_id) : null,
       }),
     })
@@ -4629,9 +4648,10 @@ async function sendChat() {
   )
 
   const project = getContextProject()
+  const projectFolder = getPrimaryProjectFolder(project) || null
   if (project?.pcloud_path && project?.pcloud_folder_id) {
     state.projectFolderScanState.set(project.id, 'pcloud')
-  } else if (project?.watched_folder) {
+  } else if (projectFolder) {
     queueProjectFolderRefresh(project)
   }
   const projectFolderContext = project && !(project?.pcloud_path && project?.pcloud_folder_id) ? (state.projectFolderContextCache.get(project.id) || '') : ''
@@ -4681,7 +4701,7 @@ async function sendChat() {
     await loadConversations()
     renderContext()
 
-    const savedArtifacts = await saveGeneratedArtifacts(response.generated_files, project?.watched_folder || null)
+    const savedArtifacts = await saveGeneratedArtifacts(response.generated_files, projectFolder)
     if (response.desktop_actions?.length) {
       showLoader('Hippo steuert den PC...')
       const actionResult = await executeDesktopActions(response.desktop_actions)
@@ -4717,7 +4737,7 @@ async function sendChat() {
     } else if (response.generated_files?.length) {
       renderMessage('assistant', 'Datei wurde erstellt.', { generatedFiles: response.generated_files })
     } else {
-      const legacySaved = showGeneratedFile(response.reply || '', project?.watched_folder || null)
+      const legacySaved = showGeneratedFile(response.reply || '', projectFolder)
       if (legacySaved) return
     }
   } catch (error) {
