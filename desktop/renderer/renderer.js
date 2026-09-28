@@ -2326,11 +2326,37 @@ async function openEditProjectModal(project) {
 
   const result = await openModal({
     title: 'Projekt bearbeiten',
-    copy: 'Hier bearbeitest du die Quellordner, den Lieferordner sowie den optionalen pCloud-Pfad und die folderid des Projekts.',
+    copy: 'Hier bearbeitest du die Quellordner, den Lieferordner sowie den optionalen pCloud-Pfad und die folderid des Projekts. Die Quellordner-Auswahl kann hier auch später erneut geändert werden, ohne den Chat zu unterbrechen.',
     content: form,
     submitLabel: 'Speichern',
     validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.delivery_folder?.trim()),
     extraActions: [
+      {
+        label: 'Quellordner / Zugriff',
+        className: 'ghost-action',
+        onClick: async ({ close }) => {
+          close()
+          showLoader('Quellordner werden geöffnet...')
+          try {
+            const scopeResult = await configureProjectSourceScope(project)
+            if (!scopeResult) return
+            if (scopeResult.refresh) {
+              const syncResult = await syncProjectSourcesToS3(project, scopeResult.sourceFolders)
+              if (!syncResult.ok) {
+                showToast(syncResult.error || 'Quellordner konnten nicht synchronisiert werden', 'error')
+                return
+              }
+              showToast(`Quellordner synchronisiert: ${syncResult.uploaded || 0} Dateien hochgeladen${syncResult.skipped ? `, ${syncResult.skipped} übersprungen` : ''}`)
+            } else {
+              showToast('Quellordner-Auswahl gespeichert')
+            }
+          } catch (error) {
+            showToast(error.message || 'Quellordner konnten nicht vorbereitet werden', 'error')
+          } finally {
+            hideLoader()
+          }
+        },
+      },
       {
         label: 'Dateien',
         className: 'ghost-action',
