@@ -979,16 +979,70 @@ function renderContext() {
   } else {
     els.pageTitle.textContent = project ? `Neuer Chat in ${project.name}` : 'Neuer Chat'
   }
-  const label = document.createElement('span')
+  const summary = document.createElement('div')
+  summary.className = 'project-context-summary'
+
+  const label = document.createElement('div')
+  label.className = 'project-context-line'
   label.textContent = projectLabel || (state.currentConversationId ? 'Globale Unterhaltung' : 'Kein Projekt gewählt')
-  els.selectedInfo.appendChild(label)
+  summary.appendChild(label)
+
+  const syncJob = project ? state.projectSyncJobs.get(project.id) : null
+  if (syncJob) {
+    const progressCard = document.createElement('div')
+    progressCard.className = 'project-sync-progress'
+    if (!Number.isFinite(syncJob.totalFiles) || syncJob.totalFiles <= 0) {
+      progressCard.classList.add('indeterminate')
+    }
+
+    const progressHeader = document.createElement('div')
+    progressHeader.className = 'project-sync-progress-header'
+
+    const progressTitle = document.createElement('div')
+    progressTitle.className = 'project-sync-progress-title'
+    progressTitle.textContent = syncJob.phase || 'Hintergrundsync läuft'
+
+    const progressMeta = document.createElement('div')
+    progressMeta.className = 'project-sync-progress-meta'
+    const metaParts = []
+    if (Number.isFinite(syncJob.processed) && Number.isFinite(syncJob.totalFiles) && syncJob.totalFiles > 0) {
+      const percent = Math.max(0, Math.min(100, Math.round((syncJob.processed / syncJob.totalFiles) * 100)))
+      metaParts.push(`${percent}%`)
+      metaParts.push(`${syncJob.processed}/${syncJob.totalFiles}`)
+    }
+    if (Number.isFinite(syncJob.uploaded) || Number.isFinite(syncJob.skipped)) {
+      metaParts.push(`${syncJob.uploaded || 0} hochgeladen`)
+      if (syncJob.skipped) metaParts.push(`${syncJob.skipped} übersprungen`)
+    }
+    if (Number.isFinite(syncJob.folderIndex) && Number.isFinite(syncJob.totalFolders) && syncJob.totalFolders > 0) {
+      metaParts.push(`Ordner ${syncJob.folderIndex}/${syncJob.totalFolders}`)
+    }
+    progressMeta.textContent = metaParts.join(' · ')
+
+    progressHeader.append(progressTitle, progressMeta)
+
+    const progressBar = document.createElement('div')
+    progressBar.className = 'project-sync-progress-bar'
+    const progressFill = document.createElement('div')
+    progressFill.className = 'project-sync-progress-fill'
+    if (Number.isFinite(syncJob.processed) && Number.isFinite(syncJob.totalFiles) && syncJob.totalFiles > 0) {
+      const width = Math.max(0, Math.min(100, (syncJob.processed / syncJob.totalFiles) * 100))
+      progressFill.style.width = `${width}%`
+    }
+    progressBar.appendChild(progressFill)
+
+    progressCard.append(progressHeader, progressBar)
+    summary.appendChild(progressCard)
+  }
+
+  const actions = document.createElement('div')
+  actions.className = 'project-context-actions'
 
   if (project && localFolders.length && !(project?.pcloud_path && project?.pcloud_folder_id)) {
     const scope = loadProjectSourceScope(project)
     const scopeButton = document.createElement('button')
     scopeButton.type = 'button'
     scopeButton.className = 'ghost-action'
-    scopeButton.style.marginLeft = '8px'
     scopeButton.style.padding = '4px 10px'
     scopeButton.textContent = scope?.sourceFolders?.length ? 'Quellordner ändern' : 'Quellordner wählen'
     scopeButton.addEventListener('click', async () => {
@@ -1007,12 +1061,11 @@ function renderContext() {
         hideLoader()
       }
     })
-    els.selectedInfo.appendChild(scopeButton)
+    actions.appendChild(scopeButton)
 
     const action = document.createElement('button')
     action.type = 'button'
     action.className = 'ghost-action'
-    action.style.marginLeft = '8px'
     action.style.padding = '4px 10px'
     action.textContent = scanState === 'consent' ? 'Zugriff erlauben' : 'Projektordner prüfen'
     action.addEventListener('click', async () => {
@@ -1031,8 +1084,11 @@ function renderContext() {
         hideLoader()
       }
     })
-    els.selectedInfo.appendChild(action)
+    actions.appendChild(action)
   }
+
+  summary.appendChild(actions)
+  els.selectedInfo.appendChild(summary)
 }
 
 function renderProjects() {

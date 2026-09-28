@@ -581,7 +581,95 @@ textarea {
 
 .page-subtitle {
   margin-top: 4px;
+  display: grid;
+  gap: 8px;
 }
+
+.project-context-summary {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.project-context-line {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.project-context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.project-sync-progress {
+  display: grid;
+  gap: 7px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.project-sync-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.project-sync-progress-title {
+  min-width: 0;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-sync-progress-meta {
+  color: var(--muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.project-sync-progress-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.project-sync-progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(99, 215, 191, 0.96), rgba(154, 178, 255, 0.96));
+  transition: width 180ms ease;
+}
+
+.project-sync-progress.indeterminate .project-sync-progress-fill {
+  position: absolute;
+  left: 0;
+  width: 35%;
+  animation: project-sync-indeterminate 1.15s linear infinite;
+}
+
+@keyframes project-sync-indeterminate {
+  from {
+    transform: translateX(-140%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
 
 .topbar-actions {
   display: flex;
