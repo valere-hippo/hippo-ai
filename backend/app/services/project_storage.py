@@ -196,11 +196,11 @@ def project_object_prefix(project: Any) -> str:
 
 
 def has_s3_storage() -> bool:
-    return bool(settings.aws_region and settings.aws_access_key_id and settings.aws_secret_access_key)
+    return False
 
 
 def can_use_s3_storage() -> bool:
-    return has_s3_storage()
+    return False
 
 
 def s3_client():
@@ -227,62 +227,16 @@ def _bucket_create_kwargs(bucket: str) -> dict[str, Any]:
 
 
 def ensure_project_bucket(project: Any) -> str | None:
-    client = s3_client()
-    if client is None:
-        return None
-
-    bucket = project_bucket_name(project)
-    try:
-        client.head_bucket(Bucket=bucket)
-    except ClientError as exc:
-        code = str(exc.response.get("Error", {}).get("Code", ""))
-        if code not in {"404", "NoSuchBucket", "NotFound", "403", "400"}:
-            raise
-        try:
-            client.create_bucket(**_bucket_create_kwargs(bucket))
-        except ClientError as create_exc:
-            create_code = str(create_exc.response.get("Error", {}).get("Code", ""))
-            if create_code not in {"BucketAlreadyOwnedByYou", "BucketAlreadyExists"}:
-                raise
-    return bucket
+    return None
 
 
 def delete_project_bucket(project: Any) -> None:
-    client = s3_client()
-    if client is None:
-        return
-
-    bucket = project_bucket_name(project)
-    prefix = project_object_prefix(project)
-    try:
-        listing = client.list_objects_v2(Bucket=bucket, Prefix=prefix)
-        objects = [{"Key": item["Key"]} for item in listing.get("Contents", []) if item.get("Key")]
-        if objects:
-            client.delete_objects(Bucket=bucket, Delete={"Objects": objects, "Quiet": True})
-        client.delete_bucket(Bucket=bucket)
-    except ClientError:
-        # Best effort cleanup only.
-        return
+    return None
 
 
 def clear_project_storage(project: Any) -> dict[str, int]:
     deleted_remote = 0
     deleted_local = 0
-
-    client = s3_client()
-    if client is not None:
-        bucket = project_bucket_name(project)
-        prefix = project_object_prefix(project)
-        try:
-            paginator = client.get_paginator("list_objects_v2")
-            for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
-                objects = [{"Key": item["Key"]} for item in page.get("Contents", []) if item.get("Key")]
-                if not objects:
-                    continue
-                client.delete_objects(Bucket=bucket, Delete={"Objects": objects, "Quiet": True})
-                deleted_remote += len(objects)
-        except ClientError:
-            pass
 
     local_dir = LOCAL_STORAGE_ROOT / str(getattr(project, "id", ""))
     if local_dir.exists() and local_dir.is_dir():
@@ -312,7 +266,7 @@ def _project_pcloud_reference(project: Any) -> tuple[str | None, int | None]:
 
 
 def _project_uses_pcloud(project: Any) -> bool:
-    return bool(getattr(project, "pcloud_path", None) and getattr(project, "pcloud_folder_id", None))
+    return False
 
 
 def _pcloud_folder_files(project: Any) -> list[PCloudEntry]:
@@ -380,28 +334,6 @@ def _local_project_dir(project: Any) -> Path:
 
 def store_project_file(project: Any, filename: str, content: bytes, content_type: str | None = None, storage_path: str | None = None) -> dict[str, Any]:
     safe_filename = _safe_name(filename)
-    if can_use_s3_storage():
-        client = s3_client()
-        if client is None:
-            # Fall back to local storage when S3 is configured but unavailable.
-            pass
-        else:
-            ensure_project_bucket(project)
-            object_path = _normalize_storage_path(storage_path or filename)
-            key = f"{project_object_prefix(project)}{object_path}"
-            client.put_object(
-                Bucket=project_bucket_name(project),
-                Key=key,
-                Body=content,
-                ContentType=content_type or mimetypes.guess_type(safe_filename)[0] or "application/octet-stream",
-            )
-            return {
-                "filename": object_path,
-                "storage": "s3",
-                "bucket": project_bucket_name(project),
-                "key": key,
-            }
-
     try:
         path, rel_name = _resolve_local_project_file(project, storage_path or filename)
     except Exception:
@@ -423,53 +355,7 @@ def list_project_files(project: Any, source_prefixes: list[str] | None = None) -
         if str(prefix or '').strip()
     ]
     if _project_uses_pcloud(project):
-        try:
-            files = _pcloud_folder_files(project)
-        except Exception:
-            return []
-
-        items: list[ProjectFile] = []
-        for entry in files:
-            if normalized_prefixes and not any(entry.path.lstrip('/').startswith(f'{prefix}/') or entry.path.lstrip('/') == prefix for prefix in normalized_prefixes):
-                continue
-            items.append(
-                ProjectFile(
-                    filename=entry.path,
-                    size=entry.size,
-                    modified_at=entry.modified_at,
-                    storage="pcloud",
-                )
-            )
-        return items
-
-    if can_use_s3_storage():
-        client = s3_client()
-        if client is None:
-            return []
-        try:
-            result = client.list_objects_v2(Bucket=project_bucket_name(project), Prefix=f"{project_object_prefix(project)}sources/")
-        except ClientError:
-            return []
-        items: list[ProjectFile] = []
-        prefix = f"{project_object_prefix(project)}sources/"
-        for entry in result.get("Contents", []) or []:
-            key = entry.get("Key")
-            if not key or not key.startswith(prefix):
-                continue
-            if key.endswith("/"):
-                continue
-            filename = key[len(prefix):]
-            if normalized_prefixes and not any(filename == source or filename.startswith(f'{source}/') for source in normalized_prefixes):
-                continue
-            items.append(
-                ProjectFile(
-                    filename=filename,
-                    size=int(entry.get("Size") or 0),
-                    modified_at=entry.get("LastModified"),
-                    storage="s3",
-                )
-            )
-        return items
+        return []
 
     return _iter_local_project_files(project)
 
@@ -477,24 +363,6 @@ def list_project_files(project: Any, source_prefixes: list[str] | None = None) -
 def read_project_file(project: Any, filename: str) -> tuple[bytes, str, str]:
     safe_filename = _safe_name(filename)
     content_type = mimetypes.guess_type(safe_filename)[0] or "application/octet-stream"
-
-    if _project_uses_pcloud(project):
-        path_hint = str(filename or "").strip()
-        if not path_hint.startswith("/"):
-            pcloud_root, _pcloud_folder_id = _project_pcloud_reference(project)
-            if pcloud_root:
-                path_hint = str(PurePosixPath(pcloud_root) / path_hint.lstrip("/"))
-        body, content_type = get_pcloud_file_bytes(path_hint)
-        return body, content_type, "pcloud"
-
-    if can_use_s3_storage():
-        client = s3_client()
-        if client is None:
-            raise RuntimeError("S3 client unavailable")
-        key = f"{project_object_prefix(project)}{_s3_project_object_path(filename)}"
-        response = client.get_object(Bucket=project_bucket_name(project), Key=key)
-        body = response["Body"].read()
-        return body, response.get("ContentType") or content_type, "s3"
 
     path, _rel_name = _resolve_local_project_file(project, filename)
     if not path.exists() or not path.is_file():
@@ -507,16 +375,6 @@ def delete_project_file(project: Any, filename: str) -> dict[str, int | str]:
     deleted_remote = 0
     deleted_local = 0
     rel_name = safe_filename
-
-    if can_use_s3_storage():
-        client = s3_client()
-        if client is not None:
-            key = f"{project_object_prefix(project)}{_s3_project_object_path(filename)}"
-            try:
-                client.delete_object(Bucket=project_bucket_name(project), Key=key)
-                deleted_remote = 1
-            except ClientError:
-                pass
 
     try:
         local_path, rel_name = _resolve_local_project_file(project, filename)

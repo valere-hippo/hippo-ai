@@ -436,9 +436,6 @@ function formatProjectSyncStatus(project) {
   if (!job) return ''
   const parts = []
   if (job.phase) parts.push(job.phase)
-  if (Number.isFinite(job.uploaded) || Number.isFinite(job.skipped)) {
-    parts.push(`${job.uploaded || 0} hochgeladen${job.skipped ? `, ${job.skipped} übersprungen` : ''}`)
-  }
   if (Number.isFinite(job.processed) && Number.isFinite(job.totalFiles) && job.totalFiles > 0) {
     const percent = Math.max(0, Math.min(100, Math.round((job.processed / job.totalFiles) * 100)))
     parts.push(`${job.processed}/${job.totalFiles} Dateien · ${percent}%`)
@@ -446,7 +443,7 @@ function formatProjectSyncStatus(project) {
   if (Number.isFinite(job.folderIndex) && Number.isFinite(job.totalFolders) && job.totalFolders > 0) {
     parts.push(`Ordner ${job.folderIndex}/${job.totalFolders}`)
   }
-  return parts.length ? `Hintergrundsync: ${parts.join(' · ')}` : 'Hintergrundsync läuft'
+  return parts.length ? `Lokale Aktualisierung: ${parts.join(' · ')}` : 'Lokale Aktualisierung läuft'
 }
 
 async function requestProjectFolderConsent(project) {
@@ -2428,7 +2425,7 @@ function buildProjectForm(defaults = {}) {
 
   const hint = document.createElement('div')
   hint.className = 'muted-copy'
-  hint.textContent = 'Die Quellordner werden in S3 synchronisiert. Der Lieferordner ist lokal und wird für Word/PDF/Bild-Lieferungen verwendet.'
+  hint.textContent = 'Die Quellordner bleiben lokal auf deinem Rechner. Hippo liest sie direkt aus den gewählten Projektordnern; der Lieferordner bleibt lokal.'
 
   const accessField = document.createElement('div')
   accessField.className = 'field'
@@ -2480,7 +2477,7 @@ function buildProjectForm(defaults = {}) {
   pcloudInput.className = 'text-input'
   pcloudInput.placeholder = '/Hippo/Projektordner'
   pcloudInput.value = defaults.pcloud_path || ''
-  pcloudField.appendChild(pcloudInput)
+  pcloudField.hidden = true
 
   const folderIdField = document.createElement('label')
   folderIdField.className = 'field'
@@ -2493,7 +2490,7 @@ function buildProjectForm(defaults = {}) {
   folderIdInput.className = 'text-input'
   folderIdInput.placeholder = '123456'
   folderIdInput.value = defaults.pcloud_folder_id || ''
-  folderIdField.appendChild(folderIdInput)
+  folderIdField.hidden = true
 
   wrapper.append(nameField, accessField, deliveryField, pcloudField, folderIdField, folderField, hint)
   return wrapper
@@ -2503,7 +2500,7 @@ async function openCreateProjectModal() {
   const form = buildProjectForm()
   const result = await openModal({
     title: 'Projekt erstellen',
-    copy: 'Wähle die Quellordner für den Projektkontext und den lokalen Lieferordner. Die Quellordner werden nach S3 synchronisiert.',
+    copy: 'Wähle die lokalen Quellordner für den Projektkontext und den lokalen Lieferordner. Es bleibt vollständig lokal.',
     content: form,
     submitLabel: 'Erstellen',
     validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.delivery_folder?.trim()),
@@ -2559,7 +2556,7 @@ async function openEditProjectModal(project) {
 
   const result = await openModal({
     title: 'Projekt bearbeiten',
-    copy: 'Hier bearbeitest du die Quellordner, den Lieferordner sowie den optionalen pCloud-Pfad und die folderid des Projekts. Die Quellordner-Auswahl kann hier auch später erneut geändert werden, ohne den Chat zu unterbrechen.',
+    copy: 'Hier bearbeitest du die lokalen Quellordner, den Lieferordner sowie den optionalen pCloud-Pfad und die folderid des Projekts. Die Quellordner-Auswahl kann hier auch später erneut geändert werden, ohne den Chat zu unterbrechen.',
     content: form,
     submitLabel: 'Speichern',
     validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.delivery_folder?.trim()),
@@ -2749,7 +2746,7 @@ async function openProjectFilesModal(project) {
       wrapper.innerHTML = ''
       summary.innerHTML = `
         <div class="storage-summary-line"><span>Speicher</span><strong>${escapeHtml(storage.provider || 'local')}</strong></div>
-        <div class="storage-summary-line"><span>Bucket</span><strong>${escapeHtml(storage.bucket || 'lokal')}</strong></div>
+        <div class="storage-summary-line"><span>Ablage</span><strong>${escapeHtml(storage.bucket || 'lokal')}</strong></div>
         <div class="storage-summary-line"><span>Pfad</span><strong>${escapeHtml(storage.key_prefix || project.watched_folder || '—')}</strong></div>
         <div class="storage-summary-line"><span>Ordner</span><strong>${escapeHtml(storage.watched_folder || '—')}</strong></div>
       `
@@ -2796,7 +2793,7 @@ async function openProjectFilesModal(project) {
       } else {
         const empty = document.createElement('div')
         empty.className = 'muted-copy'
-        empty.textContent = 'Im Projekt-Speicher sind noch keine Dateien sichtbar.'
+        empty.textContent = 'Im Projektordner sind noch keine Dateien sichtbar.'
         filesHost.appendChild(empty)
       }
 
@@ -2812,7 +2809,7 @@ async function openProjectFilesModal(project) {
 
     await openModal({
       title: `Dateien · ${project.name}`,
-      copy: 'Diese Liste zeigt den verknüpften Projekt-Speicher und die aktuell verfügbaren Dateien.',
+      copy: 'Diese Liste zeigt die aktuell im Projektordner verfügbaren Dateien.',
       content: wrapper,
       submitLabel: 'Schließen',
       width: 'min(900px, 100%)',
@@ -2854,7 +2851,7 @@ async function deleteProjectStorageFile(project, filename, refresh) {
   if (!project?.id || !filename) return
   const result = await openModal({
     title: 'Datei wirklich löschen?',
-    copy: `"${filename}" wird dauerhaft aus dem Projekt-Speicher entfernt.`,
+    copy: `"${filename}" wird dauerhaft aus dem Projektordner entfernt.`,
     content: (() => {
       const node = document.createElement('div')
       node.className = 'modal-grid'
@@ -3151,7 +3148,7 @@ function renderDashboardProjectFiles(container, storage) {
   if (!files.length) {
     const empty = document.createElement('div')
     empty.className = 'muted-copy'
-    empty.textContent = 'Im Bucket sind noch keine Dateien sichtbar.'
+    empty.textContent = 'Im Projektordner sind noch keine Dateien sichtbar.'
     fileList.appendChild(empty)
     return
   }
@@ -3209,7 +3206,7 @@ async function refreshDashboardStorage(container, projectId) {
     renderDashboardProjectFiles(container, storage)
     summary.innerHTML = `
       <div class="storage-summary-line"><span>Speicher</span><strong>${escapeHtml(storage.provider || 'local')}</strong></div>
-      <div class="storage-summary-line"><span>Bucket</span><strong>${escapeHtml(storage.bucket || 'lokal')}</strong></div>
+      <div class="storage-summary-line"><span>Ablage</span><strong>${escapeHtml(storage.bucket || 'lokal')}</strong></div>
       <div class="storage-summary-line"><span>Pfad</span><strong>${escapeHtml(storage.key_prefix || '—')}</strong></div>
       <div class="storage-summary-line"><span>Ordner</span><strong>${escapeHtml(storage.watched_folder || '—')}</strong></div>
     `
@@ -3559,7 +3556,7 @@ async function openUserDashboardModal(initialTab = 'profile') {
       const result = await apiJson(`/files/projects/${projectId}/storage`, {
         method: 'DELETE',
       })
-      showToast(`Speicher geleert: ${result.deleted_remote || 0} S3-Dateien, ${result.deleted_local || 0} lokale Dateien`)
+      showToast(`Speicher geleert: ${result.deleted_remote || 0} entfernte Dateien, ${result.deleted_local || 0} lokale Dateien`)
       await refreshDashboardStorage(storagePanel, projectId)
     } catch (error) {
       showToast(error.message || 'Speicher konnte nicht geleert werden', 'error')
@@ -5020,7 +5017,7 @@ async function promptProjectSourceScope(project) {
   modeSelect.id = 'refresh_mode'
   modeSelect.className = 'text-input'
   ;[
-    ['refresh', 'Ja, alle Quellordner neu scannen und in S3 aktualisieren'],
+    ['refresh', 'Ja, alle Quellordner lokal neu scannen'],
     ['all', 'Nein, alle Quellordner verwenden'],
     ['selected', 'Nein, nur bestimmte Quellordner verwenden'],
   ].forEach(([value, label]) => {
@@ -5098,19 +5095,14 @@ async function syncProjectSourcesToS3(project, sourceFolders = null, options = {
   const silent = Boolean(options.silent)
   const emitPhase = typeof options.onPhase === 'function' ? options.onPhase : null
   const emitProgress = typeof options.onProgress === 'function' ? options.onProgress : null
-  const waitIfPaused = typeof options.waitIfPaused === 'function' ? options.waitIfPaused : null
   if (!background) {
-    showLoader('Quellordner werden gescannt und nach S3 hochgeladen...')
+    showLoader('Lokale Projektordner werden gelesen...')
   }
   try {
-    emitPhase?.('bereinige S3')
-    await apiJson(`/files/projects/${project.id}/storage`, { method: 'DELETE' })
-    let uploaded = 0
-    let skipped = 0
+    emitPhase?.('lese lokale Projektordner')
     let processed = 0
     let totalFiles = 0
     for (const [folderIndex, folder] of folders.entries()) {
-      await waitIfPaused?.()
       emitPhase?.(`scanne Ordner ${folderIndex + 1}/${folders.length}`)
       const scan = await window.electron.scanProjectFolderFiles({ folder, maxDepth: 999, maxFiles: 50000 })
       if (!scan?.ok) {
@@ -5118,48 +5110,24 @@ async function syncProjectSourcesToS3(project, sourceFolders = null, options = {
       }
       const files = Array.isArray(scan.files) ? scan.files : []
       totalFiles += files.length
-      emitProgress?.({ folderIndex: folderIndex + 1, totalFolders: folders.length, processed, totalFiles, uploaded, skipped, phase: 'lädt hoch' })
-      for (const file of files) {
-        await waitIfPaused?.()
-        const read = await window.electron.readLocalFile({ path: file.path })
-        if (!read?.ok) {
-          skipped += 1
-          processed += 1
-          emitProgress?.({ folderIndex: folderIndex + 1, totalFolders: folders.length, processed, totalFiles, uploaded, skipped, phase: 'lädt hoch' })
-          continue
-        }
-        const payload = {
-          source_folder: normalizeSourceFolderKey(folder),
-          relative_path: file.relative_path,
-          filename: file.relative_path.split('/').pop() || file.relative_path,
-          content_base64: read.base64,
-          content_type: read.contentType || 'application/octet-stream',
-        }
-        await apiJson(`/files/projects/${project.id}/source-upload`, {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        })
-        uploaded += 1
-        processed += 1
-        emitProgress?.({ folderIndex: folderIndex + 1, totalFolders: folders.length, processed, totalFiles, uploaded, skipped, phase: 'lädt hoch' })
-      }
+      processed += files.length
+      emitProgress?.({ folderIndex: folderIndex + 1, totalFolders: folders.length, processed, totalFiles, phase: 'bereit' })
     }
     try {
-      await waitIfPaused?.()
-      emitPhase?.('aktualisiere Tools')
+      emitPhase?.('aktualisiere lokale Tool-Kontexte')
       await apiJson(`/tools/library/projects/${project.id}/sync-file-tools`, { method: 'POST' })
     } catch (toolError) {
       console.warn('Project file tool sync failed:', toolError)
     }
-    emitProgress?.({ folderIndex: folders.length, totalFolders: folders.length, processed, totalFiles, uploaded, skipped, phase: 'fertig' })
-    return { ok: true, uploaded, skipped }
+    emitProgress?.({ folderIndex: folders.length, totalFolders: folders.length, processed, totalFiles, phase: 'bereit' })
+    return { ok: true, uploaded: 0, skipped: 0, processed, totalFiles, localOnly: true }
   } catch (error) {
     return { ok: false, error: error.message || String(error) }
   } finally {
     if (!background) {
       hideLoader()
     } else if (!silent && state.selectedProjectId === project.id) {
-      showToast(`Hintergrundsynchronisation abgeschlossen: ${project.name}`)
+      showToast(`Lokale Aktualisierung abgeschlossen: ${project.name}`)
     }
   }
 }
