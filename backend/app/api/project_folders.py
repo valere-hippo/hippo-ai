@@ -89,7 +89,7 @@ async def get_project_access(project_id: int, db: DbSession, current_user=Depend
 
 
 @router.put('/{project_id}/access')
-async def set_project_access(project_id: int, payload: dict, db: DbSession, current_user=Depends(get_current_user)):
+async def set_project_access(project_id: int, payload, db: DbSession, current_user=Depends(get_current_user)):
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if project is None:

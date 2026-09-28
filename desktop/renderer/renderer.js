@@ -416,6 +416,19 @@ function normalizeStoredProjectSourceScope(value) {
   }
 }
 
+function formatProjectAccessSummary(project) {
+  const scope = loadProjectSourceScope(project)
+  const folders = scope?.sourceFolders || normalizeProjectFolderInput(project?.watched_folder)
+  const parts = []
+  if (folders.length) {
+    parts.push(`${folders.length} freigegebene lokale Ordner`)
+  }
+  if (project?.pcloud_path && project?.pcloud_folder_id) {
+    parts.push(`externe pCloud: ${project.pcloud_path} #${project.pcloud_folder_id}`)
+  }
+  return parts.length ? parts.join(' · ') : 'Kein Zugriff gespeichert'
+}
+
 async function requestProjectFolderConsent(project) {
   const folders = normalizeProjectFolderInput(project?.watched_folder)
   if (!folders.length) return false
@@ -1005,6 +1018,7 @@ function renderProjects() {
     const parts = []
     const localFolders = normalizeProjectFolderInput(project.watched_folder)
     if (localFolders.length) parts.push(`Quellen: ${localFolders.join(' · ')}`)
+    if (project.source_scope) parts.push(`Zugriff: ${formatProjectAccessSummary(project)}`)
     if (project.delivery_folder) parts.push(`Lieferung: ${project.delivery_folder}`)
     if (project.pcloud_path && project.pcloud_folder_id) parts.push(`pCloud: ${project.pcloud_path} #${project.pcloud_folder_id}`)
     subtitle.textContent = parts.length ? parts.join(' · ') : 'Kein Ordner verknüpft'
@@ -2256,6 +2270,18 @@ function buildProjectForm(defaults = {}) {
   hint.className = 'muted-copy'
   hint.textContent = 'Die Quellordner werden in S3 synchronisiert. Der Lieferordner ist lokal und wird für Word/PDF/Bild-Lieferungen verwendet.'
 
+  const accessField = document.createElement('div')
+  accessField.className = 'field'
+  const accessLabel = document.createElement('span')
+  accessLabel.textContent = 'Aktueller Zugriff'
+  const accessValue = document.createElement('div')
+  accessValue.className = 'storage-summary'
+  accessValue.innerHTML = `
+    <div class="storage-summary-line"><span>Status</span><strong>${escapeHtml(formatProjectAccessSummary(defaults))}</strong></div>
+    <div class="storage-summary-line"><span>Hinweis</span><strong>Der Zugriff kann später im Projektmenü geändert werden.</strong></div>
+  `
+  accessField.append(accessLabel, accessValue)
+
   const deliveryField = document.createElement('label')
   deliveryField.className = 'field'
   deliveryField.innerHTML = '<span>Lieferordner (lokal, Pflicht)</span>'
@@ -2309,7 +2335,7 @@ function buildProjectForm(defaults = {}) {
   folderIdInput.value = defaults.pcloud_folder_id || ''
   folderIdField.appendChild(folderIdInput)
 
-  wrapper.append(nameField, deliveryField, pcloudField, folderIdField, folderField, hint)
+  wrapper.append(nameField, accessField, deliveryField, pcloudField, folderIdField, folderField, hint)
   return wrapper
 }
 
@@ -2370,6 +2396,7 @@ async function openEditProjectModal(project) {
     name: project.name,
     folder: project.watched_folder || '',
     delivery_folder: project.delivery_folder || '',
+    source_scope: project.source_scope || '',
     pcloud_path: project.pcloud_path || '',
     pcloud_folder_id: project.pcloud_folder_id || '',
   })
@@ -2402,6 +2429,24 @@ async function openEditProjectModal(project) {
             }
           } catch (error) {
             showToast(error.message || 'Quellordner konnten nicht vorbereitet werden', 'error')
+          } finally {
+            hideLoader()
+          }
+        },
+      },
+      {
+        label: 'Zugriff entfernen',
+        className: 'ghost-action',
+        onClick: async ({ close }) => {
+          close()
+          showLoader('Zugriff wird entfernt...')
+          try {
+            await clearProjectSourceScope(project)
+            await loadProjects()
+            renderContext()
+            showToast('Zugriff entfernt')
+          } catch (error) {
+            showToast(error.message || 'Zugriff konnte nicht entfernt werden', 'error')
           } finally {
             hideLoader()
           }
@@ -2488,7 +2533,7 @@ async function deleteProject(project) {
       state.currentConversationId = null
     }
     state.projectConversationMemory.delete(project.id)
-    clearProjectSourceScope(project)
+    await clearProjectSourceScope(project)
     await loadProjects()
     await loadConversations()
     renderContext()
