@@ -73,11 +73,11 @@ def _safe_relative_project_path(value: str | None) -> Path:
     return Path(_normalize_storage_path(value))
 
 
-def _s3_project_object_path(filename: str) -> str:
+def _local_project_object_path(filename: str) -> str:
     normalized = _normalize_storage_path(filename)
-    if normalized.startswith(("sources/", "attachments/")):
+    if normalized.startswith(("attachments/", "source-files/")):
         return normalized
-    return f"sources/{normalized}"
+    return f"source-files/{normalized}"
 
 
 def _local_project_root(project: Any) -> Path:
@@ -166,7 +166,7 @@ def _build_local_project_tree_context(project: Any) -> str:
     return "\n".join(lines)
 
 
-def _storage_prefix() -> str:
+def _project_storage_prefix() -> str:
     prefix = (settings.hippo_s3_bucket_prefix or "hippo-ai-").strip().lower()
     prefix = re.sub(r"[^a-z0-9-]+", "-", prefix)
     prefix = prefix.strip("-")
@@ -175,36 +175,36 @@ def _storage_prefix() -> str:
     return prefix or "hippo-ai-"
 
 
-def project_bucket_name(project: Any) -> str:
-    explicit_bucket = (settings.hippo_s3_bucket_name or "").strip()
-    if explicit_bucket:
-        return explicit_bucket
+def project_storage_name(project: Any) -> str:
+    explicit_storage_name = (settings.hippo_s3_bucket_name or "").strip()
+    if explicit_storage_name:
+        return explicit_storage_name
 
     project_id = getattr(project, "id", None)
     if project_id is None:
         raise ValueError("project.id is required for bucket naming")
-    bucket = f"{_storage_prefix()}{project_id}"
-    bucket = re.sub(r"[^a-z0-9.-]+", "-", bucket.lower())
-    bucket = bucket.strip(".-")
-    if len(bucket) > 63:
-        bucket = bucket[:63].rstrip(".-")
-    return bucket
+    storage_name = f"{_project_storage_prefix()}{project_id}"
+    storage_name = re.sub(r"[^a-z0-9.-]+", "-", storage_name.lower())
+    storage_name = storage_name.strip(".-")
+    if len(storage_name) > 63:
+        storage_name = storage_name[:63].rstrip(".-")
+    return storage_name
 
 
-def project_object_prefix(project: Any) -> str:
+def project_storage_prefix(project: Any) -> str:
     return f"{(settings.hippo_s3_key_prefix or 'projects').strip().strip('/')}/{project.id}/"
 
 
-def has_s3_storage() -> bool:
+def has_remote_storage() -> bool:
     return False
 
 
-def can_use_s3_storage() -> bool:
+def can_use_remote_storage() -> bool:
     return False
 
 
-def s3_client():
-    if not can_use_s3_storage():
+def remote_client():
+    if not can_use_remote_storage():
         return None
     kwargs: dict[str, Any] = {
         "region_name": settings.aws_region,
@@ -216,21 +216,21 @@ def s3_client():
     return boto3.client("s3", **kwargs)
 
 
-def _bucket_create_kwargs(bucket: str) -> dict[str, Any]:
+def _storage_create_kwargs(storage_name: str) -> dict[str, Any]:
     region = (settings.aws_region or "").strip()
     if not region or region == "us-east-1":
-        return {"Bucket": bucket}
+        return {"Bucket": storage_name}
     return {
-        "Bucket": bucket,
+        "Bucket": storage_name,
         "CreateBucketConfiguration": {"LocationConstraint": region},
     }
 
 
-def ensure_project_bucket(project: Any) -> str | None:
+def ensure_local_storage(project: Any) -> str | None:
     return None
 
 
-def delete_project_bucket(project: Any) -> None:
+def delete_local_storage(project: Any) -> None:
     return None
 
 

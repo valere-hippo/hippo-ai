@@ -6,7 +6,6 @@ from email.message import EmailMessage
 from typing import Iterable
 
 from app.core.config import settings
-from app.services.project_storage import has_s3_storage, project_bucket_name
 
 
 def smtp_is_configured() -> bool:
@@ -74,7 +73,7 @@ async def notify_user_created(user, creator=None) -> bool:
 async def notify_project_created(project, owner) -> bool:
     if not smtp_is_configured():
         return False
-    bucket_text = project_bucket_name(project) if has_s3_storage() else "Lokaler Speicher"
+    storage_text = "Lokaler Speicher"
     subject = f'HIPPO-AI: Projekt "{project.name}" wurde erstellt'
     body = "\n".join(
         [
@@ -82,7 +81,7 @@ async def notify_project_created(project, owner) -> bool:
             "",
             f'dein Projekt "{project.name}" wurde erstellt.',
             f"Projekt-ID: {project.id}",
-            f"Speicher: {bucket_text}",
+            f"Speicher: {storage_text}",
             "",
             "Du kannst Dateien direkt in der App hochladen und wieder herunterladen.",
         ]
