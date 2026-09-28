@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 from typing import Any
 
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, update
 
@@ -14,8 +15,7 @@ from app.models.permission import PermissionLevel
 router = APIRouter(prefix="/projects", tags=["project-folders"]) 
 
 
-def _normalize_source_folders(payload: dict[str, Any]) -> list[str]:
-    raw = payload.get('source_folders')
+def _normalize_source_folders(raw: Any) -> list[str]:
     if raw is None:
         return []
     if isinstance(raw, str):
@@ -34,15 +34,24 @@ def _normalize_source_folders(payload: dict[str, Any]) -> list[str]:
         folders.append(str(path.resolve()))
     return list(dict.fromkeys(folders))
 
+class ProjectFolderUpdate(BaseModel):
+    folder: str = Field(min_length=1, max_length=2000)
+
+
+class ProjectAccessUpdate(BaseModel):
+    source_folders: list[str] = Field(default_factory=list)
+    consented: bool = True
+
+
 @router.post('/{project_id}/folder')
-async def set_project_folder(project_id: int, payload, db: DbSession, current_user=Depends(get_current_user)):
+async def set_project_folder(project_id: int, db: DbSession, payload: ProjectFolderUpdate, current_user=Depends(get_current_user)):
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if project is None:
         raise HTTPException(status_code=404, detail='Projekt nicht gefunden.')
     if not (current_user.role == UserRole.ADMIN or project.owner_id == current_user.id):
         raise HTTPException(status_code=403, detail='Zugriff verweigert.')
-    folder = str(payload.get('folder') or '').strip()
+    folder = str(payload.folder or '').strip()
     if not folder:
         raise HTTPException(status_code=400, detail='Bitte einen Ordner auswählen.')
     path = Path(folder).expanduser()
@@ -89,7 +98,7 @@ async def get_project_access(project_id: int, db: DbSession, current_user=Depend
 
 
 @router.put('/{project_id}/access')
-async def set_project_access(project_id: int, payload, db: DbSession, current_user=Depends(get_current_user)):
+async def set_project_access(project_id: int, db: DbSession, payload: ProjectAccessUpdate, current_user=Depends(get_current_user)):
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if project is None:
@@ -97,8 +106,8 @@ async def set_project_access(project_id: int, payload, db: DbSession, current_us
     if not (current_user.role == UserRole.ADMIN or project.owner_id == current_user.id):
         raise HTTPException(status_code=403, detail='Zugriff verweigert.')
 
-    source_folders = _normalize_source_folders(payload)
-    consented = bool(payload.get('consented', True))
+    source_folders = _normalize_source_folders(payload.source_folders)
+    consented = bool(payload.consented)
     source_scope = {
         'source_folders': source_folders,
         'consented': consented,
