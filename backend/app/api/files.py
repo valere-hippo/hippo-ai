@@ -60,9 +60,7 @@ async def upload_project_source_file(project_id: int, payload: ProjectSourceUplo
     return {
         "filename": storage_result["filename"],
         "storage": storage_result["storage"],
-        "bucket": storage_result.get("bucket"),
         "path": storage_result.get("path"),
-        "key": storage_result.get("key"),
     }
 
 
@@ -86,7 +84,7 @@ async def upload_file(project_id: int, db: DbSession, current_user=Depends(get_c
     # attempt to auto-index text files (txt, md)
     # embeddings have been removed from Hippo AI; files are stored directly only.
 
-    return {"filename": storage_result["filename"], "storage": storage_result["storage"], "bucket": storage_result.get("bucket"), "path": storage_result.get("path"), "key": storage_result.get("key")}
+    return {"filename": storage_result["filename"], "storage": storage_result["storage"], "path": storage_result.get("path")}
 
 
 @router.get("/projects/{project_id}")
@@ -124,9 +122,7 @@ async def get_project_storage(project_id: int, db: DbSession, current_user=Depen
     return {
         "project_id": project.id,
         "project_name": project.name,
-        "provider": "s3" if can_use_s3_storage() else "local",
-        "bucket": project_bucket_name(project) if can_use_s3_storage() else None,
-        "key_prefix": project_object_prefix(project) if can_use_s3_storage() else None,
+        "provider": "local",
         "watched_folder": project.watched_folder,
         "delivery_folder": getattr(project, "delivery_folder", None),
         "files": [
@@ -177,7 +173,7 @@ async def clear_project_storage_endpoint(project_id: int, db: DbSession, current
         "project_id": project.id,
         "deleted_remote": deleted["deleted_remote"],
         "deleted_local": deleted["deleted_local"],
-        "provider": "s3" if can_use_s3_storage() else "local",
+        "provider": "local",
     }
 
 
@@ -205,5 +201,5 @@ async def delete_project_file_endpoint(project_id: int, filename: str, db: DbSes
         "filename": deleted["filename"],
         "deleted_remote": deleted["deleted_remote"],
         "deleted_local": deleted["deleted_local"],
-        "provider": "s3" if can_use_s3_storage() else "local",
+        "provider": "local",
     }

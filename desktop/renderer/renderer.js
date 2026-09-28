@@ -424,9 +424,6 @@ function formatProjectAccessSummary(project) {
   if (folders.length) {
     parts.push(`${folders.length} freigegebene lokale Ordner`)
   }
-  if (project?.pcloud_path && project?.pcloud_folder_id) {
-    parts.push(`externe pCloud: ${project.pcloud_path} #${project.pcloud_folder_id}`)
-  }
   return parts.length ? parts.join(' · ') : 'Kein Zugriff gespeichert'
 }
 
@@ -613,10 +610,6 @@ function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) 
 
 async function refreshProjectFolderContext(project, { force = false, requireConsent = false } = {}) {
   if (!project?.id) return ''
-  if (project.pcloud_path && project.pcloud_folder_id) {
-    state.projectFolderScanState.set(project.id, 'pcloud')
-    return state.projectFolderContextCache.get(project.id) || ''
-  }
   const cached = state.projectFolderContextCache.get(project.id)
   if (cached && !force) return cached
   const folders = normalizeProjectFolderInput(project.watched_folder)
@@ -652,7 +645,7 @@ async function refreshProjectFolderContext(project, { force = false, requireCons
 }
 
 function queueProjectFolderRefresh(project) {
-  if (!project?.id || !project.watched_folder || (project.pcloud_path && project.pcloud_folder_id)) return Promise.resolve('')
+  if (!project?.id || !project.watched_folder) return Promise.resolve('')
   if (state.projectFolderScanState.get(project.id) === 'loading') return Promise.resolve(state.projectFolderContextCache.get(project.id) || '')
   return refreshProjectFolderContext(project, { force: true, requireConsent: false }).then(() => {
     if (state.selectedProjectId === project.id) {
@@ -981,21 +974,19 @@ function renderContext() {
   if (els.projectSkillsBtn) {
     els.projectSkillsBtn.disabled = !project
   }
-  const scanState = project ? (state.projectFolderScanState.get(project.id) || (project.pcloud_path && project.pcloud_folder_id ? 'pcloud' : 'idle')) : 'idle'
+  const scanState = project ? (state.projectFolderScanState.get(project.id) || 'idle') : 'idle'
   const scanLabel = scanState === 'loading'
     ? 'Ordneranalyse läuft…'
     : scanState === 'ready'
       ? 'Ordneranalyse bereit'
       : scanState === 'consent'
         ? 'Ordnerzugriff ausstehend'
-        : scanState === 'pcloud'
-          ? 'pCloud-Quelle'
-          : scanState === 'error'
-            ? 'Ordneranalyse fehlgeschlagen'
-            : ''
+        : scanState === 'error'
+          ? 'Ordneranalyse fehlgeschlagen'
+          : ''
   const localFolders = normalizeProjectFolderInput(project?.watched_folder)
   const projectLabel = project
-    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${project.pcloud_path ? ` · pCloud: ${project.pcloud_path}` : ''}${project.pcloud_folder_id ? ` · folderid: ${project.pcloud_folder_id}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}${formatProjectSyncStatus(project) ? ` · ${formatProjectSyncStatus(project)}` : ''}`
+    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}${formatProjectSyncStatus(project) ? ` · ${formatProjectSyncStatus(project)}` : ''}`
     : ''
   els.selectedInfo.innerHTML = ''
   if (state.currentConversationId) {
@@ -1080,7 +1071,7 @@ function renderContext() {
   const actions = document.createElement('div')
   actions.className = 'project-context-actions'
 
-  if (project && localFolders.length && !(project?.pcloud_path && project?.pcloud_folder_id)) {
+  if (project && localFolders.length) {
     const scope = loadProjectSourceScope(project)
     const scopeButton = document.createElement('button')
     scopeButton.type = 'button'
@@ -1140,7 +1131,7 @@ function renderProjects() {
   const query = (state.projectQuery || '').trim().toLowerCase()
   const projects = state.projects.filter((project) => {
     if (!query) return true
-    const haystack = [project.name, project.description, project.watched_folder, project.pcloud_path, project.pcloud_folder_id]
+    const haystack = [project.name, project.description, project.watched_folder]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
@@ -1177,7 +1168,6 @@ function renderProjects() {
     if (localFolders.length) parts.push(`Quellen: ${localFolders.join(' · ')}`)
     if (project.source_scope) parts.push(`Zugriff: ${formatProjectAccessSummary(project)}`)
     if (project.delivery_folder) parts.push(`Lieferung: ${project.delivery_folder}`)
-    if (project.pcloud_path && project.pcloud_folder_id) parts.push(`pCloud: ${project.pcloud_path} #${project.pcloud_folder_id}`)
     subtitle.textContent = parts.length ? parts.join(' · ') : 'Kein Ordner verknüpft'
     main.append(title, subtitle)
 
@@ -2185,8 +2175,7 @@ async function selectProject(projectId) {
   closeSidebarDrawer()
 
   const project = getContextProject()
-  if (project?.pcloud_path && project?.pcloud_folder_id) {
-    state.projectFolderScanState.set(project.id, 'pcloud')
+  if (project) {
     renderContext()
   }
 
@@ -2218,8 +2207,7 @@ async function openConversation(conversation) {
   renderContext()
   closeSidebarDrawer()
   const project = getContextProject()
-  if (project?.pcloud_path && project?.pcloud_folder_id) {
-    state.projectFolderScanState.set(project.id, 'pcloud')
+  if (project) {
     renderContext()
   }
   await openConversationById(conversation.id)
@@ -2470,7 +2458,7 @@ function buildProjectForm(defaults = {}) {
 
   const pcloudField = document.createElement('label')
   pcloudField.className = 'field'
-  pcloudField.innerHTML = '<span>pCloud-Pfad (optional)</span>'
+  pcloudField.innerHTML = ''
   const pcloudInput = document.createElement('input')
   pcloudInput.id = 'pcloud_path'
   pcloudInput.type = 'text'
@@ -2481,7 +2469,7 @@ function buildProjectForm(defaults = {}) {
 
   const folderIdField = document.createElement('label')
   folderIdField.className = 'field'
-  folderIdField.innerHTML = '<span>pCloud folderid (optional)</span>'
+  folderIdField.innerHTML = ''
   const folderIdInput = document.createElement('input')
   folderIdInput.id = 'pcloud_folder_id'
   folderIdInput.type = 'number'
@@ -2520,8 +2508,6 @@ async function openCreateProjectModal() {
         description: '',
         watched_folder: result.folder || null,
         delivery_folder: result.delivery_folder || null,
-        pcloud_path: result.pcloud_path?.trim() || null,
-        pcloud_folder_id: result.pcloud_folder_id ? Number(result.pcloud_folder_id) : null,
       }),
     })
     await loadWorkspace()
@@ -2550,13 +2536,11 @@ async function openEditProjectModal(project) {
     folder: project.watched_folder || '',
     delivery_folder: project.delivery_folder || '',
     source_scope: project.source_scope || '',
-    pcloud_path: project.pcloud_path || '',
-    pcloud_folder_id: project.pcloud_folder_id || '',
   })
 
   const result = await openModal({
     title: 'Projekt bearbeiten',
-    copy: 'Hier bearbeitest du die lokalen Quellordner, den Lieferordner sowie den optionalen pCloud-Pfad und die folderid des Projekts. Die Quellordner-Auswahl kann hier auch später erneut geändert werden, ohne den Chat zu unterbrechen.',
+    copy: 'Hier bearbeitest du die lokalen Quellordner und den Lieferordner. Die Quellordner-Auswahl kann hier auch später erneut geändert werden, ohne den Chat zu unterbrechen.',
     content: form,
     submitLabel: 'Speichern',
     validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.delivery_folder?.trim()),
@@ -2633,8 +2617,6 @@ async function openEditProjectModal(project) {
         description: project.description || '',
         watched_folder: result.folder || null,
         delivery_folder: result.delivery_folder || null,
-        pcloud_path: result.pcloud_path?.trim() || null,
-        pcloud_folder_id: result.pcloud_folder_id ? Number(result.pcloud_folder_id) : null,
       }),
     })
     await loadProjects()
@@ -2745,10 +2727,9 @@ async function openProjectFilesModal(project) {
     const renderStorage = (storage) => {
       wrapper.innerHTML = ''
       summary.innerHTML = `
-        <div class="storage-summary-line"><span>Speicher</span><strong>${escapeHtml(storage.provider || 'local')}</strong></div>
-        <div class="storage-summary-line"><span>Ablage</span><strong>${escapeHtml(storage.bucket || 'lokal')}</strong></div>
-        <div class="storage-summary-line"><span>Pfad</span><strong>${escapeHtml(storage.key_prefix || project.watched_folder || '—')}</strong></div>
-        <div class="storage-summary-line"><span>Ordner</span><strong>${escapeHtml(storage.watched_folder || '—')}</strong></div>
+        <div class="storage-summary-line"><span>Speicherort</span><strong>lokal</strong></div>
+        <div class="storage-summary-line"><span>Quellordner</span><strong>${escapeHtml(storage.watched_folder || project.watched_folder || '—')}</strong></div>
+        <div class="storage-summary-line"><span>Lieferordner</span><strong>${escapeHtml(storage.delivery_folder || project.delivery_folder || '—')}</strong></div>
       `
       filesHost.innerHTML = ''
 
@@ -3205,10 +3186,9 @@ async function refreshDashboardStorage(container, projectId) {
     const storage = await apiJson(`/files/projects/${projectId}/storage`)
     renderDashboardProjectFiles(container, storage)
     summary.innerHTML = `
-      <div class="storage-summary-line"><span>Speicher</span><strong>${escapeHtml(storage.provider || 'local')}</strong></div>
-      <div class="storage-summary-line"><span>Ablage</span><strong>${escapeHtml(storage.bucket || 'lokal')}</strong></div>
-      <div class="storage-summary-line"><span>Pfad</span><strong>${escapeHtml(storage.key_prefix || '—')}</strong></div>
-      <div class="storage-summary-line"><span>Ordner</span><strong>${escapeHtml(storage.watched_folder || '—')}</strong></div>
+      <div class="storage-summary-line"><span>Speicherort</span><strong>lokal</strong></div>
+      <div class="storage-summary-line"><span>Quellordner</span><strong>${escapeHtml(storage.watched_folder || '—')}</strong></div>
+      <div class="storage-summary-line"><span>Lieferordner</span><strong>${escapeHtml(storage.delivery_folder || '—')}</strong></div>
     `
     container.querySelector('[data-upload-btn]').disabled = false
     container.querySelector('[data-upload-input]').dataset.projectId = String(projectId)
