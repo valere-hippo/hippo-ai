@@ -430,6 +430,25 @@ function formatProjectAccessSummary(project) {
   return parts.length ? parts.join(' · ') : 'Kein Zugriff gespeichert'
 }
 
+function formatProjectSyncStatus(project) {
+  if (!project?.id) return ''
+  const job = state.projectSyncJobs.get(project.id)
+  if (!job) return ''
+  const parts = []
+  if (job.phase) parts.push(job.phase)
+  if (Number.isFinite(job.uploaded) || Number.isFinite(job.skipped)) {
+    parts.push(`${job.uploaded || 0} hochgeladen${job.skipped ? `, ${job.skipped} übersprungen` : ''}`)
+  }
+  if (Number.isFinite(job.processed) && Number.isFinite(job.totalFiles) && job.totalFiles > 0) {
+    const percent = Math.max(0, Math.min(100, Math.round((job.processed / job.totalFiles) * 100)))
+    parts.push(`${job.processed}/${job.totalFiles} Dateien · ${percent}%`)
+  }
+  if (Number.isFinite(job.folderIndex) && Number.isFinite(job.totalFolders) && job.totalFolders > 0) {
+    parts.push(`Ordner ${job.folderIndex}/${job.totalFolders}`)
+  }
+  return parts.length ? `Hintergrundsync: ${parts.join(' · ')}` : 'Hintergrundsync läuft'
+}
+
 async function requestProjectFolderConsent(project) {
   const folders = normalizeProjectFolderInput(project?.watched_folder)
   if (!folders.length) return false
@@ -528,21 +547,43 @@ function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) 
   const folders = (sourceFolders && sourceFolders.length ? sourceFolders : normalizeProjectFolderInput(project?.watched_folder))
   if (!folders.length) return Promise.resolve({ ok: false, error: 'Keine Quellordner ausgewählt' })
   const existingJob = state.projectSyncJobs.get(project.id)
-  if (existingJob) return existingJob
+  if (existingJob?.promise) return existingJob.promise
 
-  const job = syncProjectSourcesToS3(project, folders, { background: true, silent: Boolean(options.silent) })
-    .finally(() => {
-      state.projectSyncJobs.delete(project.id)
-      if (state.selectedProjectId === project.id) {
-        renderContext()
-      }
-    })
+  const job = {
+    phase: 'wartet',
+    uploaded: 0,
+    skipped: 0,
+    processed: 0,
+    totalFiles: 0,
+    folderIndex: 0,
+    totalFolders: folders.length,
+    startedAt: new Date().toISOString(),
+    promise: null,
+  }
+  const promise = syncProjectSourcesToS3(project, folders, {
+    background: true,
+    silent: Boolean(options.silent),
+    onProgress: (progress) => {
+      Object.assign(job, progress || {})
+      renderContext()
+    },
+    onPhase: (phase) => {
+      job.phase = phase
+      renderContext()
+    },
+  }).finally(() => {
+    state.projectSyncJobs.delete(project.id)
+    if (state.selectedProjectId === project.id) {
+      renderContext()
+    }
+  })
+  job.promise = promise
   state.projectSyncJobs.set(project.id, job)
   renderContext()
   if (!options.silent) {
     showToast(`Hintergrundsynchronisation gestartet: ${project.name}`)
   }
-  return job
+  return promise
 }
 
 async function refreshProjectFolderContext(project, { force = false, requireConsent = false } = {}) {
@@ -929,7 +970,7 @@ function renderContext() {
             : ''
   const localFolders = normalizeProjectFolderInput(project?.watched_folder)
   const projectLabel = project
-    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${project.pcloud_path ? ` · pCloud: ${project.pcloud_path}` : ''}${project.pcloud_folder_id ? ` · folderid: ${project.pcloud_folder_id}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}${state.projectSyncJobs.has(project.id) ? ' · Hintergrundsync läuft' : ''}`
+    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${project.pcloud_path ? ` · pCloud: ${project.pcloud_path}` : ''}${project.pcloud_folder_id ? ` · folderid: ${project.pcloud_folder_id}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}${formatProjectSyncStatus(project) ? ` · ${formatProjectSyncStatus(project)}` : ''}`
     : ''
   els.selectedInfo.innerHTML = ''
   if (state.currentConversationId) {
@@ -4954,22 +4995,33 @@ async function syncProjectSourcesToS3(project, sourceFolders = null, options = {
 
   const background = Boolean(options.background)
   const silent = Boolean(options.silent)
+  const emitPhase = typeof options.onPhase === 'function' ? options.onPhase : null
+  const emitProgress = typeof options.onProgress === 'function' ? options.onProgress : null
   if (!background) {
     showLoader('Quellordner werden gescannt und nach S3 hochgeladen...')
   }
   try {
+    emitPhase?.('bereinige S3')
     await apiJson(`/files/projects/${project.id}/storage`, { method: 'DELETE' })
     let uploaded = 0
     let skipped = 0
-    for (const folder of folders) {
+    let processed = 0
+    let totalFiles = 0
+    for (const [folderIndex, folder] of folders.entries()) {
+      emitPhase?.(`scanne Ordner ${folderIndex + 1}/${folders.length}`)
       const scan = await window.electron.scanProjectFolderFiles({ folder, maxDepth: 999, maxFiles: 50000 })
       if (!scan?.ok) {
         throw new Error(scan?.error || `Ordner konnte nicht gescannt werden: ${folder}`)
       }
-      for (const file of scan.files || []) {
+      const files = Array.isArray(scan.files) ? scan.files : []
+      totalFiles += files.length
+      emitProgress?.({ folderIndex: folderIndex + 1, totalFolders: folders.length, processed, totalFiles, uploaded, skipped, phase: 'lädt hoch' })
+      for (const file of files) {
         const read = await window.electron.readLocalFile({ path: file.path })
         if (!read?.ok) {
           skipped += 1
+          processed += 1
+          emitProgress?.({ folderIndex: folderIndex + 1, totalFolders: folders.length, processed, totalFiles, uploaded, skipped, phase: 'lädt hoch' })
           continue
         }
         const payload = {
@@ -4984,13 +5036,17 @@ async function syncProjectSourcesToS3(project, sourceFolders = null, options = {
           body: JSON.stringify(payload),
         })
         uploaded += 1
+        processed += 1
+        emitProgress?.({ folderIndex: folderIndex + 1, totalFolders: folders.length, processed, totalFiles, uploaded, skipped, phase: 'lädt hoch' })
       }
     }
     try {
+      emitPhase?.('aktualisiere Tools')
       await apiJson(`/tools/library/projects/${project.id}/sync-file-tools`, { method: 'POST' })
     } catch (toolError) {
       console.warn('Project file tool sync failed:', toolError)
     }
+    emitProgress?.({ folderIndex: folders.length, totalFolders: folders.length, processed, totalFiles, uploaded, skipped, phase: 'fertig' })
     return { ok: true, uploaded, skipped }
   } catch (error) {
     return { ok: false, error: error.message || String(error) }
