@@ -29,7 +29,7 @@ const state = {
   projectConversationMemory: new Map(),
   projectFolderContextCache: new Map(),
   projectFolderScanState: new Map(),
-  projectSyncJobs: new Map(),
+  projectRefreshJobs: new Map(),
   projectQuery: '',
   chatQuery: '',
   adminOverview: null,
@@ -427,9 +427,9 @@ function formatProjectAccessSummary(project) {
   return parts.length ? parts.join(' · ') : 'Kein Zugriff gespeichert'
 }
 
-function formatProjectSyncStatus(project) {
+function formatProjectRefreshStatus(project) {
   if (!project?.id) return ''
-  const job = state.projectSyncJobs.get(project.id)
+  const job = state.projectRefreshJobs.get(project.id)
   if (!job) return ''
   const parts = []
   if (job.phase) parts.push(job.phase)
@@ -540,7 +540,7 @@ function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) 
   if (!project?.id) return Promise.resolve({ ok: false, error: 'Kein Projekt ausgewählt' })
   const folders = (sourceFolders && sourceFolders.length ? sourceFolders : normalizeProjectFolderInput(project?.watched_folder))
   if (!folders.length) return Promise.resolve({ ok: false, error: 'Keine Quellordner ausgewählt' })
-  const existingJob = state.projectSyncJobs.get(project.id)
+  const existingJob = state.projectRefreshJobs.get(project.id)
   if (existingJob?.promise) return existingJob.promise
 
   const resumeWaiters = []
@@ -575,7 +575,7 @@ function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) 
     renderContext()
   }
 
-  const promise = syncProjectSourcesToS3(project, folders, {
+  const promise = refreshLocalProjectSources(project, folders, {
     background: true,
     silent: Boolean(options.silent),
     waitIfPaused: () => job.waitForResume(),
@@ -594,16 +594,16 @@ function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) 
       renderContext()
     },
   }).finally(() => {
-    state.projectSyncJobs.delete(project.id)
+    state.projectRefreshJobs.delete(project.id)
     if (state.selectedProjectId === project.id) {
       renderContext()
     }
   })
   job.promise = promise
-  state.projectSyncJobs.set(project.id, job)
+  state.projectRefreshJobs.set(project.id, job)
   renderContext()
   if (!options.silent) {
-    showToast(`Hintergrundsynchronisation gestartet: ${project.name}`)
+    showToast(`Lokale Aktualisierung gestartet: ${project.name}`)
   }
   return promise
 }
@@ -986,7 +986,7 @@ function renderContext() {
           : ''
   const localFolders = normalizeProjectFolderInput(project?.watched_folder)
   const projectLabel = project
-    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}${formatProjectSyncStatus(project) ? ` · ${formatProjectSyncStatus(project)}` : ''}`
+    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}${formatProjectRefreshStatus(project) ? ` · ${formatProjectRefreshStatus(project)}` : ''}`
     : ''
   els.selectedInfo.innerHTML = ''
   if (state.currentConversationId) {
@@ -1003,7 +1003,7 @@ function renderContext() {
   label.textContent = projectLabel || (state.currentConversationId ? 'Globale Unterhaltung' : 'Kein Projekt gewählt')
   summary.appendChild(label)
 
-  const syncJob = project ? state.projectSyncJobs.get(project.id) : null
+  const syncJob = project ? state.projectRefreshJobs.get(project.id) : null
   if (syncJob) {
     const progressCard = document.createElement('div')
     progressCard.className = 'project-sync-progress'
@@ -2456,31 +2456,9 @@ function buildProjectForm(defaults = {}) {
   deliveryRow.append(deliveryInput, deliveryButton)
   deliveryField.appendChild(deliveryRow)
 
-  const pcloudField = document.createElement('label')
-  pcloudField.className = 'field'
-  pcloudField.innerHTML = ''
-  const pcloudInput = document.createElement('input')
-  pcloudInput.id = 'pcloud_path'
-  pcloudInput.type = 'text'
-  pcloudInput.className = 'text-input'
-  pcloudInput.placeholder = '/Hippo/Projektordner'
-  pcloudInput.value = defaults.pcloud_path || ''
-  pcloudField.hidden = true
 
-  const folderIdField = document.createElement('label')
-  folderIdField.className = 'field'
-  folderIdField.innerHTML = ''
-  const folderIdInput = document.createElement('input')
-  folderIdInput.id = 'pcloud_folder_id'
-  folderIdInput.type = 'number'
-  folderIdInput.min = '1'
-  folderIdInput.step = '1'
-  folderIdInput.className = 'text-input'
-  folderIdInput.placeholder = '123456'
-  folderIdInput.value = defaults.pcloud_folder_id || ''
-  folderIdField.hidden = true
 
-  wrapper.append(nameField, accessField, deliveryField, pcloudField, folderIdField, folderField, hint)
+  wrapper.append(nameField, accessField, deliveryField, folderField, hint)
   return wrapper
 }
 
@@ -5066,7 +5044,7 @@ async function configureProjectSourceScope(project) {
   return { ...scope, saved: true, sourceFolders: persisted?.sourceFolders || scope.sourceFolders }
 }
 
-async function syncProjectSourcesToS3(project, sourceFolders = null, options = {}) {
+async function refreshLocalProjectSources(project, sourceFolders = null, options = {}) {
   if (!project?.id) return { ok: false, error: 'Kein Projekt ausgewählt' }
   const folders = (sourceFolders && sourceFolders.length ? sourceFolders : normalizeProjectFolderInput(project?.watched_folder))
   if (!folders.length) return { ok: false, error: 'Keine Quellordner ausgewählt' }

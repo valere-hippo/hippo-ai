@@ -10,13 +10,9 @@ from app.models.user import UserRole
 from app.models.project import Project
 from app.models.permission import PermissionLevel
 from app.services.project_storage import (
-    can_use_s3_storage,
     clear_project_storage,
     delete_project_file,
-    has_s3_storage,
     list_project_files,
-    project_bucket_name,
-    project_object_prefix,
     read_project_file,
     store_project_file,
 )

@@ -11,8 +11,6 @@ from app.models.project import Project
 from app.models.user import UserRole
 from app.schemas.project import ProjectCreate, ProjectResponse
 from app.services.notifications import notify_project_created
-from app.services.pcloud_storage import normalize_pcloud_folder_id, normalize_pcloud_path
-from app.services.project_storage import delete_project_bucket, ensure_project_bucket, has_s3_storage
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -37,16 +35,6 @@ def _normalize_folder_list(folder: str | None, *, required: bool = False) -> str
     return '\n'.join(dict.fromkeys(normalized))
 
 
-def _normalize_pcloud_reference(path: str | None, folder_id: int | str | None) -> tuple[str | None, int | None]:
-    path_value = (path or '').strip() or None
-    folder_value = normalize_pcloud_folder_id(folder_id)
-    if path_value is None and folder_value is None:
-        return None, None
-    if not path_value or folder_value is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitte entweder beide pCloud-Felder ausfüllen oder beide leer lassen.")
-    normalized_path = normalize_pcloud_path(path_value)
-    return normalized_path, folder_value
-
 async def _load_project(db: DbSession, project_id: int) -> Project:
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -59,7 +47,7 @@ async def _load_project(db: DbSession, project_id: int) -> Project:
 async def create_project(payload: ProjectCreate, db: DbSession, current_user=Depends(get_current_user)):
     watched_folder = _normalize_folder_list(payload.watched_folder, required=True)
     delivery_folder = _normalize_folder_list(payload.delivery_folder, required=True)
-    pcloud_path, pcloud_folder_id = _normalize_pcloud_reference(payload.pcloud_path, payload.pcloud_folder_id)
+    pcloud_path, pcloud_folder_id = None, None
 
     stmt = insert(Project).values(
         name=payload.name.strip(),
@@ -74,13 +62,6 @@ async def create_project(payload: ProjectCreate, db: DbSession, current_user=Dep
     result = await db.execute(stmt)
     await db.commit()
     project = result.scalar_one()
-
-    if has_s3_storage():
-        try:
-            ensure_project_bucket(project)
-        except Exception:
-            # Shared-folder projects no longer depend on S3; keep the project if bucket setup fails.
-            pass
 
     await db.execute(
         insert(ProjectPermission).values(user_id=current_user.id, project_id=project.id, level=PermissionLevel.ADMIN)
@@ -129,7 +110,7 @@ async def update_project(project_id: int, payload: ProjectCreate, db: DbSession,
 
     watched_folder = _normalize_folder_list(payload.watched_folder, required=True)
     delivery_folder = _normalize_folder_list(payload.delivery_folder, required=True)
-    pcloud_path, pcloud_folder_id = _normalize_pcloud_reference(payload.pcloud_path, payload.pcloud_folder_id)
+    pcloud_path, pcloud_folder_id = None, None
     updates = {
         "name": payload.name.strip(),
         "description": payload.description,
@@ -165,5 +146,4 @@ async def delete_project(project_id: int, db: DbSession, current_user=Depends(ge
     await db.execute(Project.__table__.delete().where(Project.id == project_id))
     await db.commit()
 
-    delete_project_bucket(project)
     return {"ok": True}
