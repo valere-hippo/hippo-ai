@@ -19,6 +19,7 @@ TARGET_SCHEMA = "hippoai"
 def upgrade() -> None:
     op.add_column("ai_projects", sa.Column("delivery_folder", sa.String(length=1000), nullable=True), schema=TARGET_SCHEMA)
     op.add_column("ai_projects", sa.Column("active_conversation_id", sa.Integer(), nullable=True), schema=TARGET_SCHEMA)
+    op.add_column("ai_projects", sa.Column("source_scope", sa.Text(), nullable=True), schema=TARGET_SCHEMA)
     op.create_foreign_key(
         "fk_ai_projects_active_conversation_id_ai_conversations",
         "ai_projects",
@@ -31,6 +32,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_column("ai_projects", "source_scope", schema=TARGET_SCHEMA)
     op.drop_constraint("fk_ai_projects_active_conversation_id_ai_conversations", "ai_projects", schema=TARGET_SCHEMA, type_="foreignkey")
     op.drop_column("ai_projects", "active_conversation_id", schema=TARGET_SCHEMA)
     op.drop_column("ai_projects", "delivery_folder", schema=TARGET_SCHEMA)

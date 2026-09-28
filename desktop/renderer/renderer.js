@@ -397,6 +397,25 @@ function hasProjectFolderConsent(folder) {
   return localStorage.getItem(projectFolderConsentKey(folder)) === '1'
 }
 
+function normalizeStoredProjectSourceScope(value) {
+  if (!value) return null
+  if (typeof value === 'string') {
+    try {
+      return normalizeStoredProjectSourceScope(JSON.parse(value))
+    } catch (error) {
+      return null
+    }
+  }
+  if (typeof value !== 'object') return null
+  const sourceFolders = Array.isArray(value.source_folders)
+    ? value.source_folders.map((folder) => String(folder || '').trim()).filter(Boolean)
+    : []
+  return {
+    sourceFolders,
+    consented: Boolean(value.consented),
+  }
+}
+
 async function requestProjectFolderConsent(project) {
   const folders = normalizeProjectFolderInput(project?.watched_folder)
   if (!folders.length) return false
@@ -428,43 +447,66 @@ async function requestProjectFolderConsent(project) {
 }
 
 function getProjectSourceScopeStorageKey(project) {
-  const folders = normalizeProjectFolderInput(project?.watched_folder)
-  const pcloudPart = project?.pcloud_path && project?.pcloud_folder_id
-    ? `|pcloud:${String(project.pcloud_path).trim()}#${String(project.pcloud_folder_id).trim()}`
-    : ''
-  return `hippo.project.source-scope:${String(project?.id || '').trim()}:${folders.join('|')}${pcloudPart}`
+  return `hippo.project.source-scope:${String(project?.id || '').trim()}`
 }
 
 function loadProjectSourceScope(project) {
   if (!project?.id) return null
+  const backendScope = normalizeStoredProjectSourceScope(project.source_scope)
+  if (backendScope) return backendScope
   const raw = localStorage.getItem(getProjectSourceScopeStorageKey(project))
   if (!raw) return null
   try {
-    const parsed = JSON.parse(raw)
-    const sourceFolders = Array.isArray(parsed?.sourceFolders)
-      ? parsed.sourceFolders.map((folder) => String(folder || '').trim()).filter(Boolean)
-      : []
-    return sourceFolders.length ? { sourceFolders } : null
+    return normalizeStoredProjectSourceScope(JSON.parse(raw))
   } catch (error) {
     return null
   }
 }
 
-function saveProjectSourceScope(project, sourceFolders) {
+async function saveProjectSourceScope(project, sourceFolders, { consented = true } = {}) {
   if (!project?.id) return
   const cleanFolders = (Array.isArray(sourceFolders) ? sourceFolders : [])
     .map((folder) => String(folder || '').trim())
     .filter(Boolean)
   if (!cleanFolders.length) return
-  localStorage.setItem(getProjectSourceScopeStorageKey(project), JSON.stringify({
-    sourceFolders: cleanFolders,
-    savedAt: new Date().toISOString(),
-  }))
+  const scope = {
+    source_folders: cleanFolders,
+    consented: Boolean(consented),
+  }
+  localStorage.setItem(getProjectSourceScopeStorageKey(project), JSON.stringify(scope))
+  const response = await apiJson(`/projects/${project.id}/access`, {
+    method: 'PUT',
+    body: JSON.stringify(scope),
+  })
+  const backendScope = normalizeStoredProjectSourceScope(response?.source_scope)
+  if (backendScope) {
+    localStorage.setItem(getProjectSourceScopeStorageKey(project), JSON.stringify(response.source_scope))
+    state.projects = state.projects.map((item) => (
+      item.id === project.id
+        ? { ...item, source_scope: JSON.stringify(response.source_scope) }
+        : item
+    ))
+    return backendScope
+  }
+  return { sourceFolders: cleanFolders, consented: Boolean(consented) }
 }
 
-function clearProjectSourceScope(project) {
+async function clearProjectSourceScope(project) {
   if (!project?.id) return
   localStorage.removeItem(getProjectSourceScopeStorageKey(project))
+  state.projects = state.projects.map((item) => (
+    item.id === project.id
+      ? { ...item, source_scope: JSON.stringify({ source_folders: [], consented: false }) }
+      : item
+  ))
+  try {
+    await apiJson(`/projects/${project.id}/access`, {
+      method: 'PUT',
+      body: JSON.stringify({ source_folders: [], consented: false }),
+    })
+  } catch (error) {
+    console.warn('Failed to clear project source scope', error)
+  }
 }
 
 async function refreshProjectFolderContext(project, { force = false } = {}) {
@@ -2446,6 +2488,7 @@ async function deleteProject(project) {
       state.currentConversationId = null
     }
     state.projectConversationMemory.delete(project.id)
+    clearProjectSourceScope(project)
     await loadProjects()
     await loadConversations()
     renderContext()
@@ -4836,20 +4879,20 @@ async function promptProjectSourceScope(project) {
 
 async function ensureProjectSourceScope(project) {
   const saved = loadProjectSourceScope(project)
-  if (saved?.sourceFolders?.length) {
+  if (saved?.sourceFolders?.length && saved.consented) {
     return { refresh: false, sourceFolders: saved.sourceFolders, saved: true }
   }
   const scope = await promptProjectSourceScope(project)
   if (!scope) return null
-  saveProjectSourceScope(project, scope.sourceFolders)
-  return scope
+  const persisted = await saveProjectSourceScope(project, scope.sourceFolders, { consented: true })
+  return { ...scope, saved: true, sourceFolders: persisted?.sourceFolders || scope.sourceFolders }
 }
 
 async function configureProjectSourceScope(project) {
   const scope = await promptProjectSourceScope(project)
   if (!scope) return null
-  saveProjectSourceScope(project, scope.sourceFolders)
-  return scope
+  const persisted = await saveProjectSourceScope(project, scope.sourceFolders, { consented: true })
+  return { ...scope, saved: true, sourceFolders: persisted?.sourceFolders || scope.sourceFolders }
 }
 
 async function syncProjectSourcesToS3(project, sourceFolders = null) {
