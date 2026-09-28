@@ -1071,6 +1071,16 @@ function renderContext() {
   const actions = document.createElement('div')
   actions.className = 'project-context-actions'
 
+  const menuButton = document.createElement('button')
+  menuButton.type = 'button'
+  menuButton.className = 'ghost-action'
+  menuButton.style.padding = '4px 10px'
+  menuButton.textContent = 'Projektmenü'
+  menuButton.addEventListener('click', async () => {
+    await openEditProjectModal(project)
+  })
+  actions.appendChild(menuButton)
+
   if (project && localFolders.length) {
     const scope = loadProjectSourceScope(project)
     const scopeButton = document.createElement('button')
@@ -2524,7 +2534,7 @@ async function openEditProjectModal(project) {
     validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.delivery_folder?.trim()),
     extraActions: [
       {
-        label: 'Quellordner / Zugriff',
+        label: 'Quellordner verwalten',
         className: 'ghost-action',
         onClick: async ({ close }) => {
           close()
@@ -2545,7 +2555,23 @@ async function openEditProjectModal(project) {
         },
       },
       {
-        label: 'Zugriff entfernen',
+        label: 'Projektquellen neu synchronisieren',
+        className: 'ghost-action',
+        onClick: async ({ close }) => {
+          close()
+          showLoader('Projektquellen werden aktualisiert...')
+          try {
+            await scheduleProjectSourceSync(project, normalizeProjectFolderInput(project.watched_folder), { silent: true })
+            showToast('Projektquellen werden lokal aktualisiert')
+          } catch (error) {
+            showToast(error.message || 'Projektquellen konnten nicht synchronisiert werden', 'error')
+          } finally {
+            hideLoader()
+          }
+        },
+      },
+      {
+        label: 'Zugriff entziehen',
         className: 'ghost-action',
         onClick: async ({ close }) => {
           close()
