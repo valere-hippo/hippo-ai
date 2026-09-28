@@ -1200,7 +1200,30 @@ function renderContext() {
     }
   })
   menu.appendChild(menuPanel)
-  actions.appendChild(menu)
+
+  const accessButton = document.createElement('button')
+  accessButton.type = 'button'
+  accessButton.className = 'primary-action'
+  accessButton.style.padding = '4px 12px'
+  accessButton.textContent = project?.source_scope ? 'Lokalen Zugriff ändern' : 'Lokalen Zugriff erlauben'
+  accessButton.addEventListener('click', async () => {
+    showLoader('Lokaler Zugriff wird geöffnet...')
+    try {
+      const scopeResult = await configureProjectSourceScope(project)
+      if (!scopeResult) return
+      if (scopeResult.refresh) {
+        scheduleProjectSourceSync(project, scopeResult.sourceFolders)
+      } else {
+        showToast('Lokaler Zugriff gespeichert')
+      }
+    } catch (error) {
+      showToast(error.message || 'Lokaler Zugriff konnte nicht geöffnet werden', 'error')
+    } finally {
+      hideLoader()
+    }
+  })
+
+  actions.append(accessButton, menu)
 
   summary.appendChild(actions)
   els.selectedInfo.appendChild(summary)
@@ -1248,9 +1271,9 @@ function renderProjects() {
     const parts = []
     const localFolders = normalizeProjectFolderInput(project.watched_folder)
     if (localFolders.length) parts.push(`Quellen: ${localFolders.join(' · ')}`)
-    if (project.source_scope) parts.push(`Zugriff: ${formatProjectAccessSummary(project)}`)
+    parts.push(project.source_scope ? `Zugriff: ${formatProjectAccessSummary(project)}` : 'Zugriff: noch nicht freigegeben')
     if (project.delivery_folder) parts.push(`Lieferung: ${project.delivery_folder}`)
-    subtitle.textContent = parts.length ? parts.join(' · ') : 'Kein Ordner verknüpft'
+    subtitle.textContent = parts.join(' · ')
     main.append(title, subtitle)
 
     const chip = document.createElement('div')
@@ -1271,6 +1294,29 @@ function renderProjects() {
       await openEditProjectModal(project)
     })
 
+    const accessAction = document.createElement('button')
+    accessAction.type = 'button'
+    accessAction.className = 'item-action-button'
+    accessAction.title = 'Lokalen Zugriff verwalten'
+    accessAction.textContent = '🔐'
+    accessAction.addEventListener('click', async (event) => {
+      event.stopPropagation()
+      showLoader('Lokaler Zugriff wird geöffnet...')
+      try {
+        const scopeResult = await configureProjectSourceScope(project)
+        if (!scopeResult) return
+        if (scopeResult.refresh) {
+          scheduleProjectSourceSync(project, scopeResult.sourceFolders)
+        } else {
+          showToast('Lokaler Zugriff gespeichert')
+        }
+      } catch (error) {
+        showToast(error.message || 'Lokaler Zugriff konnte nicht geöffnet werden', 'error')
+      } finally {
+        hideLoader()
+      }
+    })
+
     const deleteAction = document.createElement('button')
     deleteAction.type = 'button'
     deleteAction.className = 'item-action-button danger'
@@ -1281,7 +1327,7 @@ function renderProjects() {
       await deleteProject(project)
     })
 
-    actions.append(folderAction, deleteAction)
+    actions.append(folderAction, accessAction, deleteAction)
 
     row.append(icon, main, chip, actions)
     els.projectList.appendChild(row)
