@@ -654,6 +654,12 @@ textarea {
   transition: width 180ms ease;
 }
 
+.project-sync-progress-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .project-sync-progress.indeterminate .project-sync-progress-fill {
   position: absolute;
   left: 0;

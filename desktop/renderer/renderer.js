@@ -549,8 +549,11 @@ function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) 
   const existingJob = state.projectSyncJobs.get(project.id)
   if (existingJob?.promise) return existingJob.promise
 
+  const resumeWaiters = []
   const job = {
     phase: 'wartet',
+    lastActivePhase: 'wartet',
+    paused: false,
     uploaded: 0,
     skipped: 0,
     processed: 0,
@@ -560,15 +563,40 @@ function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) 
     startedAt: new Date().toISOString(),
     promise: null,
   }
+  job.waitForResume = () => {
+    if (!job.paused) return Promise.resolve()
+    return new Promise((resolve) => resumeWaiters.push(resolve))
+  }
+  job.setPaused = (paused) => {
+    const nextPaused = Boolean(paused)
+    if (job.paused === nextPaused) return
+    job.paused = nextPaused
+    if (nextPaused) {
+      job.phase = 'pausiert'
+    } else {
+      job.phase = job.lastActivePhase || 'lädt hoch'
+      const queued = resumeWaiters.splice(0)
+      queued.forEach((resolve) => resolve())
+    }
+    renderContext()
+  }
+
   const promise = syncProjectSourcesToS3(project, folders, {
     background: true,
     silent: Boolean(options.silent),
+    waitIfPaused: () => job.waitForResume(),
     onProgress: (progress) => {
       Object.assign(job, progress || {})
+      if (job.phase && job.phase !== 'pausiert') {
+        job.lastActivePhase = job.phase
+      }
       renderContext()
     },
     onPhase: (phase) => {
       job.phase = phase
+      if (phase && phase !== 'pausiert') {
+        job.lastActivePhase = phase
+      }
       renderContext()
     },
   }).finally(() => {
@@ -1000,11 +1028,14 @@ function renderContext() {
 
     const progressTitle = document.createElement('div')
     progressTitle.className = 'project-sync-progress-title'
-    progressTitle.textContent = syncJob.phase || 'Hintergrundsync läuft'
+    progressTitle.textContent = syncJob.paused ? 'Synchronisation pausiert' : (syncJob.phase || 'Hintergrundsync läuft')
 
     const progressMeta = document.createElement('div')
     progressMeta.className = 'project-sync-progress-meta'
     const metaParts = []
+    if (syncJob.paused) {
+      metaParts.push('pausiert')
+    }
     if (Number.isFinite(syncJob.processed) && Number.isFinite(syncJob.totalFiles) && syncJob.totalFiles > 0) {
       const percent = Math.max(0, Math.min(100, Math.round((syncJob.processed / syncJob.totalFiles) * 100)))
       metaParts.push(`${percent}%`)
@@ -1025,13 +1056,27 @@ function renderContext() {
     progressBar.className = 'project-sync-progress-bar'
     const progressFill = document.createElement('div')
     progressFill.className = 'project-sync-progress-fill'
-    if (Number.isFinite(syncJob.processed) && Number.isFinite(syncJob.totalFiles) && syncJob.totalFiles > 0) {
+    if (!syncJob.paused && Number.isFinite(syncJob.processed) && Number.isFinite(syncJob.totalFiles) && syncJob.totalFiles > 0) {
       const width = Math.max(0, Math.min(100, (syncJob.processed / syncJob.totalFiles) * 100))
       progressFill.style.width = `${width}%`
     }
     progressBar.appendChild(progressFill)
 
-    progressCard.append(progressHeader, progressBar)
+    const progressActions = document.createElement('div')
+    progressActions.className = 'project-sync-progress-actions'
+    const toggleButton = document.createElement('button')
+    toggleButton.type = 'button'
+    toggleButton.className = 'ghost-action'
+    toggleButton.style.padding = '4px 10px'
+    toggleButton.textContent = syncJob.paused ? 'Fortsetzen' : 'Pausieren'
+    toggleButton.addEventListener('click', () => {
+      if (typeof syncJob.setPaused === 'function') {
+        syncJob.setPaused(!syncJob.paused)
+      }
+    })
+    progressActions.appendChild(toggleButton)
+
+    progressCard.append(progressHeader, progressBar, progressActions)
     summary.appendChild(progressCard)
   }
 
@@ -5053,6 +5098,7 @@ async function syncProjectSourcesToS3(project, sourceFolders = null, options = {
   const silent = Boolean(options.silent)
   const emitPhase = typeof options.onPhase === 'function' ? options.onPhase : null
   const emitProgress = typeof options.onProgress === 'function' ? options.onProgress : null
+  const waitIfPaused = typeof options.waitIfPaused === 'function' ? options.waitIfPaused : null
   if (!background) {
     showLoader('Quellordner werden gescannt und nach S3 hochgeladen...')
   }
@@ -5064,6 +5110,7 @@ async function syncProjectSourcesToS3(project, sourceFolders = null, options = {
     let processed = 0
     let totalFiles = 0
     for (const [folderIndex, folder] of folders.entries()) {
+      await waitIfPaused?.()
       emitPhase?.(`scanne Ordner ${folderIndex + 1}/${folders.length}`)
       const scan = await window.electron.scanProjectFolderFiles({ folder, maxDepth: 999, maxFiles: 50000 })
       if (!scan?.ok) {
@@ -5073,6 +5120,7 @@ async function syncProjectSourcesToS3(project, sourceFolders = null, options = {
       totalFiles += files.length
       emitProgress?.({ folderIndex: folderIndex + 1, totalFolders: folders.length, processed, totalFiles, uploaded, skipped, phase: 'lädt hoch' })
       for (const file of files) {
+        await waitIfPaused?.()
         const read = await window.electron.readLocalFile({ path: file.path })
         if (!read?.ok) {
           skipped += 1
@@ -5097,6 +5145,7 @@ async function syncProjectSourcesToS3(project, sourceFolders = null, options = {
       }
     }
     try {
+      await waitIfPaused?.()
       emitPhase?.('aktualisiere Tools')
       await apiJson(`/tools/library/projects/${project.id}/sync-file-tools`, { method: 'POST' })
     } catch (toolError) {
