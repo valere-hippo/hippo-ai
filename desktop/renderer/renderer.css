@@ -603,6 +603,78 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: flex-start;
+}
+
+.project-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.project-menu > summary {
+  list-style: none;
+}
+
+.project-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.project-menu-summary {
+  min-height: 42px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.project-menu[open] .project-menu-summary {
+  background: rgba(85, 208, 186, 0.12);
+  border-color: rgba(85, 208, 186, 0.22);
+}
+
+.project-menu-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 280px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(9, 16, 23, 0.98);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.28);
+}
+
+.project-menu-item {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  text-align: left;
+}
+
+.project-menu-item:hover {
+  background: rgba(85, 208, 186, 0.12);
+  border-color: rgba(85, 208, 186, 0.22);
+}
+
+.project-menu-item.danger {
+  color: var(--danger);
+}
+
+.project-menu-item.danger:hover {
+  background: rgba(255, 107, 122, 0.12);
+  border-color: rgba(255, 107, 122, 0.22);
 }
 
 .project-sync-progress {

@@ -1071,15 +1071,84 @@ function renderContext() {
   const actions = document.createElement('div')
   actions.className = 'project-context-actions'
 
-  const menuButton = document.createElement('button')
-  menuButton.type = 'button'
-  menuButton.className = 'ghost-action'
-  menuButton.style.padding = '4px 10px'
-  menuButton.textContent = 'Projektmenü'
-  menuButton.addEventListener('click', async () => {
-    await openEditProjectModal(project)
+  const menu = document.createElement('details')
+  menu.className = 'project-menu'
+  const menuSummary = document.createElement('summary')
+  menuSummary.className = 'project-menu-summary'
+  menuSummary.textContent = 'Projektmenü'
+  menu.appendChild(menuSummary)
+
+  const menuPanel = document.createElement('div')
+  menuPanel.className = 'project-menu-panel'
+
+  const addMenuItem = (label, handler, { danger = false } = {}) => {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = `project-menu-item${danger ? ' danger' : ''}`
+    button.textContent = label
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation()
+      menu.open = false
+      await handler()
+    })
+    menuPanel.appendChild(button)
+  }
+
+  addMenuItem('Projekt bearbeiten / Lieferordner ändern', () => openEditProjectModal(project))
+  addMenuItem('Quellordner hinzufügen oder entfernen', async () => {
+    showLoader('Quellordner werden geöffnet...')
+    try {
+      const scopeResult = await configureProjectSourceScope(project)
+      if (!scopeResult) return
+      if (scopeResult.refresh) {
+        scheduleProjectSourceSync(project, scopeResult.sourceFolders)
+      } else {
+        showToast('Quellordner-Auswahl gespeichert')
+      }
+    } catch (error) {
+      showToast(error.message || 'Quellordner konnten nicht vorbereitet werden', 'error')
+    } finally {
+      hideLoader()
+    }
   })
-  actions.appendChild(menuButton)
+  addMenuItem('Zugriff freigeben', async () => {
+    showLoader('Zugriff wird gespeichert...')
+    try {
+      const scopeResult = await configureProjectSourceScope(project)
+      if (!scopeResult) return
+      showToast('Zugriff gespeichert')
+    } catch (error) {
+      showToast(error.message || 'Zugriff konnte nicht gespeichert werden', 'error')
+    } finally {
+      hideLoader()
+    }
+  })
+  addMenuItem('Zugriff entziehen', async () => {
+    showLoader('Zugriff wird entfernt...')
+    try {
+      await clearProjectSourceScope(project)
+      await loadProjects()
+      renderContext()
+      showToast('Zugriff entfernt')
+    } catch (error) {
+      showToast(error.message || 'Zugriff konnte nicht entfernt werden', 'error')
+    } finally {
+      hideLoader()
+    }
+  })
+  addMenuItem('Projektquellen neu synchronisieren', async () => {
+    showLoader('Projektquellen werden aktualisiert...')
+    try {
+      await scheduleProjectSourceSync(project, normalizeProjectFolderInput(project.watched_folder), { silent: true })
+      showToast('Projektquellen werden lokal aktualisiert')
+    } catch (error) {
+      showToast(error.message || 'Projektquellen konnten nicht synchronisiert werden', 'error')
+    } finally {
+      hideLoader()
+    }
+  })
+  menu.appendChild(menuPanel)
+  actions.appendChild(menu)
 
   if (project && localFolders.length) {
     const scope = loadProjectSourceScope(project)
