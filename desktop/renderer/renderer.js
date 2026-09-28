@@ -1080,11 +1080,25 @@ function renderContext() {
   menu.className = 'project-menu'
   const menuSummary = document.createElement('summary')
   menuSummary.className = 'project-menu-summary'
-  menuSummary.textContent = 'Projektmenü ▾'
+  menuSummary.textContent = 'Projektmenü'
   menu.appendChild(menuSummary)
 
   const menuPanel = document.createElement('div')
   menuPanel.className = 'project-menu-panel'
+
+  const menuHeader = document.createElement('div')
+  menuHeader.className = 'project-menu-header'
+  menuHeader.innerHTML = `
+    <div class="project-menu-kicker">Projekt</div>
+    <div class="project-menu-title">Lokale Änderungen</div>
+    <div class="project-menu-copy">Änderungen bleiben im Chat sichtbar und unterbrechen ihn nicht.</div>
+  `
+  menuPanel.appendChild(menuHeader)
+  const menuDivider = () => {
+    const divider = document.createElement('div')
+    divider.className = 'project-menu-divider'
+    menuPanel.appendChild(divider)
+  }
 
   const removeMenuListeners = []
   const addMenuListener = (target, type, handler, options) => {
@@ -1130,8 +1144,9 @@ function renderContext() {
   }
   state.projectMenuCleanup = cleanupProjectMenu
 
-  addMenuItem('Projekt bearbeiten / Lieferordner ändern', () => openEditProjectModal(project))
-  addMenuItem('Quellordner hinzufügen oder entfernen', async () => {
+  addMenuItem('✎ Projekt bearbeiten / Lieferordner ändern', () => openEditProjectModal(project))
+  menuDivider()
+  addMenuItem('＋ Quellordner hinzufügen oder entfernen', async () => {
     showLoader('Quellordner werden geöffnet...')
     try {
       const scopeResult = await configureProjectSourceScope(project)
@@ -1147,7 +1162,7 @@ function renderContext() {
       hideLoader()
     }
   })
-  addMenuItem('Zugriff freigeben', async () => {
+  addMenuItem('🔓 Zugriff freigeben', async () => {
     showLoader('Zugriff wird gespeichert...')
     try {
       const scopeResult = await configureProjectSourceScope(project)
@@ -1159,7 +1174,7 @@ function renderContext() {
       hideLoader()
     }
   })
-  addMenuItem('Zugriff entziehen', async () => {
+  addMenuItem('🔒 Zugriff entziehen', async () => {
     showLoader('Zugriff wird entfernt...')
     try {
       await clearProjectSourceScope(project)
@@ -1171,8 +1186,9 @@ function renderContext() {
     } finally {
       hideLoader()
     }
-  })
-  addMenuItem('Projektquellen neu synchronisieren', async () => {
+  }, { danger: true })
+  menuDivider()
+  addMenuItem('↻ Projektquellen neu synchronisieren', async () => {
     showLoader('Projektquellen werden aktualisiert...')
     try {
       await scheduleProjectSourceSync(project, normalizeProjectFolderInput(project.watched_folder), { silent: true })
@@ -1185,55 +1201,6 @@ function renderContext() {
   })
   menu.appendChild(menuPanel)
   actions.appendChild(menu)
-
-  if (project && localFolders.length) {
-    const scope = loadProjectSourceScope(project)
-    const scopeButton = document.createElement('button')
-    scopeButton.type = 'button'
-    scopeButton.className = 'ghost-action'
-    scopeButton.style.padding = '4px 10px'
-    scopeButton.textContent = scope?.sourceFolders?.length ? 'Quellordner ändern' : 'Quellordner wählen'
-    scopeButton.addEventListener('click', async () => {
-      showLoader('Quellordner werden vorbereitet...')
-      try {
-        const scopeResult = await configureProjectSourceScope(project)
-        if (!scopeResult) return
-        if (scopeResult.refresh) {
-          scheduleProjectSourceSync(project, scopeResult.sourceFolders)
-        } else {
-          showToast('Quellordner-Auswahl gespeichert')
-        }
-      } catch (error) {
-        showToast(error.message || 'Quellordner konnten nicht vorbereitet werden', 'error')
-      } finally {
-        hideLoader()
-      }
-    })
-    actions.appendChild(scopeButton)
-
-    const action = document.createElement('button')
-    action.type = 'button'
-    action.className = 'ghost-action'
-    action.style.padding = '4px 10px'
-    action.textContent = scanState === 'consent' ? 'Zugriff erlauben' : 'Projektordner prüfen'
-    action.addEventListener('click', async () => {
-      showLoader('Projektordner wird geprüft...')
-      try {
-        const context = await refreshProjectFolderContext(project, { force: true, requireConsent: true })
-        if (!context.trim()) {
-          showToast('Der Projektordner konnte nicht gelesen werden oder ist zu groß. Bitte prüfe den Ordnerpfad.', 'error')
-        } else if (state.currentConversationId) {
-          await openConversationById(state.currentConversationId)
-        }
-        renderContext()
-      } catch (error) {
-        showToast(error.message || 'Projektordner konnte nicht geprüft werden', 'error')
-      } finally {
-        hideLoader()
-      }
-    })
-    actions.appendChild(action)
-  }
 
   summary.appendChild(actions)
   els.selectedInfo.appendChild(summary)
