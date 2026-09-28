@@ -427,6 +427,46 @@ async function requestProjectFolderConsent(project) {
   })
 }
 
+function getProjectSourceScopeStorageKey(project) {
+  const folders = normalizeProjectFolderInput(project?.watched_folder)
+  const pcloudPart = project?.pcloud_path && project?.pcloud_folder_id
+    ? `|pcloud:${String(project.pcloud_path).trim()}#${String(project.pcloud_folder_id).trim()}`
+    : ''
+  return `hippo.project.source-scope:${String(project?.id || '').trim()}:${folders.join('|')}${pcloudPart}`
+}
+
+function loadProjectSourceScope(project) {
+  if (!project?.id) return null
+  const raw = localStorage.getItem(getProjectSourceScopeStorageKey(project))
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    const sourceFolders = Array.isArray(parsed?.sourceFolders)
+      ? parsed.sourceFolders.map((folder) => String(folder || '').trim()).filter(Boolean)
+      : []
+    return sourceFolders.length ? { sourceFolders } : null
+  } catch (error) {
+    return null
+  }
+}
+
+function saveProjectSourceScope(project, sourceFolders) {
+  if (!project?.id) return
+  const cleanFolders = (Array.isArray(sourceFolders) ? sourceFolders : [])
+    .map((folder) => String(folder || '').trim())
+    .filter(Boolean)
+  if (!cleanFolders.length) return
+  localStorage.setItem(getProjectSourceScopeStorageKey(project), JSON.stringify({
+    sourceFolders: cleanFolders,
+    savedAt: new Date().toISOString(),
+  }))
+}
+
+function clearProjectSourceScope(project) {
+  if (!project?.id) return
+  localStorage.removeItem(getProjectSourceScopeStorageKey(project))
+}
+
 async function refreshProjectFolderContext(project, { force = false } = {}) {
   if (!project?.id) return ''
   if (project.pcloud_path && project.pcloud_folder_id) {
@@ -825,6 +865,36 @@ function renderContext() {
   els.selectedInfo.appendChild(label)
 
   if (project && localFolders.length && !(project?.pcloud_path && project?.pcloud_folder_id)) {
+    const scope = loadProjectSourceScope(project)
+    const scopeButton = document.createElement('button')
+    scopeButton.type = 'button'
+    scopeButton.className = 'ghost-action'
+    scopeButton.style.marginLeft = '8px'
+    scopeButton.style.padding = '4px 10px'
+    scopeButton.textContent = scope?.sourceFolders?.length ? 'Quellordner ändern' : 'Quellordner wählen'
+    scopeButton.addEventListener('click', async () => {
+      showLoader('Quellordner werden vorbereitet...')
+      try {
+        const scopeResult = await configureProjectSourceScope(project)
+        if (!scopeResult) return
+        if (scopeResult.refresh) {
+          const syncResult = await syncProjectSourcesToS3(project, scopeResult.sourceFolders)
+          if (!syncResult.ok) {
+            showToast(syncResult.error || 'Quellordner konnten nicht synchronisiert werden', 'error')
+            return
+          }
+          showToast(`Quellordner synchronisiert: ${syncResult.uploaded || 0} Dateien hochgeladen${syncResult.skipped ? `, ${syncResult.skipped} übersprungen` : ''}`)
+        } else {
+          showToast('Quellordner-Auswahl gespeichert')
+        }
+      } catch (error) {
+        showToast(error.message || 'Quellordner konnten nicht vorbereitet werden', 'error')
+      } finally {
+        hideLoader()
+      }
+    })
+    els.selectedInfo.appendChild(scopeButton)
+
     const action = document.createElement('button')
     action.type = 'button'
     action.className = 'ghost-action'
@@ -4715,7 +4785,7 @@ async function promptProjectSourceScope(project) {
 
   const result = await openModal({
     title: 'Quellordner für die Antwort auswählen',
-    copy: 'Hippo fragt zuerst nach dem Änderungszustand und danach nach den Ordnern, die für die Antwort verwendet werden sollen.',
+    copy: 'Hippo fragt zuerst nach dem Änderungszustand und danach nach den Ordnern, die für die Antwort verwendet werden sollen. Diese Auswahl wird für dieses Projekt gespeichert, damit du nicht bei jeder Nachricht neu gefragt wirst.',
     content,
     submitLabel: 'Weiter',
     validate: (values) => Boolean(values.refresh_mode),
@@ -4728,6 +4798,24 @@ async function promptProjectSourceScope(project) {
   }
   const selected = folders.filter((folder, index) => result[`source_${index}`])
   return { refresh: false, sourceFolders: selected.length ? selected : folders }
+}
+
+async function ensureProjectSourceScope(project) {
+  const saved = loadProjectSourceScope(project)
+  if (saved?.sourceFolders?.length) {
+    return { refresh: false, sourceFolders: saved.sourceFolders, saved: true }
+  }
+  const scope = await promptProjectSourceScope(project)
+  if (!scope) return null
+  saveProjectSourceScope(project, scope.sourceFolders)
+  return scope
+}
+
+async function configureProjectSourceScope(project) {
+  const scope = await promptProjectSourceScope(project)
+  if (!scope) return null
+  saveProjectSourceScope(project, scope.sourceFolders)
+  return scope
 }
 
 async function syncProjectSourcesToS3(project, sourceFolders = null) {
@@ -4854,7 +4942,7 @@ async function sendChat() {
   let projectSourcePrefixes = null
 
   if (project) {
-    const scope = await promptProjectSourceScope(project)
+    const scope = await ensureProjectSourceScope(project)
     if (!scope) return
     projectSourcePrefixes = scope.sourceFolders
     if (scope.refresh) {

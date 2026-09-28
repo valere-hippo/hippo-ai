@@ -7,6 +7,7 @@ import logging
 from app.api.dependencies import get_current_user, DbSession
 from app.models.user import User, UserRole
 from app.models.chat import Conversation, ChatMessage
+from app.services.conversation_threads import choose_latest_project_conversation_id
 from app.models.project import Project
 from app.models.permission import PermissionLevel
 from app.core.config import settings
@@ -118,6 +119,13 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
 
     # ensure conversation
     conv_id = payload.conversation_id
+    if conv_id is None and conv_project is not None:
+        existing_conversations = await db.execute(
+            select(Conversation)
+            .where(Conversation.project_id == conv_project.id)
+            .order_by(Conversation.created_at.desc(), Conversation.id.desc())
+        )
+        conv_id = choose_latest_project_conversation_id(existing_conversations.scalars().all(), conv_project.id)
     if conv_id is None:
         stmt = insert(Conversation).values(title=None, project_id=conv_project.id if conv_project else None).returning(Conversation)
         result = await db.execute(stmt)
