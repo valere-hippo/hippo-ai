@@ -1205,7 +1205,7 @@ function renderContext() {
   accessButton.type = 'button'
   accessButton.className = 'primary-action'
   accessButton.style.padding = '4px 12px'
-  accessButton.textContent = project?.source_scope ? 'Lokalen Zugriff ändern' : 'Lokalen Zugriff erlauben'
+  accessButton.textContent = project?.source_scope ? "Modifier l'accès à mes dossiers locaux" : "Autoriser l'accès à mes dossiers locaux"
   accessButton.addEventListener('click', async () => {
     showLoader('Lokaler Zugriff wird geöffnet...')
     try {
@@ -1297,7 +1297,7 @@ function renderProjects() {
     const accessAction = document.createElement('button')
     accessAction.type = 'button'
     accessAction.className = 'item-action-button'
-    accessAction.title = 'Lokalen Zugriff verwalten'
+    accessAction.title = 'Autoriser ou modifier l’accès à mes dossiers locaux'
     accessAction.textContent = '🔐'
     accessAction.addEventListener('click', async (event) => {
       event.stopPropagation()
