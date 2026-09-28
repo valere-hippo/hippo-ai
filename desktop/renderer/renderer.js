@@ -29,6 +29,7 @@ const state = {
   projectConversationMemory: new Map(),
   projectFolderContextCache: new Map(),
   projectFolderScanState: new Map(),
+  projectSyncJobs: new Map(),
   projectQuery: '',
   chatQuery: '',
   adminOverview: null,
@@ -522,6 +523,28 @@ async function clearProjectSourceScope(project) {
   }
 }
 
+function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) {
+  if (!project?.id) return Promise.resolve({ ok: false, error: 'Kein Projekt ausgewählt' })
+  const folders = (sourceFolders && sourceFolders.length ? sourceFolders : normalizeProjectFolderInput(project?.watched_folder))
+  if (!folders.length) return Promise.resolve({ ok: false, error: 'Keine Quellordner ausgewählt' })
+  const existingJob = state.projectSyncJobs.get(project.id)
+  if (existingJob) return existingJob
+
+  const job = syncProjectSourcesToS3(project, folders, { background: true, silent: Boolean(options.silent) })
+    .finally(() => {
+      state.projectSyncJobs.delete(project.id)
+      if (state.selectedProjectId === project.id) {
+        renderContext()
+      }
+    })
+  state.projectSyncJobs.set(project.id, job)
+  renderContext()
+  if (!options.silent) {
+    showToast(`Hintergrundsynchronisation gestartet: ${project.name}`)
+  }
+  return job
+}
+
 async function refreshProjectFolderContext(project, { force = false, requireConsent = false } = {}) {
   if (!project?.id) return ''
   if (project.pcloud_path && project.pcloud_folder_id) {
@@ -906,7 +929,7 @@ function renderContext() {
             : ''
   const localFolders = normalizeProjectFolderInput(project?.watched_folder)
   const projectLabel = project
-    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${project.pcloud_path ? ` · pCloud: ${project.pcloud_path}` : ''}${project.pcloud_folder_id ? ` · folderid: ${project.pcloud_folder_id}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}`
+    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${project.pcloud_path ? ` · pCloud: ${project.pcloud_path}` : ''}${project.pcloud_folder_id ? ` · folderid: ${project.pcloud_folder_id}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}${state.projectSyncJobs.has(project.id) ? ' · Hintergrundsync läuft' : ''}`
     : ''
   els.selectedInfo.innerHTML = ''
   if (state.currentConversationId) {
@@ -933,12 +956,7 @@ function renderContext() {
         const scopeResult = await configureProjectSourceScope(project)
         if (!scopeResult) return
         if (scopeResult.refresh) {
-          const syncResult = await syncProjectSourcesToS3(project, scopeResult.sourceFolders)
-          if (!syncResult.ok) {
-            showToast(syncResult.error || 'Quellordner konnten nicht synchronisiert werden', 'error')
-            return
-          }
-          showToast(`Quellordner synchronisiert: ${syncResult.uploaded || 0} Dateien hochgeladen${syncResult.skipped ? `, ${syncResult.skipped} übersprungen` : ''}`)
+          scheduleProjectSourceSync(project, scopeResult.sourceFolders)
         } else {
           showToast('Quellordner-Auswahl gespeichert')
         }
@@ -2375,14 +2393,9 @@ async function openCreateProjectModal() {
       renderProjects()
       renderConversations()
       renderContext()
+      scheduleProjectSourceSync(createdProject, normalizeProjectFolderInput(createdProject.watched_folder), { silent: true })
     }
     hideLoader()
-    if (createdProject?.id) {
-      const syncResult = await syncProjectSourcesToS3(createdProject)
-      if (!syncResult.ok) {
-        showToast(syncResult.error || 'Quellordner konnten nach der Erstellung nicht synchronisiert werden', 'error')
-      }
-    }
     showToast('Projekt erstellt')
   } catch (error) {
     hideLoader()
@@ -2419,12 +2432,7 @@ async function openEditProjectModal(project) {
             const scopeResult = await configureProjectSourceScope(project)
             if (!scopeResult) return
             if (scopeResult.refresh) {
-              const syncResult = await syncProjectSourcesToS3(project, scopeResult.sourceFolders)
-              if (!syncResult.ok) {
-                showToast(syncResult.error || 'Quellordner konnten nicht synchronisiert werden', 'error')
-                return
-              }
-              showToast(`Quellordner synchronisiert: ${syncResult.uploaded || 0} Dateien hochgeladen${syncResult.skipped ? `, ${syncResult.skipped} übersprungen` : ''}`)
+              scheduleProjectSourceSync(project, scopeResult.sourceFolders)
             } else {
               showToast('Quellordner-Auswahl gespeichert')
             }
@@ -2496,10 +2504,7 @@ async function openEditProjectModal(project) {
       const refreshedProject = state.projects.find((item) => item.id === project.id) || null
       if (refreshedProject) {
         await saveProjectSourceScope(refreshedProject, normalizeProjectFolderInput(refreshedProject.watched_folder), { consented: true })
-        const syncResult = await syncProjectSourcesToS3(refreshedProject)
-        if (!syncResult.ok) {
-          showToast(syncResult.error || 'Quellordner konnten nach dem Speichern nicht synchronisiert werden', 'error')
-        }
+        scheduleProjectSourceSync(refreshedProject, normalizeProjectFolderInput(refreshedProject.watched_folder), { silent: true })
       }
     }
     showToast('Projekt gespeichert')
@@ -4942,12 +4947,16 @@ async function configureProjectSourceScope(project) {
   return { ...scope, saved: true, sourceFolders: persisted?.sourceFolders || scope.sourceFolders }
 }
 
-async function syncProjectSourcesToS3(project, sourceFolders = null) {
+async function syncProjectSourcesToS3(project, sourceFolders = null, options = {}) {
   if (!project?.id) return { ok: false, error: 'Kein Projekt ausgewählt' }
   const folders = (sourceFolders && sourceFolders.length ? sourceFolders : normalizeProjectFolderInput(project?.watched_folder))
   if (!folders.length) return { ok: false, error: 'Keine Quellordner ausgewählt' }
 
-  showLoader('Quellordner werden gescannt und nach S3 hochgeladen...')
+  const background = Boolean(options.background)
+  const silent = Boolean(options.silent)
+  if (!background) {
+    showLoader('Quellordner werden gescannt und nach S3 hochgeladen...')
+  }
   try {
     await apiJson(`/files/projects/${project.id}/storage`, { method: 'DELETE' })
     let uploaded = 0
@@ -4986,7 +4995,11 @@ async function syncProjectSourcesToS3(project, sourceFolders = null) {
   } catch (error) {
     return { ok: false, error: error.message || String(error) }
   } finally {
-    hideLoader()
+    if (!background) {
+      hideLoader()
+    } else if (!silent && state.selectedProjectId === project.id) {
+      showToast(`Hintergrundsynchronisation abgeschlossen: ${project.name}`)
+    }
   }
 }
 
@@ -5071,12 +5084,8 @@ async function sendChat() {
       projectSourcePrefixes = scope.sourceFolders
     }
     if (scope?.refresh) {
-      const syncResult = await syncProjectSourcesToS3(project, projectSourcePrefixes)
-      if (!syncResult.ok) {
-        showToast(syncResult.error || 'Quellordner konnten nicht synchronisiert werden', 'error')
-        return
-      }
-      showToast(`Quellordner synchronisiert: ${syncResult.uploaded || 0} Dateien hochgeladen${syncResult.skipped ? `, ${syncResult.skipped} übersprungen` : ''}`)
+      scheduleProjectSourceSync(project, projectSourcePrefixes, { silent: true })
+      showToast('Quellordner werden im Hintergrund synchronisiert.')
     }
   }
 
