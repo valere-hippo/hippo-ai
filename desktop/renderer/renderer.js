@@ -30,6 +30,7 @@ const state = {
   projectFolderContextCache: new Map(),
   projectFolderScanState: new Map(),
   projectRefreshJobs: new Map(),
+  projectMenuCleanup: null,
   projectQuery: '',
   chatQuery: '',
   adminOverview: null,
@@ -988,6 +989,10 @@ function renderContext() {
   const projectLabel = project
     ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}${formatProjectRefreshStatus(project) ? ` · ${formatProjectRefreshStatus(project)}` : ''}`
     : ''
+  if (typeof state.projectMenuCleanup === 'function') {
+    state.projectMenuCleanup()
+    state.projectMenuCleanup = null
+  }
   els.selectedInfo.innerHTML = ''
   if (state.currentConversationId) {
     const conversation = state.conversations.find((item) => item.id === state.currentConversationId)
@@ -1075,11 +1080,21 @@ function renderContext() {
   menu.className = 'project-menu'
   const menuSummary = document.createElement('summary')
   menuSummary.className = 'project-menu-summary'
-  menuSummary.textContent = 'Projektmenü'
+  menuSummary.textContent = 'Projektmenü ▾'
   menu.appendChild(menuSummary)
 
   const menuPanel = document.createElement('div')
   menuPanel.className = 'project-menu-panel'
+
+  const removeMenuListeners = []
+  const addMenuListener = (target, type, handler, options) => {
+    target.addEventListener(type, handler, options)
+    removeMenuListeners.push(() => target.removeEventListener(type, handler, options))
+  }
+
+  const closeMenu = () => {
+    menu.open = false
+  }
 
   const addMenuItem = (label, handler, { danger = false } = {}) => {
     const button = document.createElement('button')
@@ -1088,11 +1103,32 @@ function renderContext() {
     button.textContent = label
     button.addEventListener('click', async (event) => {
       event.stopPropagation()
-      menu.open = false
+      closeMenu()
       await handler()
     })
     menuPanel.appendChild(button)
   }
+
+  addMenuListener(document, 'click', (event) => {
+    if (!menu.open) return
+    if (!menu.contains(event.target)) closeMenu()
+  }, true)
+  addMenuListener(document, 'keydown', (event) => {
+    if (event.key === 'Escape') closeMenu()
+  })
+  addMenuListener(menu, 'toggle', () => {
+    if (!menu.open) {
+      removeMenuListeners.splice(0).forEach((cleanup) => cleanup())
+      if (state.projectMenuCleanup === cleanupProjectMenu) {
+        state.projectMenuCleanup = null
+      }
+    }
+  })
+  const cleanupProjectMenu = () => {
+    closeMenu()
+    removeMenuListeners.splice(0).forEach((cleanup) => cleanup())
+  }
+  state.projectMenuCleanup = cleanupProjectMenu
 
   addMenuItem('Projekt bearbeiten / Lieferordner ändern', () => openEditProjectModal(project))
   addMenuItem('Quellordner hinzufügen oder entfernen', async () => {
