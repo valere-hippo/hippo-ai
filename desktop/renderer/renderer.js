@@ -522,7 +522,7 @@ async function clearProjectSourceScope(project) {
   }
 }
 
-async function refreshProjectFolderContext(project, { force = false } = {}) {
+async function refreshProjectFolderContext(project, { force = false, requireConsent = false } = {}) {
   if (!project?.id) return ''
   if (project.pcloud_path && project.pcloud_folder_id) {
     state.projectFolderScanState.set(project.id, 'pcloud')
@@ -536,7 +536,7 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
     state.projectFolderScanState.set(project.id, 'idle')
     return ''
   }
-  if (!await requestProjectFolderConsent(project)) {
+  if (requireConsent && !await requestProjectFolderConsent(project)) {
     state.projectFolderContextCache.set(project.id, '')
     state.projectFolderScanState.set(project.id, 'consent')
     return ''
@@ -565,7 +565,7 @@ async function refreshProjectFolderContext(project, { force = false } = {}) {
 function queueProjectFolderRefresh(project) {
   if (!project?.id || !project.watched_folder || (project.pcloud_path && project.pcloud_folder_id)) return Promise.resolve('')
   if (state.projectFolderScanState.get(project.id) === 'loading') return Promise.resolve(state.projectFolderContextCache.get(project.id) || '')
-  return refreshProjectFolderContext(project, { force: true }).then(() => {
+  return refreshProjectFolderContext(project, { force: true, requireConsent: false }).then(() => {
     if (state.selectedProjectId === project.id) {
       renderContext()
     }
@@ -959,7 +959,7 @@ function renderContext() {
     action.addEventListener('click', async () => {
       showLoader('Projektordner wird geprüft...')
       try {
-        const context = await refreshProjectFolderContext(project, { force: true })
+        const context = await refreshProjectFolderContext(project, { force: true, requireConsent: true })
         if (!context.trim()) {
           showToast('Der Projektordner konnte nicht gelesen werden oder ist zu groß. Bitte prüfe den Ordnerpfad.', 'error')
         } else if (state.currentConversationId) {
@@ -2369,6 +2369,7 @@ async function openCreateProjectModal() {
     })
     await loadWorkspace()
     if (createdProject?.id) {
+      await saveProjectSourceScope(createdProject, normalizeProjectFolderInput(createdProject.watched_folder), { consented: true })
       state.selectedProjectId = createdProject.id
       syncSelectedProjectConversation()
       renderProjects()
@@ -2494,6 +2495,7 @@ async function openEditProjectModal(project) {
     if (state.selectedProjectId === project.id) {
       const refreshedProject = state.projects.find((item) => item.id === project.id) || null
       if (refreshedProject) {
+        await saveProjectSourceScope(refreshedProject, normalizeProjectFolderInput(refreshedProject.watched_folder), { consented: true })
         const syncResult = await syncProjectSourcesToS3(refreshedProject)
         if (!syncResult.ok) {
           showToast(syncResult.error || 'Quellordner konnten nach dem Speichern nicht synchronisiert werden', 'error')
@@ -5064,10 +5066,11 @@ async function sendChat() {
   let projectSourcePrefixes = null
 
   if (project) {
-    const scope = await ensureProjectSourceScope(project)
-    if (!scope) return
-    projectSourcePrefixes = scope.sourceFolders
-    if (scope.refresh) {
+    const scope = loadProjectSourceScope(project)
+    if (scope?.sourceFolders?.length && scope.consented) {
+      projectSourcePrefixes = scope.sourceFolders
+    }
+    if (scope?.refresh) {
       const syncResult = await syncProjectSourcesToS3(project, projectSourcePrefixes)
       if (!syncResult.ok) {
         showToast(syncResult.error || 'Quellordner konnten nicht synchronisiert werden', 'error')
