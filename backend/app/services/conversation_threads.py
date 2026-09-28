@@ -27,3 +27,22 @@ def choose_latest_project_conversation_id(conversations: Iterable[object], proje
             latest_key = key
 
     return int(getattr(latest, 'id', 0) or 0) or None
+
+
+def choose_project_conversation_id(
+    conversations: Iterable[object],
+    project_id: int | None,
+    preferred_conversation_id: int | None = None,
+) -> int | None:
+    if project_id is None:
+        return None
+
+    preferred = int(preferred_conversation_id or 0) or None
+    if preferred is not None:
+        for conversation in conversations:
+            if int(getattr(conversation, 'project_id', 0) or 0) != int(project_id):
+                continue
+            if int(getattr(conversation, 'id', 0) or 0) == preferred:
+                return preferred
+
+    return choose_latest_project_conversation_id(conversations, project_id)

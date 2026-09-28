@@ -1754,14 +1754,22 @@ function getLatestProjectConversation(projectId) {
 
 function syncSelectedProjectConversation() {
   if (!state.selectedProjectId) return
-  if (state.projectConversationMemory.has(state.selectedProjectId)) {
-    state.currentConversationId = state.projectConversationMemory.get(state.selectedProjectId)
-    return
-  }
-  const latest = getLatestProjectConversation(state.selectedProjectId)
-  state.currentConversationId = latest ? latest.id : null
-  if (latest) {
-    state.projectConversationMemory.set(state.selectedProjectId, latest.id)
+  const project = state.projects.find((item) => item.id === state.selectedProjectId) || null
+  const candidateIds = [
+    project?.active_conversation_id,
+    state.projectConversationMemory.get(state.selectedProjectId),
+    getLatestProjectConversation(state.selectedProjectId)?.id,
+  ]
+    .map((value) => Number(value || 0))
+    .filter((value) => Number.isFinite(value) && value > 0)
+
+  const matchedConversationId = candidateIds.find((conversationId) => (
+    state.conversations.some((conversation) => conversation.id === conversationId && conversation.project_id === state.selectedProjectId)
+  )) || null
+
+  state.currentConversationId = matchedConversationId
+  if (matchedConversationId) {
+    state.projectConversationMemory.set(state.selectedProjectId, matchedConversationId)
   }
 }
 

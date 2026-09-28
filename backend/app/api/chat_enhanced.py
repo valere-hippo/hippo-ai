@@ -6,7 +6,7 @@ import logging
 from app.api.dependencies import get_current_user, DbSession
 from app.models.user import User
 from app.models.chat import Conversation, ChatMessage
-from app.services.conversation_threads import choose_latest_project_conversation_id
+from app.services.conversation_threads import choose_project_conversation_id
 from app.models.project import Project
 from app.models.permission import PermissionLevel
 from app.core.config import settings
@@ -292,18 +292,32 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
     # ensure conversation
     conv_id = payload.conversation_id
-    if conv_id is None and conv_project is not None:
+    if conv_project is not None:
         existing_conversations = await db.execute(
             select(Conversation)
             .where(Conversation.project_id == conv_project.id)
             .order_by(Conversation.created_at.desc(), Conversation.id.desc())
         )
-        conv_id = choose_latest_project_conversation_id(existing_conversations.scalars().all(), conv_project.id)
+        conv_id = choose_project_conversation_id(
+            existing_conversations.scalars().all(),
+            conv_project.id,
+            getattr(conv_project, 'active_conversation_id', None),
+        )
     if conv_id is None:
         stmt = insert(Conversation).values(title=None, project_id=conv_project.id if conv_project else None).returning(Conversation)
         result = await db.execute(stmt)
         conv = result.scalar_one()
         conv_id = conv.id
+        if conv_project is not None:
+            await db.execute(
+                Project.__table__.update().where(Project.id == conv_project.id).values(active_conversation_id=conv_id)
+            )
+            await db.commit()
+    elif conv_project is not None and int(getattr(conv_project, 'active_conversation_id', 0) or 0) != int(conv_id):
+        await db.execute(
+            Project.__table__.update().where(Project.id == conv_project.id).values(active_conversation_id=conv_id)
+        )
+        await db.commit()
 
     stored_message_content = storage_text(payload.message, payload.attachments)
     if not stored_message_content:

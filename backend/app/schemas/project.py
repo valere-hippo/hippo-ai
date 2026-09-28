@@ -22,6 +22,7 @@ class ProjectResponse(BaseModel):
     is_active: bool
     watched_folder: str | None = None
     delivery_folder: str | None = None
+    active_conversation_id: int | None = None
     pcloud_path: str | None = None
     pcloud_folder_id: int | None = None
     created_at: datetime
