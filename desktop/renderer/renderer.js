@@ -2565,19 +2565,6 @@ function buildProjectForm(defaults = {}) {
   hint.className = 'muted-copy'
   hint.textContent = 'Die Quellordner bleiben lokal auf deinem Rechner. Hippo liest sie direkt aus den gewählten Projektordnern; der Lieferordner bleibt lokal.'
 
-  const accessField = document.createElement('div')
-  accessField.className = 'field'
-  const accessLabel = document.createElement('span')
-  accessLabel.textContent = 'Aktueller Zugriff'
-  const accessValue = document.createElement('div')
-  accessValue.className = 'storage-summary'
-  accessValue.id = getProjectAccessSummaryDomId(defaults)
-  accessValue.innerHTML = `
-    <div class="storage-summary-line"><span>Status</span><strong>${escapeHtml(formatProjectAccessSummary(defaults))}</strong></div>
-    <div class="storage-summary-line"><span>Hinweis</span><strong>Der Zugriff kann später im Projektmenü geändert werden.</strong></div>
-  `
-  accessField.append(accessLabel, accessValue)
-
   const deliveryField = document.createElement('label')
   deliveryField.className = 'field'
   deliveryField.innerHTML = '<span>Lieferordner (lokal, Pflicht)</span>'
@@ -2609,7 +2596,7 @@ function buildProjectForm(defaults = {}) {
 
 
 
-  wrapper.append(nameField, accessField, deliveryField, folderField, hint)
+  wrapper.append(nameField, deliveryField, folderField, hint)
   return wrapper
 }
 
