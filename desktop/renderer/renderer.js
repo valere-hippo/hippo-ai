@@ -560,6 +560,7 @@ async function authorizeProjectLocalFolders(project) {
   renderContext()
   const persisted = await savePromise
   updateProjectAccessSummary(project)
+  renderContext()
   if (state.selectedProjectId === project.id) {
     scheduleProjectSourceSync(project, persisted?.sourceFolders || folders, { silent: true })
   }
@@ -5347,12 +5348,16 @@ async function sendChat() {
 
   if (project) {
     const scope = loadProjectSourceScope(project)
-    if (scope?.sourceFolders?.length && scope.consented) {
+    const accessGranted = Boolean(scope?.sourceFolders?.length && scope.consented)
+    if (accessGranted) {
       projectSourcePrefixes = scope.sourceFolders
     }
     projectFolderContext = await queueProjectFolderRefresh(project)
-    if (!projectFolderContext && scope?.sourceFolders?.length && scope.consented) {
-      projectFolderContext = `Lokale Projektordner autorisiert: ${scope.sourceFolders.join(' | ')}`
+    if (accessGranted) {
+      const authorizedContext = `Lokale Projektordner autorisiert: ${scope.sourceFolders.join(' | ')}`
+      if (!projectFolderContext || /Der lokale Ordner konnte nicht gelesen werden|Ordneranalyse fehlgeschlagen/i.test(projectFolderContext)) {
+        projectFolderContext = projectFolderContext ? `${authorizedContext}\n${projectFolderContext}` : authorizedContext
+      }
     }
     if (scope?.refresh) {
       scheduleProjectSourceSync(project, projectSourcePrefixes, { silent: true })
