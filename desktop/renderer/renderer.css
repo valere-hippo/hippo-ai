@@ -11,7 +11,7 @@
   --accent: #d67c4a;
   --accent-2: #b76b56;
   --danger: #c95e5e;
-  --shadow: 0 22px 56px rgba(88, 68, 46, 0.12);
+  --shadow: 0 14px 32px rgba(88, 68, 46, 0.08);
   --radius: 18px;
 }
 
@@ -148,18 +148,18 @@ textarea {
 
 .brand-card {
   border-radius: 18px;
-  padding: 8px 10px;
+  padding: 12px 12px;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 12px;
 }
 
 .brand-mark {
-  width: 92px;
-  height: 90px;
+  width: 80px;
+  height: 78px;
   object-fit: contain;
   flex: 0 0 auto;
-  filter: saturate(0.94) contrast(1.04);
+  filter: saturate(0.95) contrast(1.05);
 }
 
 .brand-mark span {
@@ -167,9 +167,9 @@ textarea {
 }
 
 .brand-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 .brand-subtitle,
@@ -889,12 +889,12 @@ textarea {
 }
 
 .message-bubble {
-  max-width: min(720px, 94%);
+  max-width: min(760px, 94%);
   border-radius: 18px;
-  padding: 12px 14px;
+  padding: 13px 15px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 8px 18px rgba(88, 68, 46, 0.07);
+  background: rgba(255, 255, 255, 0.99);
+  box-shadow: 0 6px 14px rgba(88, 68, 46, 0.06);
 }
 
 .message.user .message-bubble {
@@ -920,7 +920,7 @@ textarea {
 }
 
 .message-text {
-  line-height: 1.64;
+  line-height: 1.68;
   font-size: 13.5px;
   color: var(--text);
 }
@@ -1911,16 +1911,16 @@ textarea {
 .login-card {
   width: min(460px, 100%);
   border-radius: 28px;
-  padding: 30px;
+  padding: 34px;
   position: relative;
   overflow: hidden;
 }
 
 .login-logo {
-  width: min(260px, 100%);
+  width: min(300px, 100%);
   height: auto;
   display: block;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .login-card::before {
