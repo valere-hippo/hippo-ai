@@ -91,6 +91,6 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         "## Fazit",
         "- Die Antwort basiert auf dem aktuellen Projektkontext und den aus den Dateien extrahierten Inhalten.",
         "- Für schwere Formate wie PDF, GIS, Audio und Video wird der Report mit spezialisierten Extraktoren angereichert.",
-        "- Wenn du möchtest, kann ich daraus als nächsten Schritt eine noch stärker gegliederte Word-Fassung mit separaten Kapiteln pro Dateityp erzeugen.",
+        "- Der Bericht nutzt automatisch alle verfügbaren Ordner und Dateien des Projekts; es werden keine zusätzlichen Rückfragen zu Dateiauswahl oder Unterordnern gestellt.",
     ])
     return "\n".join(report)

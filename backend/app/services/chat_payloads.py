@@ -12,6 +12,7 @@ def build_attachment_response_guidance() -> str:
         "Erkläre zuerst kurz, worum es sich bei der Datei handelt, dann die wichtigsten Inhalte oder erkannten Elemente, "
         "danach die relevantesten Details oder Auffälligkeiten und schließe mit einer kompakten Einordnung.\n"
         "Wenn der Benutzer eine Analyse des lokalen Projektordners, einer Datei oder mehrerer Dateien möchte, liefere eine strukturierte Antwort mit Überblick, Dateiliste, Details und Fazit.\n"
+        "Wenn der Benutzer einen Bericht, ein Word-Dokument oder einen PDF-Export aus dem Projektordner möchte, nutze automatisch alle verfügbaren Ordner und Dateien des Projekts; frage nicht nach bestimmten Dateien, außer der Benutzer schränkt es ausdrücklich ein.\n"
         "Verwende bei solchen Anfragen lieber mehrere Absätze, nummerierte Schritte, Aufzählungspunkte und klare Zwischenüberschriften als nur ein bis zwei kurze Sätze.\n"
         "Wenn der Benutzer eine ausführliche Antwort erwartet, entwickle die Antwort vollständig aus und vermeide unnötige Kürze.\n"
         "Bevorzuge eine tiefere Erklärung mit Beispielen, Einordnung und sauberen Übergängen statt einer knappen Stichwortliste.\n"

@@ -443,7 +443,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "If the user explicitly requests an image or PNG, return a real file block with an image filename instead of prose instructions. If the user only wants analysis or a textual answer, respond in text and do not create an image file.\n"
             "If the user asks to analyze documents from the project folders, use the project context and answer in the user's language.\n"
             "If project_folder_context is present, treat it as the source of truth for the project folder contents and do not claim you lack local filesystem access.\n"
-            "For project-folder questions, respond with a detailed structure: overview, visible files, file-by-file details, and conclusion.\n"
+            "For project-folder questions, respond with a detailed structure: overview, visible files, file-by-file details, and conclusion. Use all available project folders by default and never ask the user to choose folders or files unless they explicitly narrow the scope.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
             "If an image, screenshot, or document is attached, rely on the direct attachment data in the prompt and any locally extracted text; do not claim that you cannot read attachments.\n"
             "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, spatial clusters, species-specific patterns, and possible territories / breeding areas. If the user wants more depth, extend the analysis with additional metrics, maps, or statistical summaries.\n"
@@ -488,7 +488,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                     "content": (
                         "Kontext der lokalen Projektordner:\n"
                         f"{project_files_context}\n\n"
-                        "Nutze diesen Kontext, wenn der Benutzer die Dateien oder den Ordner analysieren möchte, antworte ausführlich auf Deutsch und bleibe content-first: erst Inhalt, Extraktion und technische Schlussfolgerung, dann erst optional Dateinamen. Vermeide Tabellen oder übertriebenes Markdown."
+                        "Nutze diesen Kontext, wenn der Benutzer die Dateien oder den Ordner analysieren möchte, antworte ausführlich auf Deutsch und bleibe content-first: erst Inhalt, Extraktion und technische Schlussfolgerung, dann erst optional Dateinamen. Vermeide Tabellen oder übertriebenes Markdown.\n"
+                        "Wenn der Benutzer einen Bericht, ein Word-Dokument oder einen PDF-Export aus dem Projektordner möchte, verwende automatisch alle verfügbaren Ordner und Dateien des Projekts, ohne nach bestimmten Dateien oder Unterordnern zu fragen, sofern der Benutzer die Auswahl nicht explizit einschränkt."
                     ),
                 },
             )
