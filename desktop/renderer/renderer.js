@@ -537,6 +537,22 @@ async function clearProjectSourceScope(project) {
   }
 }
 
+async function authorizeProjectLocalFolders(project) {
+  if (!project?.id) return null
+  const folders = normalizeProjectFolderInput(project?.watched_folder)
+  if (!folders.length) {
+    throw new Error('Keine lokalen Projektordner gefunden.')
+  }
+  const savePromise = saveProjectSourceScope(project, folders, { consented: true })
+  renderProjects()
+  renderContext()
+  const persisted = await savePromise
+  if (state.selectedProjectId === project.id) {
+    scheduleProjectSourceSync(project, persisted?.sourceFolders || folders, { silent: true })
+  }
+  return persisted || { sourceFolders: folders, consented: true }
+}
+
 function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) {
   if (!project?.id) return Promise.resolve({ ok: false, error: 'Kein Projekt ausgewählt' })
   const folders = (sourceFolders && sourceFolders.length ? sourceFolders : normalizeProjectFolderInput(project?.watched_folder))
@@ -1207,15 +1223,11 @@ function renderContext() {
   accessButton.style.padding = '4px 12px'
   accessButton.textContent = project?.source_scope ? "Modifier l'accès à mes dossiers locaux" : "Autoriser l'accès à mes dossiers locaux"
   accessButton.addEventListener('click', async () => {
-    showLoader('Lokaler Zugriff wird geöffnet...')
+    showLoader('Lokale Ordner werden autorisiert...')
     try {
-      const scopeResult = await configureProjectSourceScope(project)
+      const scopeResult = await authorizeProjectLocalFolders(project)
       if (!scopeResult) return
-      if (scopeResult.refresh) {
-        scheduleProjectSourceSync(project, scopeResult.sourceFolders)
-      } else {
-        showToast('Lokaler Zugriff gespeichert')
-      }
+      showToast('Alle lokalen Projektordner sind jetzt autorisiert')
     } catch (error) {
       showToast(error.message || 'Lokaler Zugriff konnte nicht geöffnet werden', 'error')
     } finally {
@@ -1301,15 +1313,11 @@ function renderProjects() {
     accessAction.textContent = '🔐'
     accessAction.addEventListener('click', async (event) => {
       event.stopPropagation()
-      showLoader('Lokaler Zugriff wird geöffnet...')
+      showLoader('Lokale Ordner werden autorisiert...')
       try {
-        const scopeResult = await configureProjectSourceScope(project)
+        const scopeResult = await authorizeProjectLocalFolders(project)
         if (!scopeResult) return
-        if (scopeResult.refresh) {
-          scheduleProjectSourceSync(project, scopeResult.sourceFolders)
-        } else {
-          showToast('Lokaler Zugriff gespeichert')
-        }
+        showToast('Alle lokalen Projektordner sind jetzt autorisiert')
       } catch (error) {
         showToast(error.message || 'Lokaler Zugriff konnte nicht geöffnet werden', 'error')
       } finally {
