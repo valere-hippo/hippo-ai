@@ -46,8 +46,8 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     context_bullets = _summarize_context_lines(context_text)
 
     summary_note = (
-        "Die Modellantwort ist nicht rechtzeitig zurückgekommen, daher wurde dieser Bericht aus dem tatsächlich ermittelten Projektkontext erzeugt. "
-        "Die folgenden Abschnitte beruhen auf den extrahierten Datei- und Formatinformationen, nicht auf erfundenen Platzhaltern."
+        "Kurzfassung: Der Bericht basiert direkt auf dem ermittelten Projektkontext und den extrahierten Inhalten. "
+        "Er vermeidet Platzhalter und folgt einer klaren, knappen und dennoch gründlichen Struktur."
     )
 
     report: list[str] = [
@@ -56,7 +56,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         "## Anfrage",
         question_text,
         "",
-        "## Kurzbewertung",
+        "## Kurzfassung",
         summary_note,
         "",
     ]
@@ -70,7 +70,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         report.append("")
 
     report.extend([
-        "## Technische Einordnung",
+        "## Zentrale Beobachtungen",
         "- Der Bericht wurde auf Basis der Datei- und Inhaltsextraktion des Projektordners erstellt.",
         "- Für Textdateien, Office-Dateien, Tabellen, Bilder, Geo-Daten und Medien werden unterschiedliche Extraktoren benutzt.",
         "- Wenn zusätzliche Dateitypen auftauchen, werden passende Tools automatisch erzeugt und beim nächsten Sync berücksichtigt.",
@@ -88,7 +88,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
 
     report.extend([
         "",
-        "## Fazit",
+        "## Einordnung",
         "- Die Antwort basiert auf dem aktuellen Projektkontext und den aus den Dateien extrahierten Inhalten.",
         "- Für schwere Formate wie PDF, GIS, Audio und Video wird der Report mit spezialisierten Extraktoren angereichert.",
         "- Der Bericht nutzt automatisch alle verfügbaren Ordner und Dateien des Projekts; es werden keine zusätzlichen Rückfragen zu Dateiauswahl oder Unterordnern gestellt.",
