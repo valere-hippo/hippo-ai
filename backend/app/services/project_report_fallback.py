@@ -64,16 +64,15 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     if context_lines:
         report.extend([
             "## Extrahierter Projektkontext",
+            "; ".join(context_bullets) if context_bullets else "",
+            "",
         ])
-        for bullet in context_bullets:
-            report.append(f"- {bullet}")
-        report.append("")
 
     report.extend([
         "## Beobachtungen",
-        "- Der Bericht wurde auf Basis der Datei- und Inhaltsextraktion des Projektordners erstellt.",
-        "- Für Textdateien, Office-Dateien, Tabellen, Bilder, Geo-Daten und Medien werden unterschiedliche Extraktoren benutzt.",
-        "- Wenn zusätzliche Dateitypen auftauchen, werden passende Tools automatisch erzeugt und beim nächsten Sync berücksichtigt.",
+        "Der Bericht wurde auf Basis der Datei- und Inhaltsextraktion des Projektordners erstellt.",
+        "Für Textdateien, Office-Dateien, Tabellen, Bilder, Geo-Daten und Medien werden unterschiedliche Extraktoren benutzt.",
+        "Wenn zusätzliche Dateitypen auftauchen, werden passende Tools automatisch erzeugt und beim nächsten Sync berücksichtigt.",
         "",
         "## Ausführliche Beobachtungen",
     ])
@@ -82,15 +81,17 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         for line in context_lines[:60]:
             if _is_file_marker(line):
                 continue
-            report.append(f"- {_strip_bullet_prefix(line)}")
+            cleaned = _strip_bullet_prefix(line).strip()
+            if cleaned:
+                report.append(cleaned)
     else:
-        report.append("- Kein detaillierter Projektkontext verfügbar.")
+        report.append("Kein detaillierter Projektkontext verfügbar.")
 
     report.extend([
         "",
         "## Schluss",
-        "- Die Antwort basiert auf dem aktuellen Projektkontext und den aus den Dateien extrahierten Inhalten.",
-        "- Für schwere Formate wie PDF, GIS, Audio und Video wird der Report mit spezialisierten Extraktoren angereichert.",
-        "- Der Bericht nutzt automatisch alle verfügbaren Ordner und Dateien des Projekts; es werden keine zusätzlichen Rückfragen zu Dateiauswahl oder Unterordnern gestellt.",
+        "Die Antwort basiert auf dem aktuellen Projektkontext und den aus den Dateien extrahierten Inhalten.",
+        "Für schwere Formate wie PDF, GIS, Audio und Video wird der Report mit spezialisierten Extraktoren angereichert.",
+        "Der Bericht nutzt automatisch alle verfügbaren Ordner und Dateien des Projekts; es werden keine zusätzlichen Rückfragen zu Dateiauswahl oder Unterordnern gestellt.",
     ])
     return "\n".join(report)
