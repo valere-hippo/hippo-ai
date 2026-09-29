@@ -13,7 +13,7 @@ def build_attachment_response_guidance() -> str:
         "danach die relevantesten Details oder Auffälligkeiten und schließe mit einer kompakten Einordnung.\n"
         "Wenn der Benutzer eine Analyse des lokalen Projektordners, einer Datei oder mehrerer Dateien möchte, liefere eine strukturierte Antwort mit Überblick, Dateiliste, Details und Fazit.\n"
         "Wenn der Benutzer einen Bericht, ein Word-Dokument oder einen PDF-Export aus dem Projektordner möchte, nutze automatisch alle verfügbaren Ordner und Dateien des Projekts; frage nicht nach bestimmten Dateien, außer der Benutzer schränkt es ausdrücklich ein.\n"
-        "Schreibe in einem klaren, Claude-ähnlichen Stil: direkt, strukturiert, knapp aber gründlich, ohne Einleitungssätze wie 'ich beginne nun' oder ähnliche Meta-Kommentare.\n"
+        "Schreibe in einem klaren, Claude-ähnlichen Stil: direkt, strukturiert, knapp aber gründlich, ohne Einleitungssätze wie 'ich beginne nun' oder ähnliche Meta-Kommentare, und mit möglichst wenigen Übergangsfloskeln.\n"
         "Verwende bei solchen Anfragen lieber mehrere Absätze, nummerierte Schritte, Aufzählungspunkte und klare Zwischenüberschriften als nur ein bis zwei kurze Sätze.\n"
         "Wenn der Benutzer eine ausführliche Antwort erwartet, entwickle die Antwort vollständig aus und vermeide unnötige Kürze.\n"
         "Bevorzuge eine tiefere Erklärung mit Beispielen, Einordnung und sauberen Übergängen statt einer knappen Stichwortliste.\n"

@@ -444,7 +444,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "If the user asks to analyze documents from the project folders, use the project context and answer in the user's language.\n"
             "If project_folder_context is present, treat it as the source of truth for the project folder contents and do not claim you lack local filesystem access.\n"
             "For project-folder questions, respond with a detailed structure: overview, visible files, file-by-file details, and conclusion. Use all available project folders by default and never ask the user to choose folders or files unless they explicitly narrow the scope.\n"
-            "Write in a polished Claude-like style: direct, structured, concise but thorough, no preamble, no self-referential commentary, no repetitive reassurance.\n"
+            "Write in a polished Claude-like style: direct, structured, concise but thorough, no preamble, no self-referential commentary, no repetitive reassurance, and minimize transitional phrases.\n"
             "Write the answer as a polished document with clear section headings, paragraphs, and bullets. Avoid decorative Markdown around headings.\n"
             "If an image, screenshot, or document is attached, rely on the direct attachment data in the prompt and any locally extracted text; do not claim that you cannot read attachments.\n"
             "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, spatial clusters, species-specific patterns, and possible territories / breeding areas. If the user wants more depth, extend the analysis with additional metrics, maps, or statistical summaries.\n"

@@ -46,8 +46,8 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     context_bullets = _summarize_context_lines(context_text)
 
     summary_note = (
-        "Kurzfassung: Der Bericht basiert direkt auf dem ermittelten Projektkontext und den extrahierten Inhalten. "
-        "Er vermeidet Platzhalter und folgt einer klaren, knappen und dennoch gründlichen Struktur."
+        "Der Bericht basiert direkt auf dem ermittelten Projektkontext und den extrahierten Inhalten. "
+        "Er bleibt direkt und sachlich, ohne unnötige Übergänge oder Meta-Kommentare."
     )
 
     report: list[str] = [
@@ -56,7 +56,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         "## Anfrage",
         question_text,
         "",
-        "## Kurzfassung",
+        "## Ergebnis",
         summary_note,
         "",
     ]
@@ -70,7 +70,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         report.append("")
 
     report.extend([
-        "## Zentrale Beobachtungen",
+        "## Beobachtungen",
         "- Der Bericht wurde auf Basis der Datei- und Inhaltsextraktion des Projektordners erstellt.",
         "- Für Textdateien, Office-Dateien, Tabellen, Bilder, Geo-Daten und Medien werden unterschiedliche Extraktoren benutzt.",
         "- Wenn zusätzliche Dateitypen auftauchen, werden passende Tools automatisch erzeugt und beim nächsten Sync berücksichtigt.",
@@ -88,7 +88,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
 
     report.extend([
         "",
-        "## Einordnung",
+        "## Schluss",
         "- Die Antwort basiert auf dem aktuellen Projektkontext und den aus den Dateien extrahierten Inhalten.",
         "- Für schwere Formate wie PDF, GIS, Audio und Video wird der Report mit spezialisierten Extraktoren angereichert.",
         "- Der Bericht nutzt automatisch alle verfügbaren Ordner und Dateien des Projekts; es werden keine zusätzlichen Rückfragen zu Dateiauswahl oder Unterordnern gestellt.",
