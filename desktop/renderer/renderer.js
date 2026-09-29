@@ -1207,13 +1207,15 @@ function renderContext() {
     }
   })
   addMenuItem('🔓 Zugriff freigeben', async () => {
-    showLoader('Zugriff wird gespeichert...')
+    showLoader('Zugriff wird aktiviert...')
     try {
-      const scopeResult = await configureProjectSourceScope(project)
-      if (!scopeResult) return
-      showToast('Zugriff gespeichert')
+      await authorizeProjectLocalFolders(project)
+      updateProjectAccessSummary(project)
+      renderContext()
+      renderProjects()
+      showToast('Alle lokalen Projektordner sind jetzt autorisiert')
     } catch (error) {
-      showToast(error.message || 'Zugriff konnte nicht gespeichert werden', 'error')
+      showToast(error.message || 'Zugriff konnte nicht aktiviert werden', 'error')
     } finally {
       hideLoader()
     }
