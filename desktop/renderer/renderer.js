@@ -560,6 +560,7 @@ async function authorizeProjectLocalFolders(project) {
   renderContext()
   const persisted = await savePromise
   updateProjectAccessSummary(project)
+  await loadProjects()
   renderContext()
   if (state.selectedProjectId === project.id) {
     scheduleProjectSourceSync(project, persisted?.sourceFolders || folders, { silent: true })
@@ -571,6 +572,7 @@ async function toggleProjectLocalAccess(project) {
   const scope = loadProjectSourceScope(project)
   if (scope?.sourceFolders?.length && scope.consented) {
     await clearProjectSourceScope(project)
+    await loadProjects()
     updateProjectAccessSummary(project)
     renderContext()
     renderProjects()
@@ -1247,25 +1249,7 @@ function renderContext() {
   })
   menu.appendChild(menuPanel)
 
-  const accessButton = document.createElement('button')
-  accessButton.type = 'button'
-  accessButton.className = 'primary-action'
-  accessButton.style.padding = '4px 12px'
-  accessButton.textContent = project?.source_scope ? 'Zugriff entziehen' : 'Zugriff erlauben'
-  accessButton.addEventListener('click', async () => {
-    showLoader('Lokale Ordner werden autorisiert...')
-    try {
-      const scopeResult = await toggleProjectLocalAccess(project)
-      updateProjectAccessSummary(project)
-      showToast(scopeResult?.granted === false ? 'Lokaler Zugriff entfernt' : 'Alle lokalen Projektordner sind jetzt autorisiert')
-    } catch (error) {
-      showToast(error.message || 'Lokaler Zugriff konnte nicht geöffnet werden', 'error')
-    } finally {
-      hideLoader()
-    }
-  })
-
-  actions.append(accessButton, menu)
+  actions.append(menu)
 
   summary.appendChild(actions)
   els.selectedInfo.appendChild(summary)
