@@ -427,7 +427,7 @@ function updateProjectAccessSummary(project) {
   if (!node) return
   node.innerHTML = `
     <div class="storage-summary-line"><span>Status</span><strong>${escapeHtml(formatProjectAccessSummary(project))}</strong></div>
-    <div class="storage-summary-line"><span>Hinweis</span><strong>Der Zugriff kann später im Projektmenü geändert werden.</strong></div>
+    <div class="storage-summary-line"><span>Hinweis</span><strong>Hippo verwendet automatisch alle Ordner dieses Projekts.</strong></div>
   `
 }
 
@@ -435,7 +435,7 @@ function formatProjectAccessSummary(project) {
   const scope = loadProjectSourceScope(project)
   const folders = scope?.sourceFolders || normalizeProjectFolderInput(project?.watched_folder)
   if (folders.length) {
-    return `Zugriff erlaubt · ${folders.length} lokale Ordner`
+    return 'Zugriff erlaubt · alle Projektordner'
   }
   return 'Zugriff nicht freigegeben'
 }
@@ -1137,7 +1137,7 @@ function renderContext() {
   menuHeader.innerHTML = `
     <div class="project-menu-kicker">Projekt</div>
     <div class="project-menu-title">Lokale Änderungen</div>
-    <div class="project-menu-copy">Änderungen bleiben im Chat sichtbar und unterbrechen ihn nicht.</div>
+    <div class="project-menu-copy">Hippo verwendet automatisch alle Ordner dieses Projekts, sobald Zugriff freigegeben ist.</div>
   `
   menuPanel.appendChild(menuHeader)
   const menuDivider = () => {
@@ -1192,7 +1192,7 @@ function renderContext() {
 
   addMenuItem('✎ Projekt bearbeiten / Lieferordner ändern', () => openEditProjectModal(project))
   menuDivider()
-  addMenuItem('＋ Quellordner hinzufügen oder entfernen', async () => {
+  addMenuItem('＋ Projektordner verwalten', async () => {
     showLoader('Quellordner werden geöffnet...')
     try {
       const scopeResult = await configureProjectSourceScope(project)
@@ -2617,7 +2617,7 @@ async function openCreateProjectModal() {
   const form = buildProjectForm()
   const result = await openModal({
     title: 'Projekt erstellen',
-    copy: 'Wähle die lokalen Quellordner für den Projektkontext und den lokalen Lieferordner. Es bleibt vollständig lokal.',
+    copy: 'Hippo verwendet automatisch alle lokalen Projektordner. Es werden keine Dateiauswahlen mehr abgefragt.',
     content: form,
     submitLabel: 'Erstellen',
     validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.delivery_folder?.trim()),
@@ -2669,7 +2669,7 @@ async function openEditProjectModal(project) {
 
   const result = await openModal({
     title: 'Projekt bearbeiten',
-    copy: 'Hier bearbeitest du die lokalen Quellordner und den Lieferordner. Die Quellordner-Auswahl kann hier auch später erneut geändert werden, ohne den Chat zu unterbrechen.',
+    copy: 'Hier bearbeitest du die lokalen Quellordner und den Lieferordner. Hippo verwendet automatisch alle freigegebenen Ordner, ohne nach einzelnen Dateien zu fragen.',
     content: form,
     submitLabel: 'Speichern',
     validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.delivery_folder?.trim()),
