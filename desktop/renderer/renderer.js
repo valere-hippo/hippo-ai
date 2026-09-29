@@ -434,11 +434,10 @@ function updateProjectAccessSummary(project) {
 function formatProjectAccessSummary(project) {
   const scope = loadProjectSourceScope(project)
   const folders = scope?.sourceFolders || normalizeProjectFolderInput(project?.watched_folder)
-  const parts = []
   if (folders.length) {
-    parts.push(`${folders.length} freigegebene lokale Ordner`)
+    return `Zugriff erlaubt · ${folders.length} lokale Ordner`
   }
-  return parts.length ? parts.join(' · ') : 'Kein Zugriff gespeichert'
+  return 'Zugriff nicht freigegeben'
 }
 
 function formatProjectRefreshStatus(project) {
@@ -520,17 +519,15 @@ async function saveProjectSourceScope(project, sourceFolders, { consented = true
     body: JSON.stringify(scope),
   })
   const backendScope = normalizeStoredProjectSourceScope(response?.source_scope)
-  if (backendScope) {
-    localStorage.setItem(getProjectSourceScopeStorageKey(project), JSON.stringify(response.source_scope))
-    project.source_scope = JSON.stringify(response.source_scope)
-    state.projects = state.projects.map((item) => (
-      item.id === project.id
-        ? { ...item, source_scope: JSON.stringify(response.source_scope) }
-        : item
-    ))
-    return backendScope
-  }
-  return { sourceFolders: cleanFolders, consented: Boolean(consented) }
+  const effectiveScope = backendScope || scope
+  localStorage.setItem(getProjectSourceScopeStorageKey(project), JSON.stringify(effectiveScope))
+  project.source_scope = JSON.stringify(effectiveScope)
+  state.projects = state.projects.map((item) => (
+    item.id === project.id
+      ? { ...item, source_scope: JSON.stringify(effectiveScope) }
+      : item
+  ))
+  return effectiveScope
 }
 
 async function clearProjectSourceScope(project) {
@@ -567,6 +564,19 @@ async function authorizeProjectLocalFolders(project) {
     scheduleProjectSourceSync(project, persisted?.sourceFolders || folders, { silent: true })
   }
   return persisted || { sourceFolders: folders, consented: true }
+}
+
+async function toggleProjectLocalAccess(project) {
+  const scope = loadProjectSourceScope(project)
+  if (scope?.sourceFolders?.length && scope.consented) {
+    await clearProjectSourceScope(project)
+    updateProjectAccessSummary(project)
+    renderContext()
+    renderProjects()
+    return { granted: false }
+  }
+  const result = await authorizeProjectLocalFolders(project)
+  return { granted: Boolean(result) }
 }
 
 function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) {
@@ -1018,7 +1028,7 @@ function renderContext() {
           ? 'Ordneranalyse fehlgeschlagen'
           : ''
   const localFolders = normalizeProjectFolderInput(project?.watched_folder)
-  const accessLabel = project ? ` · Zugriff: ${formatProjectAccessSummary(project)}` : ''
+  const accessLabel = project ? ` · ${formatProjectAccessSummary(project)}` : ''
   const projectLabel = project
     ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${accessLabel}${scanLabel ? ` · ${scanLabel}` : ''}${formatProjectRefreshStatus(project) ? ` · ${formatProjectRefreshStatus(project)}` : ''}`
     : ''
@@ -1238,14 +1248,13 @@ function renderContext() {
   accessButton.type = 'button'
   accessButton.className = 'primary-action'
   accessButton.style.padding = '4px 12px'
-  accessButton.textContent = project?.source_scope ? "Modifier l'accès à mes dossiers locaux" : "Autoriser l'accès à mes dossiers locaux"
+  accessButton.textContent = project?.source_scope ? 'Zugriff entziehen' : 'Zugriff erlauben'
   accessButton.addEventListener('click', async () => {
     showLoader('Lokale Ordner werden autorisiert...')
     try {
-      const scopeResult = await authorizeProjectLocalFolders(project)
-      if (!scopeResult) return
+      const scopeResult = await toggleProjectLocalAccess(project)
       updateProjectAccessSummary(project)
-      showToast('Alle lokalen Projektordner sind jetzt autorisiert')
+      showToast(scopeResult?.granted === false ? 'Lokaler Zugriff entfernt' : 'Alle lokalen Projektordner sind jetzt autorisiert')
     } catch (error) {
       showToast(error.message || 'Lokaler Zugriff konnte nicht geöffnet werden', 'error')
     } finally {
@@ -1328,15 +1337,14 @@ function renderProjects() {
     accessAction.type = 'button'
     accessAction.className = 'item-action-button'
     accessAction.title = 'Autoriser ou modifier l’accès à mes dossiers locaux'
-    accessAction.textContent = '🔐'
+    accessAction.textContent = project?.source_scope ? '🔓' : '🔐'
     accessAction.addEventListener('click', async (event) => {
       event.stopPropagation()
       showLoader('Lokale Ordner werden autorisiert...')
       try {
-        const scopeResult = await authorizeProjectLocalFolders(project)
-        if (!scopeResult) return
+        const scopeResult = await toggleProjectLocalAccess(project)
         updateProjectAccessSummary(project)
-        showToast('Alle lokalen Projektordner sind jetzt autorisiert')
+        showToast(scopeResult?.granted === false ? 'Lokaler Zugriff entfernt' : 'Alle lokalen Projektordner sind jetzt autorisiert')
       } catch (error) {
         showToast(error.message || 'Lokaler Zugriff konnte nicht geöffnet werden', 'error')
       } finally {
@@ -2717,18 +2725,17 @@ async function openEditProjectModal(project) {
         },
       },
       {
-        label: 'Zugriff entziehen',
+        label: project?.source_scope ? 'Zugriff entziehen' : 'Zugriff erlauben',
         className: 'ghost-action',
         onClick: async ({ close }) => {
           close()
-          showLoader('Zugriff wird entfernt...')
+          showLoader('Lokalen Zugriff wird aktualisiert...')
           try {
-            await clearProjectSourceScope(project)
-            await loadProjects()
-            renderContext()
-            showToast('Zugriff entfernt')
+            const scopeResult = await toggleProjectLocalAccess(project)
+            updateProjectAccessSummary(project)
+            showToast(scopeResult?.granted === false ? 'Lokaler Zugriff entfernt' : 'Alle lokalen Projektordner sind jetzt autorisiert')
           } catch (error) {
-            showToast(error.message || 'Zugriff konnte nicht entfernt werden', 'error')
+            showToast(error.message || 'Zugriff konnte nicht aktualisiert werden', 'error')
           } finally {
             hideLoader()
           }
@@ -5336,11 +5343,16 @@ async function sendChat() {
   const project = getContextProject()
   const deliveryFolder = project?.delivery_folder || null
   let projectSourcePrefixes = null
+  let projectFolderContext = ''
 
   if (project) {
     const scope = loadProjectSourceScope(project)
     if (scope?.sourceFolders?.length && scope.consented) {
       projectSourcePrefixes = scope.sourceFolders
+    }
+    projectFolderContext = await queueProjectFolderRefresh(project)
+    if (!projectFolderContext && scope?.sourceFolders?.length && scope.consented) {
+      projectFolderContext = `Lokale Projektordner autorisiert: ${scope.sourceFolders.join(' | ')}`
     }
     if (scope?.refresh) {
       scheduleProjectSourceSync(project, projectSourcePrefixes, { silent: true })
@@ -5374,6 +5386,7 @@ async function sendChat() {
         attachments,
         desktop_agent: state.desktopAgentMode,
         desktop_profile: state.desktopAgentProfile,
+        project_folder_context: projectFolderContext || null,
         project_source_prefixes: projectSourcePrefixes,
       }),
     })
