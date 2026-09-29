@@ -140,7 +140,7 @@ def _build_local_project_tree_context(project: Any) -> str:
     if not folders:
         root = _local_project_root(project)
         folders = [root]
-    lines = [f"Ordnerbaum des gemeinsamen Projektordners: {', '.join(str(folder) for folder in folders)}"]
+    lines = [f"Ordnerbaum des lokalen Projektordners: {', '.join(str(folder) for folder in folders)}"]
     for folder_index, root in enumerate(folders, start=1):
         folder_label = root.name or f"folder-{folder_index}"
         lines.append(f"[Ordnerquelle] {folder_label}: {root}")
@@ -1490,10 +1490,10 @@ async def build_project_files_context(project: Any, max_files: int | None = None
     except FileNotFoundError as exc:
         folder = str(getattr(project, "watched_folder", "") or "").strip()
         return (
-            "Der gemeinsame Projektordner ist konfiguriert, aber vom Backend aktuell nicht lesbar.\n"
+            "Der lokale Projektordner ist momentan nicht lesbar.\n"
             f"Ordnerpfad: {folder or 'unbekannt'}\n"
             f"Fehler: {exc}\n"
-            "Bitte prüfe, ob der Backend-Server Zugriff auf diesen Pfad hat oder ob der Ordner korrekt gemountet wurde."
+            "Bitte prüfe, ob Hippo Desktop Zugriff auf diesen Pfad hat oder ob der Ordner noch nicht synchronisiert wurde."
         )
     except Exception as exc:
         if _project_uses_pcloud(project):
@@ -1527,13 +1527,13 @@ async def build_project_files_context(project: Any, max_files: int | None = None
             tree_context = ""
         if tree_context:
             return (
-                "Im gemeinsamen Ordner des Projekts sind aktuell keine Dateien sichtbar, aber die Verzeichnisstruktur ist verfügbar.\n"
+                "Im lokalen Projektordner sind aktuell keine Dateien sichtbar, aber die Verzeichnisstruktur ist verfügbar.\n"
                 f"Ordnerpfad: {folder or 'unbekannt'}\n\n"
                 f"{tree_context}"
             )
         return (
-            "Im gemeinsamen Ordner des Projekts sind aktuell keine Dateien sichtbar.\n"
-            "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Ordner leer ist oder die Synchronisierung noch nicht abgeschlossen wurde."
+            "Im lokalen Projektordner sind aktuell keine Dateien sichtbar.\n"
+            "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Ordner leer ist oder die lokale Synchronisierung noch nicht abgeschlossen wurde."
         )
 
     files_by_name = {item.filename: item for item in files}
@@ -1552,7 +1552,7 @@ async def build_project_files_context(project: Any, max_files: int | None = None
             media_summaries[item.filename] = asyncio.create_task(_summarize_media_file(project, item.filename))
 
     lines = [
-        f"Im gemeinsamen Ordner des Projekts sind {len(files)} sichtbare Dateien vorhanden:",
+        f"Im lokalen Projektordner sind {len(files)} sichtbare Dateien vorhanden:",
     ]
 
     if not _project_uses_pcloud(project):

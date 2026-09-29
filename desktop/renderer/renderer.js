@@ -418,6 +418,19 @@ function normalizeStoredProjectSourceScope(value) {
   }
 }
 
+function getProjectAccessSummaryDomId(project) {
+  return `project-access-summary-${String(project?.id || 'new').trim()}`
+}
+
+function updateProjectAccessSummary(project) {
+  const node = document.getElementById(getProjectAccessSummaryDomId(project))
+  if (!node) return
+  node.innerHTML = `
+    <div class="storage-summary-line"><span>Status</span><strong>${escapeHtml(formatProjectAccessSummary(project))}</strong></div>
+    <div class="storage-summary-line"><span>Hinweis</span><strong>Der Zugriff kann später im Projektmenü geändert werden.</strong></div>
+  `
+}
+
 function formatProjectAccessSummary(project) {
   const scope = loadProjectSourceScope(project)
   const folders = scope?.sourceFolders || normalizeProjectFolderInput(project?.watched_folder)
@@ -509,6 +522,7 @@ async function saveProjectSourceScope(project, sourceFolders, { consented = true
   const backendScope = normalizeStoredProjectSourceScope(response?.source_scope)
   if (backendScope) {
     localStorage.setItem(getProjectSourceScopeStorageKey(project), JSON.stringify(response.source_scope))
+    project.source_scope = JSON.stringify(response.source_scope)
     state.projects = state.projects.map((item) => (
       item.id === project.id
         ? { ...item, source_scope: JSON.stringify(response.source_scope) }
@@ -522,6 +536,7 @@ async function saveProjectSourceScope(project, sourceFolders, { consented = true
 async function clearProjectSourceScope(project) {
   if (!project?.id) return
   localStorage.removeItem(getProjectSourceScopeStorageKey(project))
+  project.source_scope = JSON.stringify({ source_folders: [], consented: false })
   state.projects = state.projects.map((item) => (
     item.id === project.id
       ? { ...item, source_scope: JSON.stringify({ source_folders: [], consented: false }) }
@@ -547,6 +562,7 @@ async function authorizeProjectLocalFolders(project) {
   renderProjects()
   renderContext()
   const persisted = await savePromise
+  updateProjectAccessSummary(project)
   if (state.selectedProjectId === project.id) {
     scheduleProjectSourceSync(project, persisted?.sourceFolders || folders, { silent: true })
   }
@@ -1002,8 +1018,9 @@ function renderContext() {
           ? 'Ordneranalyse fehlgeschlagen'
           : ''
   const localFolders = normalizeProjectFolderInput(project?.watched_folder)
+  const accessLabel = project ? ` · Zugriff: ${formatProjectAccessSummary(project)}` : ''
   const projectLabel = project
-    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${scanLabel ? ` · ${scanLabel}` : ''}${formatProjectRefreshStatus(project) ? ` · ${formatProjectRefreshStatus(project)}` : ''}`
+    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${accessLabel}${scanLabel ? ` · ${scanLabel}` : ''}${formatProjectRefreshStatus(project) ? ` · ${formatProjectRefreshStatus(project)}` : ''}`
     : ''
   if (typeof state.projectMenuCleanup === 'function') {
     state.projectMenuCleanup()
@@ -1227,6 +1244,7 @@ function renderContext() {
     try {
       const scopeResult = await authorizeProjectLocalFolders(project)
       if (!scopeResult) return
+      updateProjectAccessSummary(project)
       showToast('Alle lokalen Projektordner sind jetzt autorisiert')
     } catch (error) {
       showToast(error.message || 'Lokaler Zugriff konnte nicht geöffnet werden', 'error')
@@ -1317,6 +1335,7 @@ function renderProjects() {
       try {
         const scopeResult = await authorizeProjectLocalFolders(project)
         if (!scopeResult) return
+        updateProjectAccessSummary(project)
         showToast('Alle lokalen Projektordner sind jetzt autorisiert')
       } catch (error) {
         showToast(error.message || 'Lokaler Zugriff konnte nicht geöffnet werden', 'error')
@@ -2557,6 +2576,7 @@ function buildProjectForm(defaults = {}) {
   accessLabel.textContent = 'Aktueller Zugriff'
   const accessValue = document.createElement('div')
   accessValue.className = 'storage-summary'
+  accessValue.id = getProjectAccessSummaryDomId(defaults)
   accessValue.innerHTML = `
     <div class="storage-summary-line"><span>Status</span><strong>${escapeHtml(formatProjectAccessSummary(defaults))}</strong></div>
     <div class="storage-summary-line"><span>Hinweis</span><strong>Der Zugriff kann später im Projektmenü geändert werden.</strong></div>
