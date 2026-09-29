@@ -1,4 +1,4 @@
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import json
 from typing import Any
 
@@ -27,11 +27,9 @@ def _normalize_source_folders(raw: Any) -> list[str]:
     folders: list[str] = []
     for part in raw_values:
         path = Path(part).expanduser()
-        if not path.is_absolute():
+        if not (path.is_absolute() or PureWindowsPath(part).is_absolute()):
             raise HTTPException(status_code=400, detail='Bitte absolute Quellordner auswählen.')
-        if not path.exists() or not path.is_dir():
-            raise HTTPException(status_code=400, detail=f'Quellordner nicht gefunden: {part}')
-        folders.append(str(path.resolve()))
+        folders.append(str(path))
     return list(dict.fromkeys(folders))
 
 class ProjectFolderUpdate(BaseModel):
@@ -55,13 +53,11 @@ async def set_project_folder(project_id: int, db: DbSession, payload: ProjectFol
     if not folder:
         raise HTTPException(status_code=400, detail='Bitte einen Ordner auswählen.')
     path = Path(folder).expanduser()
-    if not path.is_absolute():
+    if not (path.is_absolute() or PureWindowsPath(folder).is_absolute()):
         raise HTTPException(status_code=400, detail='Bitte einen absoluten Ordnerpfad auswählen.')
-    if not path.exists() or not path.is_dir():
-        raise HTTPException(status_code=400, detail='Bitte einen gültigen Ordner auswählen.')
-    await db.execute(update(Project).where(Project.id == project_id).values(watched_folder=str(path.resolve())))
+    await db.execute(update(Project).where(Project.id == project_id).values(watched_folder=str(path)))
     await db.commit()
-    return {'project_id': project_id, 'folder': str(path.resolve())}
+    return {'project_id': project_id, 'folder': str(path)}
 
 @router.get('/{project_id}/folder')
 async def get_project_folder(project_id: int, db: DbSession, current_user=Depends(get_current_user)):
