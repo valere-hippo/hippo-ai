@@ -118,7 +118,7 @@ textarea {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.97);
   color: var(--text);
-  font-size: 20px;
+  font-size: 21px;
   cursor: pointer;
 }
 
@@ -305,7 +305,7 @@ textarea {
   border-radius: 12px;
   margin-bottom: 1px;
   font-size: 12.5px;
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.985);
 }
 
 .sidebar-search::placeholder {
@@ -421,8 +421,8 @@ textarea {
 }
 
 .ghost-action {
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 44px;
+  padding: 0 16px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.97);
   border-color: var(--line);
@@ -539,7 +539,7 @@ textarea {
   color: var(--text);
   background: rgba(255, 255, 255, 0.97);
   border-color: var(--line);
-  font-size: 20px;
+  font-size: 21px;
 }
 
 .workspace {
@@ -565,8 +565,8 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 14px 9px;
+  gap: 12px;
+  padding: 12px 16px 11px;
   border-bottom: 1px solid rgba(83, 62, 42, 0.08);
   background: rgba(255, 251, 246, 0.92);
   backdrop-filter: blur(18px) saturate(110%);
@@ -576,7 +576,7 @@ textarea {
 }
 
 .page-title {
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 700;
   letter-spacing: -0.03em;
 }
@@ -589,15 +589,15 @@ textarea {
 
 .project-context-summary {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
 .project-context-line {
   min-width: 0;
   color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.64;
   word-break: break-word;
 }
 
@@ -628,8 +628,8 @@ textarea {
 }
 
 .project-menu-summary {
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 44px;
+  padding: 0 16px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -651,10 +651,10 @@ textarea {
   z-index: 2000;
   top: calc(100% + 8px);
   left: 0;
-  min-width: 320px;
-  padding: 10px;
+  min-width: 340px;
+  padding: 12px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
   border-radius: 22px;
   border: 1px solid var(--line);
   background: rgba(255, 251, 246, 0.995);
@@ -677,14 +677,14 @@ textarea {
 
 .project-menu-title {
   color: var(--text);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
 }
 
 .project-menu-copy {
   color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.64;
 }
 
 .project-menu-divider {
@@ -695,8 +695,8 @@ textarea {
 
 .project-menu-item {
   width: 100%;
-  min-height: 42px;
-  padding: 0 12px;
+  min-height: 44px;
+  padding: 0 14px;
   border-radius: 14px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.95);
@@ -724,10 +724,10 @@ textarea {
 .project-sync-progress {
   display: grid;
   gap: 7px;
-  padding: 8px 10px;
-  border-radius: 14px;
+  padding: 10px 12px;
+  border-radius: 16px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.985);
 }
 
 .project-sync-progress-header {
@@ -827,7 +827,7 @@ textarea {
 .topbar-account {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
   padding: 5px 9px 5px 7px;
   border-radius: 999px;
@@ -897,12 +897,12 @@ textarea {
 }
 
 .message-bubble {
-  max-width: min(640px, 92%);
+  max-width: min(720px, 94%);
   border-radius: 18px;
-  padding: 10px 11px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 8px 18px rgba(88, 68, 46, 0.08);
+  box-shadow: 0 8px 18px rgba(88, 68, 46, 0.07);
 }
 
 .message.user .message-bubble {
@@ -929,7 +929,7 @@ textarea {
 
 .message-text {
   line-height: 1.64;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text);
 }
 
@@ -1015,8 +1015,9 @@ textarea {
 .rich-content li,
 .rich-content blockquote {
   font-size: 13px;
-  line-height: 1.64;
+  line-height: 1.68;
   overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
 .rich-content ul,
@@ -1042,7 +1043,7 @@ textarea {
   padding: 0.95rem 1rem;
   border-radius: 14px;
   overflow: auto;
-  background: rgba(8, 14, 20, 0.72);
+  background: rgba(247, 241, 234, 0.98);
   border: 1px solid var(--line);
 }
 
@@ -1112,7 +1113,7 @@ textarea {
   overflow: hidden;
   border-radius: 18px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.985);
   box-shadow: 0 10px 24px rgba(2, 8, 15, 0.2);
 }
 
@@ -1765,8 +1766,8 @@ textarea {
 .dashboard-panel-subtitle {
   margin-top: 4px;
   color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.64;
 }
 
 .dashboard-user-list {
@@ -2032,7 +2033,7 @@ select.text-input option {
 
 .modal-card h3 {
   margin: 0 0 10px;
-  font-size: 20px;
+  font-size: 21px;
 }
 
 .modal-copy {
@@ -2067,8 +2068,8 @@ select.text-input option {
   background: rgba(6, 12, 20, 0.96);
   border: 1px solid var(--line);
   color: var(--text);
-  font-size: 12.5px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.64;
   white-space: pre-wrap;
   word-break: break-word;
   overflow: auto;
@@ -2213,7 +2214,7 @@ select.text-input option {
   }
 
   .page-title {
-    font-size: 20px;
+    font-size: 21px;
   }
 
   .chat-stage {
