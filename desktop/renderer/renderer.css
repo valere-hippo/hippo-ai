@@ -320,7 +320,7 @@ textarea {
   min-height: 36px;
   padding: 7px 9px;
   border-radius: 13px;
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.96);
   border: 1px solid transparent;
   color: var(--text);
   cursor: pointer;
@@ -448,7 +448,7 @@ textarea {
   padding: 12px 14px;
   border-radius: 18px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .db-status-top {
@@ -546,9 +546,9 @@ textarea {
   height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(circle at top right, rgba(89, 183, 228, 0.08), transparent 26%),
-    radial-gradient(circle at bottom left, rgba(85, 208, 186, 0.06), transparent 24%),
-    linear-gradient(180deg, rgba(11, 17, 24, 0.86), rgba(8, 14, 20, 0.98));
+    radial-gradient(circle at top right, rgba(214, 124, 74, 0.08), transparent 26%),
+    radial-gradient(circle at bottom left, rgba(183, 107, 86, 0.06), transparent 24%),
+    linear-gradient(180deg, rgba(255, 251, 246, 0.98), rgba(249, 243, 235, 0.98));
 }
 
 .workspace-shell {
@@ -697,7 +697,7 @@ textarea {
   padding: 0 14px;
   border-radius: 14px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
   color: var(--text);
   text-align: left;
   display: flex;
@@ -899,7 +899,7 @@ textarea {
   border-radius: 18px;
   padding: 12px 14px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 8px 18px rgba(88, 68, 46, 0.07);
 }
 
@@ -911,7 +911,7 @@ textarea {
 .message.system .message-bubble {
   border-style: dashed;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .message-role {
@@ -1033,7 +1033,7 @@ textarea {
   padding: 0.85rem 1rem;
   border-left: 3px solid rgba(214, 124, 74, 0.52);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
   color: var(--muted);
 }
 
@@ -1620,7 +1620,7 @@ textarea {
   padding: 14px;
   border-radius: 18px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .skill-form-actions,
@@ -1648,14 +1648,14 @@ textarea {
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .voice-canvas {
   width: 100%;
   margin-top: 8px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
   border: 1px solid var(--line);
   display: none;
   transform: translateY(4px);
@@ -1682,7 +1682,7 @@ textarea {
   padding: 16px 18px;
   border-radius: 20px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .dashboard-header-copy {
@@ -1746,7 +1746,7 @@ textarea {
   padding: 14px;
   border-radius: 18px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .dashboard-panel-header {
@@ -1830,7 +1830,7 @@ textarea {
   padding: 12px;
   border-radius: 16px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .dashboard-overview-box-title {
@@ -1851,7 +1851,7 @@ textarea {
   gap: 2px;
   padding: 8px 10px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -1890,7 +1890,7 @@ textarea {
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .storage-summary-line span {
@@ -1980,7 +1980,7 @@ textarea {
   padding: 0 14px;
   border-radius: 16px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.98);
   color: var(--text);
   outline: none;
 }
@@ -2014,7 +2014,7 @@ select.text-input option {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(4, 8, 12, 0.62);
+  background: rgba(243, 236, 227, 0.78);
   display: grid;
   place-items: center;
   padding: 24px;
@@ -2026,10 +2026,10 @@ select.text-input option {
   max-height: min(88vh, 920px);
   border-radius: 22px;
   background:
-    radial-gradient(circle at top right, rgba(85, 208, 186, 0.06), transparent 26%),
-    linear-gradient(180deg, rgba(20, 30, 41, 0.98), rgba(13, 20, 29, 0.99));
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 24px 56px rgba(2, 8, 15, 0.46);
+    radial-gradient(circle at top right, rgba(214, 124, 74, 0.06), transparent 26%),
+    linear-gradient(180deg, rgba(255, 251, 246, 0.99), rgba(249, 243, 235, 0.99));
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 56px rgba(88, 68, 46, 0.16);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -2070,7 +2070,7 @@ select.text-input option {
   margin: 0;
   padding: 14px;
   border-radius: 18px;
-  background: rgba(6, 12, 20, 0.96);
+  background: rgba(255, 251, 246, 0.98);
   border: 1px solid var(--line);
   color: var(--text);
   font-size: 13px;
@@ -2106,13 +2106,13 @@ select.text-input option {
   z-index: 29;
   display: grid;
   place-items: center;
-  background: rgba(2, 6, 10, 0.48);
+  background: rgba(243, 236, 227, 0.70);
 }
 
 .loader-card {
   padding: 14px 16px;
   border-radius: 16px;
-  background: rgba(16, 24, 33, 0.94);
+  background: rgba(255, 251, 246, 0.98);
   border: 1px solid var(--line);
   color: var(--text);
   box-shadow: var(--shadow);
@@ -2125,7 +2125,7 @@ select.text-input option {
   z-index: 40;
   padding: 10px 12px;
   border-radius: 14px;
-  background: rgba(16, 24, 33, 0.96);
+  background: rgba(255, 251, 246, 0.99);
   color: var(--text);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
@@ -2168,7 +2168,7 @@ select.text-input option {
     border-bottom: 0;
     transform: translateX(-102%);
     transition: transform 0.24s ease;
-    box-shadow: 28px 0 50px rgba(2, 6, 10, 0.35);
+    box-shadow: 28px 0 50px rgba(88, 68, 46, 0.14);
     height: 100dvh;
     max-height: 100dvh;
   }
@@ -2182,7 +2182,7 @@ select.text-input option {
     position: fixed;
     inset: 0;
     z-index: 15;
-    background: rgba(2, 6, 10, 0.52);
+    background: rgba(243, 236, 227, 0.82);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
