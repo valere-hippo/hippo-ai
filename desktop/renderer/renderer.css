@@ -155,13 +155,11 @@ textarea {
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  background: linear-gradient(145deg, rgba(89, 183, 228, 0.92), rgba(85, 208, 186, 0.8));
-  position: relative;
+  width: 92px;
+  height: 90px;
+  object-fit: contain;
   flex: 0 0 auto;
-  box-shadow: 0 10px 20px rgba(89, 183, 228, 0.16);
+  filter: saturate(0.94) contrast(1.04);
 }
 
 .brand-mark span {
@@ -1922,6 +1920,13 @@ textarea {
   padding: 30px;
   position: relative;
   overflow: hidden;
+}
+
+.login-logo {
+  width: min(260px, 100%);
+  height: auto;
+  display: block;
+  margin-bottom: 16px;
 }
 
 .login-card::before {
