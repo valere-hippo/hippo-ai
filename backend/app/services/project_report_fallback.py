@@ -47,7 +47,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
 
     summary_note = (
         "Der Bericht basiert direkt auf dem ermittelten Projektkontext und den extrahierten Inhalten. "
-        "Er bleibt direkt und sachlich, ohne unnötige Übergänge oder Meta-Kommentare."
+        "Er bleibt direkt, sachlich und kompakt, ohne unnötige Übergänge oder Meta-Kommentare."
     )
 
     report: list[str] = [
@@ -56,36 +56,34 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         "## Anfrage",
         question_text,
         "",
-        "## Ergebnis",
+        "## Zusammenfassung",
         summary_note,
         "",
     ]
 
     if context_lines:
-        report.extend([
-            "## Extrahierter Projektkontext",
-            "; ".join(context_bullets) if context_bullets else "",
-            "",
-        ])
-
-    report.extend([
-        "## Beobachtungen",
-        "Der Bericht wurde auf Basis der Datei- und Inhaltsextraktion des Projektordners erstellt.",
-        "Für Textdateien, Office-Dateien, Tabellen, Bilder, Geo-Daten und Medien werden unterschiedliche Extraktoren benutzt.",
-        "Wenn zusätzliche Dateitypen auftauchen, werden passende Tools automatisch erzeugt und beim nächsten Sync berücksichtigt.",
-        "",
-        "## Ausführliche Beobachtungen",
-    ])
-
-    if context_lines:
+        context_excerpt: list[str] = []
         for line in context_lines[:60]:
             if _is_file_marker(line):
                 continue
             cleaned = _strip_bullet_prefix(line).strip()
             if cleaned:
-                report.append(cleaned)
+                context_excerpt.append(cleaned)
+        report.extend([
+            "## Analyse",
+            "Der Bericht wurde auf Basis der Datei- und Inhaltsextraktion des Projektordners erstellt.",
+            "Für Textdateien, Office-Dateien, Tabellen, Bilder, Geo-Daten und Medien werden unterschiedliche Extraktoren benutzt.",
+            "Wenn zusätzliche Dateitypen auftauchen, werden passende Tools automatisch erzeugt und beim nächsten Sync berücksichtigt.",
+            f"Kontext: {' '.join(context_excerpt[:8])}" if context_excerpt else "Kontext: keine weiteren Extraktionsdetails verfügbar.",
+        ])
     else:
-        report.append("Kein detaillierter Projektkontext verfügbar.")
+        report.extend([
+            "## Analyse",
+            "Der Bericht wurde auf Basis der Datei- und Inhaltsextraktion des Projektordners erstellt.",
+            "Für Textdateien, Office-Dateien, Tabellen, Bilder, Geo-Daten und Medien werden unterschiedliche Extraktoren benutzt.",
+            "Wenn zusätzliche Dateitypen auftauchen, werden passende Tools automatisch erzeugt und beim nächsten Sync berücksichtigt.",
+            "Kontext: kein detaillierter Projektkontext verfügbar.",
+        ])
 
     report.extend([
         "",
