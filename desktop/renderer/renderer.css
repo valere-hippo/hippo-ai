@@ -604,11 +604,17 @@ textarea {
   flex-wrap: wrap;
   gap: 8px;
   align-items: flex-start;
+  position: relative;
+  z-index: 1;
 }
 
 .project-menu {
   position: relative;
   display: inline-block;
+}
+
+.project-menu[open] {
+  z-index: 1000;
 }
 
 .project-menu > summary {
@@ -640,7 +646,7 @@ textarea {
 
 .project-menu-panel {
   position: absolute;
-  z-index: 20;
+  z-index: 2000;
   top: calc(100% + 8px);
   left: 0;
   min-width: 320px;
