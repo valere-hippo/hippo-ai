@@ -102,10 +102,10 @@ textarea {
   gap: 6px;
   padding: 8px 8px 8px;
   background:
-    radial-gradient(circle at top left, rgba(85, 208, 186, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(8, 16, 23, 0.98), rgba(8, 16, 23, 0.94));
+    radial-gradient(circle at top left, rgba(214, 124, 74, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 251, 246, 0.98), rgba(249, 243, 235, 0.98));
   border-right: 1px solid var(--line);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px) saturate(110%);
   overflow: hidden;
   min-height: 0;
 }
@@ -163,13 +163,7 @@ textarea {
 }
 
 .brand-mark span {
-  position: absolute;
-  inset: 10px 11px 10px 11px;
-  border-radius: 14px 14px 16px 16px;
-  background: rgba(10, 16, 22, 0.95);
-  box-shadow:
-    13px 0 0 0 rgba(10, 16, 22, 0.95),
-    -13px 0 0 0 rgba(10, 16, 22, 0.95);
+  display: none;
 }
 
 .brand-title {
@@ -210,8 +204,8 @@ textarea {
   min-height: 38px;
   padding: 0 12px;
   color: var(--text);
-  background: linear-gradient(180deg, rgba(85, 208, 186, 0.16), rgba(85, 208, 186, 0.06));
-  border-color: rgba(85, 208, 186, 0.18);
+  background: linear-gradient(180deg, rgba(214, 124, 74, 0.14), rgba(214, 124, 74, 0.06));
+  border-color: rgba(214, 124, 74, 0.18);
   font-weight: 600;
 }
 
@@ -1991,7 +1985,7 @@ select.text-input {
 }
 
 select.text-input option {
-  background: #16212e;
+  background: #ffffff;
   color: var(--text);
 }
 
