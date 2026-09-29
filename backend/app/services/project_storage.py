@@ -112,9 +112,13 @@ def _resolve_local_project_file(project: Any, filename: str) -> tuple[Path, str]
 
 
 def _iter_local_project_files(project: Any) -> list[ProjectFile]:
-    folders = _local_project_folders(project) or [_local_project_dir(project)]
+    folders = _local_project_folders(project)
+    if not folders:
+        return []
     items: list[ProjectFile] = []
     for folder_index, root in enumerate(folders, start=1):
+        if not root.exists() or not root.is_dir():
+            continue
         folder_label = root.name or f"folder-{folder_index}"
         for entry in sorted(root.rglob("*"), key=lambda path: path.as_posix().lower()):
             if not entry.is_file():
@@ -136,10 +140,9 @@ def _iter_local_project_files(project: Any) -> list[ProjectFile]:
 
 
 def _build_local_project_tree_context(project: Any) -> str:
-    folders = _local_project_folders(project)
+    folders = [folder for folder in _local_project_folders(project) if folder.exists() and folder.is_dir()]
     if not folders:
-        root = _local_project_root(project)
-        folders = [root]
+        return ""
     lines = [f"Ordnerbaum des lokalen Projektordners: {', '.join(str(folder) for folder in folders)}"]
     for folder_index, root in enumerate(folders, start=1):
         folder_label = root.name or f"folder-{folder_index}"
@@ -313,7 +316,7 @@ def _local_project_folders(project: Any) -> list[Path]:
     for candidate in candidates:
         path = Path(candidate).expanduser()
         if not path.exists() or not path.is_dir():
-            raise FileNotFoundError(candidate)
+            continue
         folders.append(path)
     return folders
 
