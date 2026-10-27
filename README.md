@@ -56,7 +56,7 @@ We no longer use Kubernetes for Phase 1/2 deployments. Use the provided docker-c
 Quick steps:
 1. Copy `.env.example` to `.env` and fill secrets (POSTGRES_PASSWORD, JWT_SECRET_KEY, etc.).
 2. Ensure host has Docker, docker-compose, and (if using GPU models) nvidia-container-toolkit installed.
-3. Copy `docker-compose.prod.yml` to the deployment host (e.g., `/opt/hippo-ai/docker-compose.yml`) and create the `.env` there.
+3. Copy `docker-compose.prod.yml` to the deployment host (e.g., `/opt/hippo-ai/docker-compose.yml`) and create the `.env` there. The production compose runs from the image contents, so you do not need to copy the backend source tree onto the server.
 4. Start services:
 
 ```bash

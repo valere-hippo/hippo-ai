@@ -11,7 +11,7 @@ This document now describes the infra-runner deployment flow; no SSH deploy keys
 
 Server preparation (target host)
 1. Install Docker and Docker Compose (and nvidia-container-runtime if using GPUs).
-2. Create a directory for deployment (e.g., /opt/hippo-ai) and put docker-compose.yml there. The compose should reference images from ghcr.io/<owner>/hippo-ai-api:latest.
+2. Create a directory for deployment (e.g., /opt/hippo-ai) and put docker-compose.yml there. The compose should reference images from ghcr.io/<owner>/hippo-ai-api:latest and should not bind-mount the repo source tree into the API container.
 3. Ensure the self-hosted runner user can run docker commands.
 4. Optionally create a systemd service wrapper for docker-compose for auto start.
 

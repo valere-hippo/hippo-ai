@@ -22,6 +22,7 @@ WantedBy=multi-user.target
 Usage:
 - Copy docker-compose.prod.yml to /opt/hippo-ai/docker-compose.yml
 - Create /opt/hippo-ai/.env with production secrets
+- Do not mount the backend source tree into the API container; the image already contains the code
 - Place hippo-ai.service as above
 - Run:
     sudo systemctl daemon-reload
