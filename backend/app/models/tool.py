@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, JSON
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -10,6 +10,8 @@ class AITool(Base):
     __tablename__ = "ai_tools"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("hippoai.ai_projects.id", ondelete="CASCADE"), nullable=True, index=True)
+    source_project_id: Mapped[int | None] = mapped_column(ForeignKey("hippoai.ai_projects.id", ondelete="SET NULL"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     instructions: Mapped[str] = mapped_column(Text, nullable=False)

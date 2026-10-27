@@ -11,6 +11,7 @@ class Conversation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(200), nullable=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("hippoai.ai_projects.id"), nullable=True)
+    profile_id: Mapped[int | None] = mapped_column(ForeignKey("hippoai.ai_chat_profiles.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 

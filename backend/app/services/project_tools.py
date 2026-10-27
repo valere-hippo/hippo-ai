@@ -48,7 +48,7 @@ async def _load_tool_preferences(db: Any, user_id: int | None, project_id: int |
 
 
 async def load_shared_tools(db: Any, enabled_only: bool = False) -> list[AITool]:
-    stmt = select(AITool)
+    stmt = select(AITool).where(AITool.project_id.is_(None))
     if enabled_only:
         stmt = stmt.where(AITool.is_enabled.is_(True))
     stmt = stmt.order_by(AITool.created_at.asc())
@@ -57,7 +57,10 @@ async def load_shared_tools(db: Any, enabled_only: bool = False) -> list[AITool]
 
 
 async def load_tools_for_project(db: Any, project_id: int, user_id: int | None = None, enabled_only: bool = False) -> list[AITool]:
-    tools = await load_shared_tools(db, enabled_only=False)
+    stmt = select(AITool).where((AITool.project_id == project_id) | (AITool.project_id.is_(None)))
+    stmt = stmt.order_by(AITool.project_id.is_(None).desc(), AITool.created_at.asc())
+    result = await db.execute(stmt)
+    tools = result.scalars().all()
     prefs = await _load_tool_preferences(db, user_id, project_id, [int(tool.id) for tool in tools])
     for tool in tools:
         effective_enabled = prefs.get(int(tool.id), bool(getattr(tool, "is_enabled", False)))
@@ -103,7 +106,13 @@ def format_tools_context(tools: list[AITool], query: str | None = None, limit: i
     ]
 
     for tool in selected:
-        lines.append(f"- {tool.name} [{tool.tool_type}]")
+        if getattr(tool, "project_id", None) is None:
+            scope = "Global"
+        elif getattr(tool, "source_project_id", None):
+            scope = f"Projekt {tool.project_id} · aus Projekt {tool.source_project_id}"
+        else:
+            scope = f"Projekt {tool.project_id}"
+        lines.append(f"- {tool.name} [{tool.tool_type} · {scope}]")
         description = (tool.description or "").strip()
         if description:
             lines.append(f"  Beschreibung: {description}")
@@ -128,3 +137,24 @@ async def build_tools_context(db: Any, query: str | None = None, limit: int = 5,
             pass
     tools = await load_tools_for_project(db, project_id, user_id=user_id, enabled_only=True) if project_id is not None else await load_shared_tools(db, enabled_only=True)
     return format_tools_context(tools, query=query, limit=limit)
+
+
+def clone_tool_for_project(tool: AITool, target_project_id: int, source_project_id: int | None = None) -> dict[str, Any]:
+    return {
+        "source_project_id": source_project_id,
+        "project_id": target_project_id,
+        "name": tool.name,
+        "description": tool.description,
+        "instructions": tool.instructions,
+        "tool_type": tool.tool_type,
+        "command": tool.command,
+        "arguments": tool.arguments,
+        "working_directory": tool.working_directory,
+        "endpoint": tool.endpoint,
+        "method": tool.method,
+        "platform": tool.platform,
+        "timeout_seconds": tool.timeout_seconds,
+        "requires_confirmation": tool.requires_confirmation,
+        "parameters": tool.parameters,
+        "is_enabled": tool.is_enabled,
+    }

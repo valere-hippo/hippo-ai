@@ -9,6 +9,7 @@ class ProjectCreate(BaseModel):
     watched_folder: str | None = Field(default=None, max_length=2000)
     delivery_folder: str | None = Field(default=None, max_length=1000)
     source_scope: str | None = Field(default=None)
+    default_profile_id: int | None = None
     pcloud_path: str | None = Field(default=None, max_length=1000)
     pcloud_folder_id: int | None = Field(default=None, ge=1)
 
@@ -24,6 +25,7 @@ class ProjectResponse(BaseModel):
     watched_folder: str | None = None
     delivery_folder: str | None = None
     active_conversation_id: int | None = None
+    default_profile_id: int | None = None
     source_scope: str | None = None
     pcloud_path: str | None = None
     pcloud_folder_id: int | None = None

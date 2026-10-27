@@ -23,6 +23,8 @@ const state = {
   users: [],
   selectedProjectId: null,
   currentConversationId: null,
+  selectedProfileId: Number(localStorage.getItem('hippo.chat.profile.id') || '0') || null,
+  chatProfiles: [],
   draftAttachments: [],
   recording: null,
   isRecording: false,
@@ -378,6 +380,27 @@ function formatRole(role) {
 
 function getContextProject() {
   return state.projects.find((project) => project.id === state.selectedProjectId) || null
+}
+
+function getProjectConversationMemoryKey(projectId, profileId) {
+  return `${Number(projectId || 0)}:${Number(profileId || 0)}`
+}
+
+function getProfileStorageKey(projectId) {
+  return `hippo.chat.profile.id:${projectId ? Number(projectId) : 'global'}`
+}
+
+function setSelectedProfileId(profileId) {
+  const next = Number(profileId || 0) || null
+  state.selectedProfileId = next
+  const project = getContextProject()
+  if (project) {
+    localStorage.setItem(getProfileStorageKey(project.id), String(next || ''))
+  } else {
+    localStorage.setItem('hippo.chat.profile.id', String(next || ''))
+  }
+  syncSelectedProjectConversation()
+  renderContext()
 }
 
 function normalizeProjectFolderInput(folderValue) {
@@ -1013,7 +1036,10 @@ function updatePresence() {
 
 function renderContext() {
   const project = getContextProject()
-  els.projectPill.textContent = project ? project.name : 'Global'
+  const currentProfile = state.chatProfiles.find((profile) => Number(profile.id) === Number(state.selectedProfileId)) || null
+  els.projectPill.textContent = project
+    ? `${project.name}${currentProfile ? ` · ${currentProfile.name}` : ''}`
+    : (currentProfile ? currentProfile.name : 'Global')
   if (els.projectToolsBtn) {
     els.projectToolsBtn.disabled = !project
   }
@@ -1032,8 +1058,9 @@ function renderContext() {
           : ''
   const localFolders = normalizeProjectFolderInput(project?.watched_folder)
   const accessLabel = project ? ` · ${formatProjectAccessSummary(project)}` : ''
+  const profileSummaryLabel = currentProfile ? ` · Profil: ${currentProfile.name} (${currentProfile.chat_bot_id})` : ''
   const projectLabel = project
-    ? `Projekt: ${project.name}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${accessLabel}${scanLabel ? ` · ${scanLabel}` : ''}${formatProjectRefreshStatus(project) ? ` · ${formatProjectRefreshStatus(project)}` : ''}`
+    ? `Projekt: ${project.name}${profileSummaryLabel}${localFolders.length ? ` · Quellen: ${localFolders.join(' | ')}` : ''}${project.delivery_folder ? ` · Lieferung: ${project.delivery_folder}` : ''}${accessLabel}${scanLabel ? ` · ${scanLabel}` : ''}${formatProjectRefreshStatus(project) ? ` · ${formatProjectRefreshStatus(project)}` : ''}`
     : ''
   if (typeof state.projectMenuCleanup === 'function') {
     state.projectMenuCleanup()
@@ -1121,6 +1148,38 @@ function renderContext() {
 
   const actions = document.createElement('div')
   actions.className = 'project-context-actions'
+
+  const profileWrap = document.createElement('div')
+  profileWrap.className = 'project-profile-select-wrap'
+  const profileLabel = document.createElement('span')
+  profileLabel.className = 'project-profile-select-label'
+  profileLabel.textContent = 'Profil'
+  const profileSelect = document.createElement('select')
+  profileSelect.className = 'text-input project-profile-select'
+  const currentProfileId = Number(state.selectedProfileId || 0) || null
+  const profileOptions = []
+  profileOptions.push({ value: '', label: 'Global' })
+  state.chatProfiles.forEach((profile) => {
+    const scopeLabel = profile.project_id ? `Projekt ${profile.project_id}` : 'Global'
+    profileOptions.push({ value: String(profile.id), label: `${profile.name} · ${scopeLabel}` })
+  })
+  profileOptions.forEach((optionData) => {
+    const option = document.createElement('option')
+    option.value = optionData.value
+    option.textContent = optionData.label
+    profileSelect.appendChild(option)
+  })
+  profileSelect.value = currentProfileId ? String(currentProfileId) : ''
+  profileSelect.addEventListener('change', () => {
+    setSelectedProfileId(profileSelect.value ? Number(profileSelect.value) : null)
+  })
+  const profileManageButton = document.createElement('button')
+  profileManageButton.type = 'button'
+  profileManageButton.className = 'ghost-action'
+  profileManageButton.textContent = 'Verwalten'
+  profileManageButton.addEventListener('click', () => openChatProfileManager())
+  profileWrap.append(profileLabel, profileSelect, profileManageButton)
+  actions.appendChild(profileWrap)
 
   const menu = document.createElement('details')
   menu.className = 'project-menu'
@@ -1420,7 +1479,10 @@ function renderConversations() {
       title.textContent = getConversationTitle(conversation)
       const subtitle = document.createElement('div')
       subtitle.className = 'item-subtitle'
-      subtitle.textContent = conversation.created_at ? new Date(conversation.created_at).toLocaleString() : ''
+      const profile = conversation.profile_id ? state.chatProfiles.find((item) => Number(item.id) === Number(conversation.profile_id)) : null
+      const subtitleParts = [conversation.created_at ? new Date(conversation.created_at).toLocaleString() : '']
+      if (profile) subtitleParts.push(`Profil: ${profile.name}`)
+      subtitle.textContent = subtitleParts.filter(Boolean).join(' · ')
       main.append(title, subtitle)
 
       const chip = document.createElement('div')
@@ -2108,21 +2170,21 @@ function getLatestProjectConversation(projectId) {
 function syncSelectedProjectConversation() {
   if (!state.selectedProjectId) return
   const project = state.projects.find((item) => item.id === state.selectedProjectId) || null
-  const candidateIds = [
-    project?.active_conversation_id,
-    state.projectConversationMemory.get(state.selectedProjectId),
-    getLatestProjectConversation(state.selectedProjectId)?.id,
-  ]
+  const profileId = state.selectedProfileId || project?.default_profile_id || null
+  const candidateIds = [project?.active_conversation_id, state.projectConversationMemory.get(getProjectConversationMemoryKey(state.selectedProjectId, profileId)), getLatestProjectConversation(state.selectedProjectId)?.id]
     .map((value) => Number(value || 0))
     .filter((value) => Number.isFinite(value) && value > 0)
 
-  const matchedConversationId = candidateIds.find((conversationId) => (
-    state.conversations.some((conversation) => conversation.id === conversationId && conversation.project_id === state.selectedProjectId)
-  )) || null
+  const matchedConversationId = candidateIds.find((conversationId) => {
+    const conversation = state.conversations.find((item) => item.id === conversationId)
+    if (!conversation || conversation.project_id !== state.selectedProjectId) return false
+    if (profileId && Number(conversation.profile_id || 0) !== Number(profileId)) return false
+    return true
+  }) || null
 
   state.currentConversationId = matchedConversationId
   if (matchedConversationId) {
-    state.projectConversationMemory.set(state.selectedProjectId, matchedConversationId)
+    state.projectConversationMemory.set(getProjectConversationMemoryKey(state.selectedProjectId, profileId), matchedConversationId)
   }
 }
 
@@ -2138,9 +2200,10 @@ function normalizeActiveConversationState() {
   }
 
   for (const [projectId, conversationId] of state.projectConversationMemory.entries()) {
-    const projectExists = state.projects.some((project) => project.id === projectId)
+    const [projectPart, profilePart] = String(projectId).split(':').map((value) => Number(value || 0))
+    const projectExists = state.projects.some((project) => project.id === projectPart)
     const conversationExistsForProject = state.conversations.some(
-      (conversation) => conversation.id === conversationId && conversation.project_id === projectId,
+      (conversation) => conversation.id === conversationId && conversation.project_id === projectPart && Number(conversation.profile_id || 0) === profilePart,
     )
     if (!projectExists || !conversationExistsForProject) {
       state.projectConversationMemory.delete(projectId)
@@ -2171,6 +2234,28 @@ async function loadConversations() {
   state.conversations = Array.isArray(conversations) ? conversations : []
   normalizeActiveConversationState()
   renderConversations()
+  renderContext()
+}
+
+async function loadProfiles() {
+  const project = getContextProject()
+  const query = project?.id ? `?project_id=${encodeURIComponent(project.id)}` : ''
+  try {
+    const items = await apiJson(`/profiles/${query}`)
+    state.chatProfiles = Array.isArray(items) ? items : []
+  } catch (error) {
+    state.chatProfiles = []
+  }
+  const storageKey = project ? getProfileStorageKey(project.id) : 'hippo.chat.profile.id'
+  const stored = Number(localStorage.getItem(storageKey) || '0') || null
+  if (stored && state.chatProfiles.some((profile) => Number(profile.id) === stored)) {
+    state.selectedProfileId = stored
+  } else if (project?.default_profile_id && state.chatProfiles.some((profile) => Number(profile.id) === Number(project.default_profile_id))) {
+    state.selectedProfileId = Number(project.default_profile_id)
+  } else if (state.selectedProfileId && !state.chatProfiles.some((profile) => Number(profile.id) === Number(state.selectedProfileId))) {
+    state.selectedProfileId = null
+  }
+  syncSelectedProjectConversation()
   renderContext()
 }
 
@@ -2264,6 +2349,7 @@ function renderDbStatus() {
 
 async function loadWorkspace() {
   await Promise.all([loadProjects(), loadConversations(), loadUsers()])
+  await loadProfiles()
   await loadAdminOverview()
   renderContext()
 }
@@ -2318,16 +2404,19 @@ function logout() {
 
 async function selectProject(projectId) {
   state.selectedProjectId = projectId
-  syncSelectedProjectConversation()
+  const project = getContextProject()
+  const storedProfile = Number(localStorage.getItem(getProfileStorageKey(projectId)) || '0') || null
+  state.selectedProfileId = storedProfile || project?.default_profile_id || null
   renderProjects()
   renderConversations()
   renderContext()
   closeSidebarDrawer()
 
-  const project = getContextProject()
-  if (project) {
-    renderContext()
-  }
+  await loadProfiles()
+  syncSelectedProjectConversation()
+  renderProjects()
+  renderConversations()
+  renderContext()
 
   if (state.currentConversationId) {
     await openConversationById(state.currentConversationId)
@@ -2350,7 +2439,8 @@ async function openConversation(conversation) {
   state.currentConversationId = conversation.id
   if (conversation.project_id) {
     state.selectedProjectId = conversation.project_id
-    state.projectConversationMemory.set(conversation.project_id, conversation.id)
+    state.selectedProfileId = Number(conversation.profile_id || 0) || state.selectedProfileId
+    state.projectConversationMemory.set(getProjectConversationMemoryKey(conversation.project_id, conversation.profile_id), conversation.id)
   }
   renderProjects()
   renderConversations()
@@ -4157,8 +4247,31 @@ function buildSkillManagerContent(project) {
   listCount.textContent = '0'
   listHeading.append(listLabel, listCount)
 
+  const projectSourceRow = document.createElement('div')
+  projectSourceRow.className = 'skill-upload-row'
+  const sourceProjectInput = document.createElement('input')
+  sourceProjectInput.type = 'number'
+  sourceProjectInput.min = '1'
+  sourceProjectInput.className = 'text-input'
+  sourceProjectInput.placeholder = 'Quellprojekt-ID'
+  sourceProjectInput.style.maxWidth = '180px'
+  const loadSourceButton = document.createElement('button')
+  loadSourceButton.type = 'button'
+  loadSourceButton.className = 'ghost-action'
+  loadSourceButton.textContent = 'Projekt laden'
+  const backToProjectButton = document.createElement('button')
+  backToProjectButton.type = 'button'
+  backToProjectButton.className = 'ghost-action'
+  backToProjectButton.textContent = 'Zurück zum aktuellen Projekt'
+  const sourceHint = document.createElement('div')
+  sourceHint.className = 'muted-copy'
+  sourceHint.textContent = 'Optional: lade die Skills eines anderen Projekts und übernehme sie dann in das aktuelle Projekt.'
+  projectSourceRow.append(sourceProjectInput, loadSourceButton, backToProjectButton)
+
   const skillList = document.createElement('div')
   skillList.className = 'skill-list'
+
+  let browsingSourceProjectId = null
 
   const formSection = document.createElement('div')
   formSection.className = 'skill-form'
@@ -4338,7 +4451,7 @@ function buildSkillManagerContent(project) {
       if (project) {
         const globalChip = document.createElement('span')
         globalChip.className = `section-badge subtle${skill.is_enabled ? '' : ' danger'}`
-        globalChip.textContent = skill.is_enabled ? 'Global aktiv' : 'Global inaktiv'
+        globalChip.textContent = skill.source_project_id ? `Aus Projekt ${skill.source_project_id}` : (skill.project_id ? `Projekt ${skill.project_id}` : (skill.is_enabled ? 'Global aktiv' : 'Global inaktiv'))
         statusWrap.appendChild(globalChip)
       }
       cardTop.append(meta, statusWrap)
@@ -4350,72 +4463,98 @@ function buildSkillManagerContent(project) {
       const actions = document.createElement('div')
       actions.className = 'skill-card-actions'
 
-      const editButton = document.createElement('button')
-      editButton.type = 'button'
-      editButton.className = 'ghost-action'
-      editButton.textContent = 'Bearbeiten'
-      editButton.addEventListener('click', () => fillForm(skill))
-
-      const toggleButton = document.createElement('button')
-      toggleButton.type = 'button'
-      toggleButton.className = 'ghost-action'
-      toggleButton.textContent = project ? (isActiveForMe ? 'Für mich deaktivieren' : 'Für mich aktivieren') : (skill.is_enabled ? 'Deaktivieren' : 'Aktivieren')
-      toggleButton.addEventListener('click', async () => {
-        showLoader('Skill wird aktualisiert...')
-        try {
-          if (project) {
-            await apiJson(`/skills/library/${skill.id}/activation`, {
-              method: 'PATCH',
-              body: JSON.stringify({ project_id: project.id, is_enabled: !isActiveForMe }),
+      if (browsingSourceProjectId) {
+        const importButton = document.createElement('button')
+        importButton.type = 'button'
+        importButton.className = 'ghost-action'
+        importButton.textContent = 'In aktuelles Projekt übernehmen'
+        importButton.addEventListener('click', async () => {
+          if (!project?.id) return
+          showLoader('Skill wird ins Projekt übernommen...')
+          try {
+            await apiJson(`/projects/${encodeURIComponent(project.id)}/skills/${encodeURIComponent(skill.id)}/import`, {
+              method: 'POST',
+              body: JSON.stringify({ source_project_id: browsingSourceProjectId, is_enabled: true }),
             })
-          } else {
-            await apiJson(`/skills/library/${skill.id}`, {
-              method: 'PATCH',
-              body: JSON.stringify({ is_enabled: !skill.is_enabled }),
-            })
+            browsingSourceProjectId = null
+            sourceProjectInput.value = ''
+            await loadLibrary()
+            showToast('Skill ins aktuelle Projekt übernommen')
+          } catch (error) {
+            showToast(error.message || 'Skill konnte nicht übernommen werden', 'error')
+          } finally {
+            hideLoader()
           }
-          await loadLibrary()
-          showToast(project ? 'Skill für dieses Projekt aktualisiert' : 'Skill aktualisiert')
-        } catch (error) {
-          showToast(error.message || 'Skill konnte nicht aktualisiert werden', 'error')
-        } finally {
-          hideLoader()
-        }
-      })
-
-      const deleteButton = document.createElement('button')
-      deleteButton.type = 'button'
-      deleteButton.className = 'ghost-action danger'
-      deleteButton.textContent = 'Löschen'
-      deleteButton.addEventListener('click', async () => {
-        const result = await openModal({
-          title: 'Skill wirklich löschen?',
-          copy: `Skill "${skill.name}" wird dauerhaft gelöscht.`,
-          content: (() => {
-            const node = document.createElement('div')
-            node.className = 'modal-grid'
-            node.innerHTML = `<div class="muted-copy">Die Funktion steht danach nicht mehr als Skill zur Verfügung.</div>`
-            return node
-          })(),
-          submitLabel: 'Löschen',
         })
-        if (!result) return
-        showLoader('Skill wird gelöscht...')
-        try {
-          await apiJson(`/skills/library/${skill.id}`, { method: 'DELETE' })
-          if (editingSkillId === skill.id) {
-            resetForm()
-          }
-          await loadLibrary()
-          showToast('Skill gelöscht')
-        } catch (error) {
-          showToast(error.message || 'Skill konnte nicht gelöscht werden', 'error')
-        } finally {
-          hideLoader()
-        }
-      })
+        actions.append(importButton)
+      } else {
+        const editButton = document.createElement('button')
+        editButton.type = 'button'
+        editButton.className = 'ghost-action'
+        editButton.textContent = 'Bearbeiten'
+        editButton.addEventListener('click', () => fillForm(skill))
 
-      actions.append(editButton, toggleButton, deleteButton)
+        const toggleButton = document.createElement('button')
+        toggleButton.type = 'button'
+        toggleButton.className = 'ghost-action'
+        toggleButton.textContent = project ? (isActiveForMe ? 'Für mich deaktivieren' : 'Für mich aktivieren') : (skill.is_enabled ? 'Deaktivieren' : 'Aktivieren')
+        toggleButton.addEventListener('click', async () => {
+          showLoader('Skill wird aktualisiert...')
+          try {
+            if (project) {
+              await apiJson(`/skills/library/${skill.id}/activation`, {
+                method: 'PATCH',
+                body: JSON.stringify({ project_id: project.id, is_enabled: !isActiveForMe }),
+              })
+            } else {
+              await apiJson(`/skills/library/${skill.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ is_enabled: !skill.is_enabled }),
+              })
+            }
+            await loadLibrary()
+            showToast(project ? 'Skill für dieses Projekt aktualisiert' : 'Skill aktualisiert')
+          } catch (error) {
+            showToast(error.message || 'Skill konnte nicht aktualisiert werden', 'error')
+          } finally {
+            hideLoader()
+          }
+        })
+
+        const deleteButton = document.createElement('button')
+        deleteButton.type = 'button'
+        deleteButton.className = 'ghost-action danger'
+        deleteButton.textContent = 'Löschen'
+        deleteButton.addEventListener('click', async () => {
+          const result = await openModal({
+            title: 'Skill wirklich löschen?',
+            copy: `Skill "${skill.name}" wird dauerhaft gelöscht.`,
+            content: (() => {
+              const node = document.createElement('div')
+              node.className = 'modal-grid'
+              node.innerHTML = `<div class="muted-copy">Die Funktion steht danach nicht mehr als Skill zur Verfügung.</div>`
+              return node
+            })(),
+            submitLabel: 'Löschen',
+          })
+          if (!result) return
+          showLoader('Skill wird gelöscht...')
+          try {
+            await apiJson(`/skills/library/${skill.id}`, { method: 'DELETE' })
+            if (editingSkillId === skill.id) {
+              resetForm()
+            }
+            await loadLibrary()
+            showToast('Skill gelöscht')
+          } catch (error) {
+            showToast(error.message || 'Skill konnte nicht gelöscht werden', 'error')
+          } finally {
+            hideLoader()
+          }
+        })
+
+        actions.append(editButton, toggleButton, deleteButton)
+      }
       card.append(cardTop, instructions, actions)
       skillList.appendChild(card)
     })
@@ -4423,9 +4562,20 @@ function buildSkillManagerContent(project) {
 
   const loadLibrary = async () => {
     try {
-      const projectId = project?.id ? `?project_id=${encodeURIComponent(project.id)}` : ''
-      const items = await apiJson(`/skills/library${projectId}`)
+      const params = new URLSearchParams()
+      if (project?.id) {
+        params.set('project_id', String(project.id))
+      }
+      if (browsingSourceProjectId) {
+        params.set('source_project_id', String(browsingSourceProjectId))
+      }
+      const query = params.toString() ? `?${params.toString()}` : ''
+      const items = await apiJson(`/skills/library${query}`)
       skillCache = Array.isArray(items) ? items : []
+      formState.textContent = browsingSourceProjectId ? `Quelle ${browsingSourceProjectId}` : (editingSkillId ? 'Bearbeiten' : 'Neu')
+      sourceHint.textContent = browsingSourceProjectId
+        ? `Du siehst die Skills aus Projekt ${browsingSourceProjectId}. Übernehme einzelne Einträge ins aktuelle Projekt.`
+        : 'Optional: lade die Skills eines anderen Projekts und übernehme sie dann in das aktuelle Projekt.'
       renderSkills()
     } catch (error) {
       skillList.innerHTML = ''
@@ -4478,6 +4628,21 @@ function buildSkillManagerContent(project) {
 
   resetButton.addEventListener('click', resetForm)
   saveButton.addEventListener('click', saveSkill)
+  loadSourceButton.addEventListener('click', async () => {
+    const value = Number(sourceProjectInput.value)
+    if (!Number.isFinite(value) || value <= 0) {
+      showToast('Bitte eine gültige Quellprojekt-ID eingeben.', 'error')
+      return
+    }
+    browsingSourceProjectId = value
+    await loadLibrary()
+  })
+  backToProjectButton.addEventListener('click', async () => {
+    browsingSourceProjectId = null
+    sourceProjectInput.value = ''
+    await loadLibrary()
+  })
+  formSection.prepend(sourceHint, projectSourceRow)
   loadLibrary().catch((error) => {
     showToast(error.message || 'Skills konnten nicht geladen werden', 'error')
   })
@@ -4507,8 +4672,31 @@ function buildToolManagerContent(project) {
   listCount.textContent = '0'
   listHeading.append(listLabel, listCount)
 
+  const projectSourceRow = document.createElement('div')
+  projectSourceRow.className = 'skill-upload-row'
+  const sourceProjectInput = document.createElement('input')
+  sourceProjectInput.type = 'number'
+  sourceProjectInput.min = '1'
+  sourceProjectInput.className = 'text-input'
+  sourceProjectInput.placeholder = 'Quellprojekt-ID'
+  sourceProjectInput.style.maxWidth = '180px'
+  const loadSourceButton = document.createElement('button')
+  loadSourceButton.type = 'button'
+  loadSourceButton.className = 'ghost-action'
+  loadSourceButton.textContent = 'Projekt laden'
+  const backToProjectButton = document.createElement('button')
+  backToProjectButton.type = 'button'
+  backToProjectButton.className = 'ghost-action'
+  backToProjectButton.textContent = 'Zurück zum aktuellen Projekt'
+  const sourceHint = document.createElement('div')
+  sourceHint.className = 'muted-copy'
+  sourceHint.textContent = 'Optional: lade die Tools eines anderen Projekts und übernehme sie dann in das aktuelle Projekt.'
+  projectSourceRow.append(sourceProjectInput, loadSourceButton, backToProjectButton)
+
   const toolList = document.createElement('div')
   toolList.className = 'tool-list'
+
+  let browsingSourceProjectId = null
 
   const formSection = document.createElement('div')
   formSection.className = 'tool-form'
@@ -4836,7 +5024,7 @@ function buildToolManagerContent(project) {
       if (project) {
         const globalChip = document.createElement('span')
         globalChip.className = `section-badge subtle${tool.is_enabled ? '' : ' danger'}`
-        globalChip.textContent = tool.is_enabled ? 'Global aktiv' : 'Global inaktiv'
+        globalChip.textContent = tool.source_project_id ? `Aus Projekt ${tool.source_project_id}` : (tool.is_enabled ? 'Global aktiv' : 'Global inaktiv')
         statusWrap.appendChild(globalChip)
       }
       cardTop.append(meta, statusWrap)
@@ -4848,73 +5036,109 @@ function buildToolManagerContent(project) {
       const actions = document.createElement('div')
       actions.className = 'tool-card-actions'
 
-      const editButton = document.createElement('button')
-      editButton.type = 'button'
-      editButton.className = 'ghost-action'
-      editButton.textContent = 'Bearbeiten'
-      editButton.addEventListener('click', () => fillForm(tool))
-
-      const toggleButton = document.createElement('button')
-      toggleButton.type = 'button'
-      toggleButton.className = 'ghost-action'
-      toggleButton.textContent = tool.is_enabled ? 'Deaktivieren' : 'Aktivieren'
-      toggleButton.addEventListener('click', async () => {
-        showLoader('Tool wird aktualisiert...')
-        try {
-          await apiJson(`/tools/library/${tool.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ is_enabled: !tool.is_enabled }),
-          })
-          await refreshTools()
-          showToast('Tool aktualisiert')
-        } catch (error) {
-          showToast(error.message || 'Tool konnte nicht aktualisiert werden', 'error')
-        } finally {
-          hideLoader()
-        }
-      })
-
-      const deleteButton = document.createElement('button')
-      deleteButton.type = 'button'
-      deleteButton.className = 'ghost-action danger'
-      deleteButton.textContent = 'Löschen'
-      deleteButton.addEventListener('click', async () => {
-        const result = await openModal({
-          title: 'Tool wirklich löschen?',
-          copy: `Tool "${tool.name}" wird dauerhaft gelöscht.`,
-          content: (() => {
-            const node = document.createElement('div')
-            node.className = 'modal-grid'
-            node.innerHTML = `<div class="muted-copy">Die Funktion steht danach nicht mehr als Tool zur Verfügung.</div>`
-            return node
-          })(),
-          submitLabel: 'Löschen',
-        })
-        if (!result) return
-        showLoader('Tool wird gelöscht...')
-        try {
-          await apiJson(`/tools/library/${tool.id}`, { method: 'DELETE' })
-          if (editingToolId === tool.id) {
-            resetForm()
+      if (browsingSourceProjectId) {
+        const importButton = document.createElement('button')
+        importButton.type = 'button'
+        importButton.className = 'ghost-action'
+        importButton.textContent = 'In aktuelles Projekt übernehmen'
+        importButton.addEventListener('click', async () => {
+          if (!project?.id) return
+          showLoader('Tool wird ins Projekt übernommen...')
+          try {
+            await apiJson(`/projects/${encodeURIComponent(project.id)}/tools/${encodeURIComponent(tool.id)}/import`, {
+              method: 'POST',
+              body: JSON.stringify({ source_project_id: browsingSourceProjectId, is_enabled: true }),
+            })
+            browsingSourceProjectId = null
+            sourceProjectInput.value = ''
+            await refreshTools()
+            showToast('Tool ins aktuelle Projekt übernommen')
+          } catch (error) {
+            showToast(error.message || 'Tool konnte nicht übernommen werden', 'error')
+          } finally {
+            hideLoader()
           }
-          await refreshTools()
-          showToast('Tool gelöscht')
-        } catch (error) {
-          showToast(error.message || 'Tool konnte nicht gelöscht werden', 'error')
-        } finally {
-          hideLoader()
-        }
-      })
+        })
+        actions.append(importButton)
+      } else {
+        const editButton = document.createElement('button')
+        editButton.type = 'button'
+        editButton.className = 'ghost-action'
+        editButton.textContent = 'Bearbeiten'
+        editButton.addEventListener('click', () => fillForm(tool))
 
-      actions.append(editButton, toggleButton, deleteButton)
+        const toggleButton = document.createElement('button')
+        toggleButton.type = 'button'
+        toggleButton.className = 'ghost-action'
+        toggleButton.textContent = tool.is_enabled ? 'Deaktivieren' : 'Aktivieren'
+        toggleButton.addEventListener('click', async () => {
+          showLoader('Tool wird aktualisiert...')
+          try {
+            await apiJson(`/tools/library/${tool.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ is_enabled: !tool.is_enabled }),
+            })
+            await refreshTools()
+            showToast('Tool aktualisiert')
+          } catch (error) {
+            showToast(error.message || 'Tool konnte nicht aktualisiert werden', 'error')
+          } finally {
+            hideLoader()
+          }
+        })
+
+        const deleteButton = document.createElement('button')
+        deleteButton.type = 'button'
+        deleteButton.className = 'ghost-action danger'
+        deleteButton.textContent = 'Löschen'
+        deleteButton.addEventListener('click', async () => {
+          const result = await openModal({
+            title: 'Tool wirklich löschen?',
+            copy: `Tool "${tool.name}" wird dauerhaft gelöscht.`,
+            content: (() => {
+              const node = document.createElement('div')
+              node.className = 'modal-grid'
+              node.innerHTML = `<div class="muted-copy">Die Funktion steht danach nicht mehr als Tool zur Verfügung.</div>`
+              return node
+            })(),
+            submitLabel: 'Löschen',
+          })
+          if (!result) return
+          showLoader('Tool wird gelöscht...')
+          try {
+            await apiJson(`/tools/library/${tool.id}`, { method: 'DELETE' })
+            if (editingToolId === tool.id) {
+              resetForm()
+            }
+            await refreshTools()
+            showToast('Tool gelöscht')
+          } catch (error) {
+            showToast(error.message || 'Tool konnte nicht gelöscht werden', 'error')
+          } finally {
+            hideLoader()
+          }
+        })
+
+        actions.append(editButton, toggleButton, deleteButton)
+      }
       card.append(cardTop, instructions, actions)
       toolList.appendChild(card)
     })
   }
 
   async function refreshTools() {
-    const projectId = project?.id ? `?project_id=${encodeURIComponent(project.id)}` : ''
-    toolCache = await apiJson(`/tools/library${projectId}`)
+    const params = new URLSearchParams()
+    if (project?.id) {
+      params.set('project_id', String(project.id))
+    }
+    if (browsingSourceProjectId) {
+      params.set('source_project_id', String(browsingSourceProjectId))
+    }
+    const query = params.toString() ? `?${params.toString()}` : ''
+    toolCache = await apiJson(`/tools/library${query}`)
+    sourceHint.textContent = browsingSourceProjectId
+      ? `Du siehst die Tools aus Projekt ${browsingSourceProjectId}. Übernehme einzelne Einträge ins aktuelle Projekt.`
+      : 'Optional: lade die Tools eines anderen Projekts und übernehme sie dann in das aktuelle Projekt.'
     renderTools()
   }
 
@@ -4941,6 +5165,7 @@ function buildToolManagerContent(project) {
 
     const timeoutSeconds = timeoutInput.value.trim() ? Number(timeoutInput.value.trim()) : null
     const payload = {
+      project_id: project?.id || null,
       name,
       description: description || null,
       instructions,
@@ -4982,6 +5207,21 @@ function buildToolManagerContent(project) {
 
   resetButton.addEventListener('click', resetForm)
   saveButton.addEventListener('click', saveTool)
+  loadSourceButton.addEventListener('click', async () => {
+    const value = Number(sourceProjectInput.value)
+    if (!Number.isFinite(value) || value <= 0) {
+      showToast('Bitte eine gültige Quellprojekt-ID eingeben.', 'error')
+      return
+    }
+    browsingSourceProjectId = value
+    await refreshTools()
+  })
+  backToProjectButton.addEventListener('click', async () => {
+    browsingSourceProjectId = null
+    sourceProjectInput.value = ''
+    await refreshTools()
+  })
+  formSection.prepend(sourceHint, projectSourceRow)
   refreshTools().catch((error) => {
     showToast(error.message || 'Tools konnten nicht geladen werden', 'error')
   })
@@ -5010,6 +5250,323 @@ async function openProjectSkillsModal() {
     content,
     submitLabel: 'Schließen',
     width: 'min(1100px, 100%)',
+  })
+}
+
+function buildChatProfileManagerContent(project) {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'modal-grid profile-manager'
+
+  let editingProfileId = null
+
+  const listSection = document.createElement('div')
+  listSection.className = 'skill-manager-section'
+  const listHeading = document.createElement('div')
+  listHeading.className = 'section-heading'
+  const listLabel = document.createElement('span')
+  listLabel.textContent = 'Profile'
+  const listCount = document.createElement('span')
+  listCount.className = 'section-count'
+  listCount.textContent = '0'
+  listHeading.append(listLabel, listCount)
+  const profileList = document.createElement('div')
+  profileList.className = 'skill-list'
+  listSection.append(listHeading, profileList)
+
+  const formSection = document.createElement('div')
+  formSection.className = 'skill-form'
+  const formHeading = document.createElement('div')
+  formHeading.className = 'section-heading'
+  const formLabel = document.createElement('span')
+  formLabel.textContent = 'Profil anlegen oder bearbeiten'
+  const formState = document.createElement('span')
+  formState.className = 'section-count'
+  formState.textContent = 'Neu'
+  formHeading.append(formLabel, formState)
+
+  const fields = [
+    ['Profilname', 'profile-name', 'z. B. QGIS - Analyse'],
+    ['Chat-Bot-ID', 'profile-bot-id', 'qgis-analysis'],
+    ['Memory-Namespace', 'profile-namespace', 'profile-qgis'],
+    ['Modell-Provider', 'profile-provider', 'openai'],
+    ['Modellname', 'profile-model', 'gpt-4o-mini'],
+  ]
+  const inputs = new Map()
+  fields.forEach(([labelText, id, placeholder]) => {
+    const field = document.createElement('label')
+    field.className = 'field'
+    const label = document.createElement('span')
+    label.textContent = labelText
+    const input = document.createElement('input')
+    input.className = 'text-input'
+    input.id = id
+    input.placeholder = placeholder
+    field.append(label, input)
+    formSection.appendChild(field)
+    inputs.set(id, input)
+  })
+
+  const descriptionField = document.createElement('label')
+  descriptionField.className = 'field'
+  const descriptionLabel = document.createElement('span')
+  descriptionLabel.textContent = 'Beschreibung'
+  const descriptionInput = document.createElement('textarea')
+  descriptionInput.className = 'composer-input'
+  descriptionInput.style.minHeight = '84px'
+  descriptionInput.placeholder = 'Kurz beschreiben, wofür dieses Profil gedacht ist.'
+  descriptionField.append(descriptionLabel, descriptionInput)
+  formSection.appendChild(descriptionField)
+
+  const promptField = document.createElement('label')
+  promptField.className = 'field'
+  const promptLabel = document.createElement('span')
+  promptLabel.textContent = 'Systemprompt'
+  const promptInput = document.createElement('textarea')
+  promptInput.className = 'composer-input'
+  promptInput.style.minHeight = '120px'
+  promptInput.placeholder = 'Profil-spezifische Regeln und Tonalität.'
+  promptField.append(promptLabel, promptInput)
+  formSection.appendChild(promptField)
+
+  const toggles = document.createElement('div')
+  toggles.className = 'skill-upload-row'
+  const sharedSkills = document.createElement('label')
+  sharedSkills.className = 'skill-enabled-row'
+  const sharedSkillsInput = document.createElement('input')
+  sharedSkillsInput.type = 'checkbox'
+  sharedSkillsInput.checked = true
+  sharedSkills.append(sharedSkillsInput, document.createElement('span'))
+  sharedSkills.lastChild.textContent = 'Geteilte Skills erlauben'
+
+  const sharedTools = document.createElement('label')
+  sharedTools.className = 'skill-enabled-row'
+  const sharedToolsInput = document.createElement('input')
+  sharedToolsInput.type = 'checkbox'
+  sharedToolsInput.checked = true
+  sharedTools.append(sharedToolsInput, document.createElement('span'))
+  sharedTools.lastChild.textContent = 'Geteilte Tools erlauben'
+  toggles.append(sharedSkills, sharedTools)
+  formSection.appendChild(toggles)
+
+  const activeRow = document.createElement('label')
+  activeRow.className = 'skill-enabled-row'
+  const activeInput = document.createElement('input')
+  activeInput.type = 'checkbox'
+  activeInput.checked = true
+  const activeLabel = document.createElement('span')
+  activeLabel.textContent = 'Profil aktivieren'
+  activeRow.append(activeInput, activeLabel)
+  formSection.appendChild(activeRow)
+
+  const formActions = document.createElement('div')
+  formActions.className = 'skill-form-actions'
+  const resetButton = document.createElement('button')
+  resetButton.type = 'button'
+  resetButton.className = 'ghost-action'
+  resetButton.textContent = 'Neu starten'
+  const saveButton = document.createElement('button')
+  saveButton.type = 'button'
+  saveButton.className = 'primary-button'
+  saveButton.style.width = 'auto'
+  saveButton.textContent = 'Profil speichern'
+  formActions.append(resetButton, saveButton)
+  formSection.appendChild(formActions)
+
+  const resetForm = () => {
+    editingProfileId = null
+    formState.textContent = 'Neu'
+    inputs.forEach((input) => { input.value = '' })
+    descriptionInput.value = ''
+    promptInput.value = ''
+    sharedSkillsInput.checked = true
+    sharedToolsInput.checked = true
+    activeInput.checked = true
+  }
+
+  const fillForm = (profile) => {
+    if (!profile) return resetForm()
+    editingProfileId = profile.id
+    formState.textContent = `Bearbeiten #${profile.id}`
+    inputs.get('profile-name').value = profile.name || ''
+    inputs.get('profile-bot-id').value = profile.chat_bot_id || ''
+    inputs.get('profile-namespace').value = profile.memory_namespace || ''
+    inputs.get('profile-provider').value = profile.model_provider || ''
+    inputs.get('profile-model').value = profile.model_name || ''
+    descriptionInput.value = profile.description || ''
+    promptInput.value = profile.system_prompt || ''
+    sharedSkillsInput.checked = Boolean(profile.allow_shared_skills)
+    sharedToolsInput.checked = Boolean(profile.allow_shared_tools)
+    activeInput.checked = Boolean(profile.is_active)
+  }
+
+  const renderProfiles = () => {
+    profileList.innerHTML = ''
+    listCount.textContent = String(state.chatProfiles.length)
+    if (!state.chatProfiles.length) {
+      const empty = document.createElement('div')
+      empty.className = 'muted-copy'
+      empty.style.padding = '8px 0'
+      empty.textContent = 'Noch keine Profile angelegt.'
+      profileList.appendChild(empty)
+      return
+    }
+
+    state.chatProfiles.forEach((profile) => {
+      const card = document.createElement('div')
+      card.className = `skill-card${Number(state.selectedProfileId || 0) === Number(profile.id) ? ' active' : ''}`
+      const top = document.createElement('div')
+      top.className = 'skill-card-top'
+      const meta = document.createElement('div')
+      const title = document.createElement('div')
+      title.className = 'skill-card-title'
+      title.textContent = profile.name || 'Unbenanntes Profil'
+      const subtitle = document.createElement('div')
+      subtitle.className = 'skill-card-subtitle'
+      subtitle.textContent = `${profile.chat_bot_id || 'bot-id fehlt'} · ${profile.project_id ? `Projekt ${profile.project_id}` : 'Global'}`
+      meta.append(title, subtitle)
+      const status = document.createElement('div')
+      status.className = 'skill-card-status'
+      const chip = document.createElement('span')
+      chip.className = `section-badge${profile.is_active ? '' : ' subtle'}`
+      chip.textContent = profile.is_active ? 'Aktiv' : 'Inaktiv'
+      status.appendChild(chip)
+      top.append(meta, status)
+
+      const description = document.createElement('div')
+      description.className = 'skill-card-instructions'
+      description.textContent = profile.description || profile.system_prompt || ''
+
+      const actions = document.createElement('div')
+      actions.className = 'skill-card-actions'
+
+      const useButton = document.createElement('button')
+      useButton.type = 'button'
+      useButton.className = 'ghost-action'
+      useButton.textContent = Number(state.selectedProfileId || 0) === Number(profile.id) ? 'Aktiv' : 'Als aktives Profil nutzen'
+      useButton.addEventListener('click', () => {
+        setSelectedProfileId(profile.id)
+        showToast('Profil aktiviert')
+      })
+
+      const editButton = document.createElement('button')
+      editButton.type = 'button'
+      editButton.className = 'ghost-action'
+      editButton.textContent = 'Bearbeiten'
+      editButton.addEventListener('click', () => fillForm(profile))
+
+      const deleteButton = document.createElement('button')
+      deleteButton.type = 'button'
+      deleteButton.className = 'ghost-action danger'
+      deleteButton.textContent = 'Löschen'
+      deleteButton.addEventListener('click', async () => {
+        const result = await openModal({
+          title: 'Profil wirklich löschen?',
+          copy: `Profil "${profile.name}" wird dauerhaft gelöscht.`,
+          content: (() => {
+            const node = document.createElement('div')
+            node.className = 'modal-grid'
+            node.innerHTML = `<div class="muted-copy">Das Profil verschwindet aus allen Chats und kann nicht mehr ausgewählt werden.</div>`
+            return node
+          })(),
+          submitLabel: 'Löschen',
+        })
+        if (!result) return
+        showLoader('Profil wird gelöscht...')
+        try {
+          await apiJson(`/profiles/${profile.id}`, { method: 'DELETE' })
+          if (editingProfileId === profile.id) resetForm()
+          await loadProfiles()
+          showToast('Profil gelöscht')
+        } catch (error) {
+          showToast(error.message || 'Profil konnte nicht gelöscht werden', 'error')
+        } finally {
+          hideLoader()
+        }
+      })
+
+      if (project?.id) {
+        const defaultButton = document.createElement('button')
+        defaultButton.type = 'button'
+        defaultButton.className = 'ghost-action'
+        defaultButton.textContent = project.default_profile_id === profile.id ? 'Projekt-Standard' : 'Als Projekt-Standard'
+        defaultButton.addEventListener('click', async () => {
+          showLoader('Projekt-Standard wird gesetzt...')
+          try {
+            await apiJson(`/projects/${encodeURIComponent(project.id)}/default-profile`, {
+              method: 'PATCH',
+              body: JSON.stringify({ profile_id: profile.id }),
+            })
+            await loadProjects()
+            await loadProfiles()
+            showToast('Projekt-Standardprofil gesetzt')
+          } catch (error) {
+            showToast(error.message || 'Profil konnte nicht als Standard gesetzt werden', 'error')
+          } finally {
+            hideLoader()
+          }
+        })
+        actions.append(useButton, editButton, defaultButton, deleteButton)
+      } else {
+        actions.append(useButton, editButton, deleteButton)
+      }
+
+      card.append(top, description, actions)
+      profileList.appendChild(card)
+    })
+  }
+
+  const saveProfile = async () => {
+    const name = inputs.get('profile-name').value.trim()
+    const botId = inputs.get('profile-bot-id').value.trim()
+    if (!name || !botId) {
+      showToast('Name und Chat-Bot-ID sind erforderlich.', 'error')
+      return
+    }
+    const payload = {
+      name,
+      chat_bot_id: botId,
+      description: descriptionInput.value.trim() || null,
+      system_prompt: promptInput.value.trim() || null,
+      memory_namespace: inputs.get('profile-namespace').value.trim() || null,
+      model_provider: inputs.get('profile-provider').value.trim() || null,
+      model_name: inputs.get('profile-model').value.trim() || null,
+      allow_shared_skills: sharedSkillsInput.checked,
+      allow_shared_tools: sharedToolsInput.checked,
+      is_active: activeInput.checked,
+      project_id: project?.id || null,
+    }
+    showLoader(editingProfileId ? 'Profil wird aktualisiert...' : 'Profil wird erstellt...')
+    try {
+      if (editingProfileId) {
+        await apiJson(`/profiles/${editingProfileId}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      } else {
+        await apiJson('/profiles/', { method: 'POST', body: JSON.stringify(payload) })
+      }
+      resetForm()
+      await loadProfiles()
+      showToast('Profil gespeichert')
+    } catch (error) {
+      showToast(error.message || 'Profil konnte nicht gespeichert werden', 'error')
+    } finally {
+      hideLoader()
+    }
+  }
+
+  resetButton.addEventListener('click', resetForm)
+  saveButton.addEventListener('click', saveProfile)
+  renderProfiles()
+  return wrapper
+}
+
+async function openChatProfileManager() {
+  await loadProfiles()
+  const content = buildChatProfileManagerContent(getContextProject())
+  await openModal({
+    title: 'Profile verwalten',
+    copy: 'Lege chat- und projektspezifische Hermes-Profile an und setze das aktive Profil für den aktuellen Chat.',
+    content,
+    submitLabel: 'Schließen',
+    width: 'min(1200px, 100%)',
   })
 }
 
@@ -5360,6 +5917,7 @@ async function sendChat() {
       body: JSON.stringify({
         conversation_id: state.currentConversationId,
         project_id: state.selectedProjectId,
+        profile_id: state.selectedProfileId,
         message,
         attachments,
         desktop_agent: state.desktopAgentMode,

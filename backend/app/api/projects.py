@@ -8,6 +8,7 @@ from sqlalchemy import insert, select
 from app.api.dependencies import DbSession, get_current_user
 from app.models.permission import PermissionLevel, ProjectPermission
 from app.models.project import Project
+from app.models.chat_profile import ChatProfile
 from app.models.user import UserRole
 from app.schemas.project import ProjectCreate, ProjectResponse
 from app.services.notifications import notify_project_created
@@ -48,6 +49,15 @@ async def create_project(payload: ProjectCreate, db: DbSession, current_user=Dep
     watched_folder = _normalize_folder_list(payload.watched_folder, required=True)
     delivery_folder = _normalize_folder_list(payload.delivery_folder, required=True)
     pcloud_path, pcloud_folder_id = None, None
+    default_profile_id = None
+    if getattr(payload, 'default_profile_id', None):
+        profile_result = await db.execute(select(ChatProfile).where(ChatProfile.id == payload.default_profile_id))
+        profile = profile_result.scalar_one_or_none()
+        if profile is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profil nicht gefunden.")
+        if profile.owner_id != current_user.id and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
+        default_profile_id = profile.id
 
     stmt = insert(Project).values(
         name=payload.name.strip(),
@@ -55,6 +65,7 @@ async def create_project(payload: ProjectCreate, db: DbSession, current_user=Dep
         owner_id=current_user.id,
         watched_folder=watched_folder,
         delivery_folder=delivery_folder,
+        default_profile_id=default_profile_id,
         pcloud_path=pcloud_path,
         pcloud_folder_id=pcloud_folder_id,
     ).returning(Project)
@@ -111,11 +122,21 @@ async def update_project(project_id: int, payload: ProjectCreate, db: DbSession,
     watched_folder = _normalize_folder_list(payload.watched_folder, required=True)
     delivery_folder = _normalize_folder_list(payload.delivery_folder, required=True)
     pcloud_path, pcloud_folder_id = None, None
+    default_profile_id = None
+    if getattr(payload, 'default_profile_id', None):
+        profile_result = await db.execute(select(ChatProfile).where(ChatProfile.id == payload.default_profile_id))
+        profile = profile_result.scalar_one_or_none()
+        if profile is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profil nicht gefunden.")
+        if profile.owner_id != current_user.id and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
+        default_profile_id = profile.id
     updates = {
         "name": payload.name.strip(),
         "description": payload.description,
         "watched_folder": watched_folder,
         "delivery_folder": delivery_folder,
+        "default_profile_id": default_profile_id,
         "pcloud_path": pcloud_path,
         "pcloud_folder_id": pcloud_folder_id,
     }
@@ -124,6 +145,32 @@ async def update_project(project_id: int, payload: ProjectCreate, db: DbSession,
 
     result = await db.execute(select(Project).where(Project.id == project_id))
     return result.scalar_one()
+
+
+@router.patch("/{project_id}/default-profile")
+async def set_project_default_profile(project_id: int, payload: dict, db: DbSession, current_user=Depends(get_current_user)):
+    project = await _load_project(db, project_id)
+    if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
+
+    profile_id = int(payload.get("profile_id") or 0)
+    if profile_id <= 0:
+        await db.execute(Project.__table__.update().where(Project.id == project_id).values(default_profile_id=None))
+        await db.commit()
+        return {"project_id": project_id, "default_profile_id": None}
+
+    profile_result = await db.execute(select(ChatProfile).where(ChatProfile.id == profile_id))
+    profile = profile_result.scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profil nicht gefunden.")
+    if profile.project_id is not None and profile.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Profil gehört zu einem anderen Projekt.")
+    if profile.owner_id != current_user.id and current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
+
+    await db.execute(Project.__table__.update().where(Project.id == project_id).values(default_profile_id=profile.id))
+    await db.commit()
+    return {"project_id": project_id, "default_profile_id": profile.id}
 
 
 @router.delete("/{project_id}")

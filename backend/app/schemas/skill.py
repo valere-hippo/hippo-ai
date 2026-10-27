@@ -22,6 +22,7 @@ class ProjectSkillResponse(BaseModel):
 
     id: int
     project_id: int | None
+    source_project_id: int | None = None
     name: str
     description: str | None
     instructions: str

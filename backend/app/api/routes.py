@@ -15,6 +15,11 @@ try:
 except Exception:
     pass
 try:
+    from app.api import chat_profiles
+    api_router.include_router(chat_profiles.router)
+except Exception:
+    pass
+try:
     from app.api import tools
     api_router.include_router(tools.router)
     api_router.include_router(tools.library_router)

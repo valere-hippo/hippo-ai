@@ -29,6 +29,7 @@ from app.services.generated_files import GeneratedFile, SCENE_PREFIX, build_gene
 from app.services.project_tools import build_tools_context
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context, build_shared_skills_context
+from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 from app.services.project_report_fallback import build_project_report_fallback
 from app.services.model_registry import resolve_chat_max_tokens
@@ -43,6 +44,7 @@ logger = logging.getLogger("hippo-ai.chat")
 class ChatRequest(BaseModel):
     conversation_id: int | None = None
     project_id: int | None = None
+    profile_id: int | None = None
     message: str
     attachments: list[ChatAttachment] | None = None
     project_folder_context: str | None = None
@@ -117,6 +119,22 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             raise HTTPException(status_code=403, detail='Zugriff verweigert.')
         conv_project = proj
 
+    resolved_profile_id = payload.profile_id
+    if resolved_profile_id is None and payload.conversation_id is not None:
+        profile_result = await db.execute(select(Conversation.profile_id).where(Conversation.id == payload.conversation_id))
+        resolved_profile_id = profile_result.scalar_one_or_none()
+    if resolved_profile_id is None and conv_project is not None:
+        project_profile_result = await db.execute(select(Project.default_profile_id).where(Project.id == conv_project.id))
+        resolved_profile_id = project_profile_result.scalar_one_or_none()
+
+    profile = None
+    if resolved_profile_id is not None:
+        profile = await load_chat_profile(db, int(resolved_profile_id))
+        if profile is not None and profile.project_id is not None and profile.project_id != (conv_project.id if conv_project else profile.project_id):
+            raise HTTPException(status_code=403, detail='Profil gehört zu einem anderen Projekt.')
+        if profile is not None and profile.owner_id not in {current_user_id, getattr(conv_project, 'owner_id', current_user_id)} and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status_code=403, detail='Zugriff verweigert.')
+
     # ensure conversation
     conv_id = payload.conversation_id
     if conv_project is not None:
@@ -129,9 +147,14 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             existing_conversations.scalars().all(),
             conv_project.id,
             getattr(conv_project, 'active_conversation_id', None),
+            resolved_profile_id,
         )
     if conv_id is None:
-        stmt = insert(Conversation).values(title=None, project_id=conv_project.id if conv_project else None).returning(Conversation)
+        stmt = insert(Conversation).values(
+            title=None,
+            project_id=conv_project.id if conv_project else None,
+            profile_id=resolved_profile_id,
+        ).returning(Conversation)
         result = await db.execute(stmt)
         conv = result.scalar_one()
         conv_id = conv.id
@@ -144,6 +167,10 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         await db.execute(
             Project.__table__.update().where(Project.id == conv_project.id).values(active_conversation_id=conv_id)
         )
+        await db.commit()
+
+    if resolved_profile_id is not None:
+        await db.execute(Conversation.__table__.update().where(Conversation.id == conv_id).values(profile_id=resolved_profile_id))
         await db.commit()
 
     stored_message_content = storage_text(payload.message, payload.attachments)
@@ -181,6 +208,10 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         hippo_messages.append({"role": role, "content": m.content})
 
     hippo_messages.insert(0, {"role": "system", "content": build_hippo_system_prompt()})
+    if profile is not None:
+        profile_context = build_chat_profile_context(profile, conv_project.name if conv_project else None)
+        if profile_context:
+            hippo_messages.insert(1, {"role": "system", "content": profile_context})
 
     # If conversation is tied to a project, inform the assistant it may generate files for that project
     if conv_project is not None:
@@ -199,7 +230,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "When the user asks for a report, analysis, or Word/PDF deliverable from the project folders, automatically use all accessible project folders and all files in them unless the user explicitly narrows the scope. Do not ask which folders or files to use.\n"
             "Write in a polished Claude-like report style: direct, structured, concise but thorough, no preamble, no self-referential commentary, no repetitive reassurance, and minimize transitional phrases.\n"
             "For project-folder questions, produce a detailed answer that is content-first: describe what the files contain, what the extracted text / geometry / OCR / transcript says, and what technical conclusions follow. Prefer paragraphs over bullet lists unless bullets add real clarity. Do not lead with file size or filename inventory unless it is genuinely relevant.\n"
-            "Write the answer as a polished document with clear section headings and concise paragraphs. Avoid decorative Markdown around headings.\n"
+            "Write the answer as a polished document with clear section headings and concise paragraphs. Prefer a three-part structure when possible: summary, analysis, conclusion. Avoid decorative Markdown around headings.\n"
             "If an image, screenshot, or document is attached, rely on the direct attachment data in the prompt and any locally extracted text; do not claim that you cannot read attachments.\n"
             "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, and spatial clusters.\n"
             f"{build_attachment_response_guidance()}"
@@ -464,6 +495,7 @@ async def list_conversations(db: DbSession, current_user: User = Depends(get_cur
                 "id": conv.id,
                 "title": title,
                 "project_id": conv.project_id,
+                "profile_id": getattr(conv, 'profile_id', None),
                 "created_at": conv.created_at,
             }
         )
@@ -492,6 +524,7 @@ async def get_conversation(conv_id: int, db: DbSession, current_user: User = Dep
             'id': conv.id,
             'title': conv.title,
             'project_id': conv.project_id,
+            'profile_id': getattr(conv, 'profile_id', None),
             'created_at': conv.created_at.isoformat() if conv.created_at else None,
         },
         'messages': messages,

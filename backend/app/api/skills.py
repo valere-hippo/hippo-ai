@@ -116,9 +116,21 @@ async def _upsert_skill_preference(db: DbSession, user_id: int, project_id: int,
 
 
 @router.get("/", response_model=list[ProjectSkillResponse])
-async def list_project_skills(project_id: int, db: DbSession, current_user=Depends(get_current_user)):
+async def list_project_skills(project_id: int, db: DbSession, source_project_id: int | None = None, current_user=Depends(get_current_user)):
     project = await _load_project(db, project_id)
     await _require_permission(db, current_user, project, PermissionLevel.READ)
+
+    if source_project_id is not None:
+        source_project = await _load_project(db, source_project_id)
+        await _require_permission(db, current_user, source_project, PermissionLevel.READ)
+        result = await db.execute(
+            select(ProjectSkill)
+            .where(ProjectSkill.project_id == source_project_id)
+            .order_by(ProjectSkill.created_at.asc())
+        )
+        skills = result.scalars().all()
+        await _apply_skill_preferences(db, skills, source_project_id, int(current_user.id) if current_user else None)
+        return skills
 
     result = await db.execute(
         select(ProjectSkill)
@@ -202,6 +214,55 @@ async def set_project_skill_activation(project_id: int, skill_id: int, payload: 
     await _upsert_skill_preference(db, int(current_user.id), project_id, skill.id, enabled)
     setattr(skill, "is_active_for_user", enabled)
     return skill
+
+
+@router.post("/{skill_id}/import", response_model=ProjectSkillResponse, status_code=status.HTTP_201_CREATED)
+async def import_project_skill(project_id: int, skill_id: int, payload: dict, db: DbSession, current_user=Depends(get_current_user)):
+    project = await _load_project(db, project_id)
+    await _require_permission(db, current_user, project, PermissionLevel.ADMIN)
+
+    source_project_id = int(payload.get("source_project_id") or 0)
+    if source_project_id <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="source_project_id fehlt.")
+    source_project = await _load_project(db, source_project_id)
+    await _require_permission(db, current_user, source_project, PermissionLevel.READ)
+
+    source_result = await db.execute(
+        select(ProjectSkill).where(ProjectSkill.id == skill_id, ProjectSkill.project_id == source_project_id)
+    )
+    source_skill = source_result.scalar_one_or_none()
+    if source_skill is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill nicht gefunden.")
+
+    enabled = bool(payload.get("is_enabled", True))
+    existing = await db.execute(
+        select(ProjectSkill).where(
+            ProjectSkill.project_id == project_id,
+            ProjectSkill.source_project_id == source_project_id,
+            ProjectSkill.name == source_skill.name,
+        )
+    )
+    target_skill = existing.scalar_one_or_none()
+    values = {
+        "project_id": project_id,
+        "source_project_id": source_project_id,
+        "name": source_skill.name,
+        "description": source_skill.description,
+        "instructions": source_skill.instructions,
+        "is_enabled": enabled,
+    }
+    if target_skill is None:
+        stmt = insert(ProjectSkill).values(**values).returning(ProjectSkill)
+        result = await db.execute(stmt)
+        await db.commit()
+        return result.scalar_one()
+
+    await db.execute(
+        ProjectSkill.__table__.update().where(ProjectSkill.id == target_skill.id).values(**values, updated_at=datetime.utcnow())
+    )
+    await db.commit()
+    result = await db.execute(select(ProjectSkill).where(ProjectSkill.id == target_skill.id))
+    return result.scalar_one()
 
 
 @library_router.get("/library", response_model=list[ProjectSkillResponse])

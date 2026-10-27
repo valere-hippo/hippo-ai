@@ -136,9 +136,16 @@ async def _upsert_tool_preference(db: DbSession, user_id: int, project_id: int, 
 
 
 @library_router.get("/library", response_model=list[AIToolResponse])
-async def list_tools(db: DbSession, project_id: int | None = None, current_user=Depends(get_current_user)):
+async def list_tools(db: DbSession, project_id: int | None = None, source_project_id: int | None = None, current_user=Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
+    if source_project_id is not None:
+        source_project = await _load_project(db, source_project_id)
+        await _require_permission(db, current_user, source_project, PermissionLevel.READ)
+        result = await db.execute(select(AITool).where(AITool.project_id == source_project_id).order_by(AITool.created_at.asc()))
+        tools = result.scalars().all()
+        await _apply_tool_preferences(db, tools, project_id or source_project_id, int(current_user.id))
+        return tools
     if project_id is not None:
         tools = await load_tools_for_project(db, project_id, user_id=int(current_user.id), enabled_only=False)
         return tools
@@ -149,10 +156,14 @@ async def list_tools(db: DbSession, project_id: int | None = None, current_user=
 
 
 @library_router.post("/library", response_model=AIToolResponse, status_code=status.HTTP_201_CREATED)
-async def create_tool(payload: AIToolCreate, db: DbSession, current_user=Depends(get_current_user)):
+async def create_tool(payload: AIToolCreate, db: DbSession, project_id: int | None = None, current_user=Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
+    if project_id is not None:
+        project = await _load_project(db, project_id)
+        await _require_permission(db, current_user, project, PermissionLevel.ADMIN)
     stmt = insert(AITool).values(
+        project_id=project_id,
         name=payload.name.strip(),
         description=payload.description.strip() if payload.description else None,
         instructions=payload.instructions.strip(),
@@ -239,6 +250,9 @@ async def update_tool(tool_id: int, payload: AIToolUpdate, db: DbSession, curren
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
     tool = await _load_tool(db, tool_id)
+    if getattr(tool, "project_id", None) is not None:
+        project = await _load_project(db, int(tool.project_id))
+        await _require_permission(db, current_user, project, PermissionLevel.ADMIN)
     updates: dict[str, object] = {}
     if payload.name is not None:
         updates["name"] = payload.name.strip()
@@ -284,6 +298,13 @@ async def update_tool(tool_id: int, payload: AIToolUpdate, db: DbSession, curren
 async def delete_tool(tool_id: int, db: DbSession, current_user=Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
+    tool_result = await db.execute(select(AITool).where(AITool.id == tool_id))
+    tool = tool_result.scalar_one_or_none()
+    if tool is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tool nicht gefunden.")
+    if getattr(tool, "project_id", None) is not None:
+        project = await _load_project(db, int(tool.project_id))
+        await _require_permission(db, current_user, project, PermissionLevel.ADMIN)
     result = await db.execute(delete(AITool).where(AITool.id == tool_id))
     await db.commit()
     if result.rowcount == 0:
@@ -300,6 +321,63 @@ async def set_project_tool_activation(project_id: int, tool_id: int, payload: di
     await _upsert_tool_preference(db, int(current_user.id), project_id, tool.id, enabled)
     setattr(tool, "is_active_for_user", enabled)
     return tool
+
+
+@router.post("/{tool_id}/import", response_model=AIToolResponse, status_code=status.HTTP_201_CREATED)
+async def import_project_tool(project_id: int, tool_id: int, payload: dict, db: DbSession, current_user=Depends(get_current_user)):
+    project = await _load_project(db, project_id)
+    await _require_permission(db, current_user, project, PermissionLevel.ADMIN)
+
+    source_project_id = int(payload.get("source_project_id") or 0)
+    if source_project_id <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="source_project_id fehlt.")
+    source_project = await _load_project(db, source_project_id)
+    await _require_permission(db, current_user, source_project, PermissionLevel.READ)
+
+    source_result = await db.execute(
+        select(AITool).where(AITool.id == tool_id, AITool.source_project_id == source_project_id)
+    )
+    source_tool = source_result.scalar_one_or_none()
+    if source_tool is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tool nicht gefunden.")
+
+    enabled = bool(payload.get("is_enabled", True))
+    existing = await db.execute(
+        select(AITool).where(
+            AITool.source_project_id == source_project_id,
+            AITool.name == source_tool.name,
+        )
+    )
+    target_tool = existing.scalar_one_or_none()
+    values = {
+        "source_project_id": source_project_id,
+        "name": source_tool.name,
+        "description": source_tool.description,
+        "instructions": source_tool.instructions,
+        "tool_type": source_tool.tool_type,
+        "command": source_tool.command,
+        "arguments": source_tool.arguments,
+        "working_directory": source_tool.working_directory,
+        "endpoint": source_tool.endpoint,
+        "method": source_tool.method,
+        "platform": source_tool.platform,
+        "timeout_seconds": source_tool.timeout_seconds,
+        "requires_confirmation": source_tool.requires_confirmation,
+        "parameters": source_tool.parameters,
+        "is_enabled": enabled,
+    }
+    if target_tool is None:
+        stmt = insert(AITool).values(**values).returning(AITool)
+        result = await db.execute(stmt)
+        await db.commit()
+        return result.scalar_one()
+
+    await db.execute(
+        AITool.__table__.update().where(AITool.id == target_tool.id).values(**values, updated_at=datetime.utcnow())
+    )
+    await db.commit()
+    result = await db.execute(select(AITool).where(AITool.id == target_tool.id))
+    return result.scalar_one()
 
 
 @library_router.patch("/library/{tool_id}/activation")

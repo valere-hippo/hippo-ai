@@ -41,6 +41,8 @@ class AIToolResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    project_id: int | None = None
+    source_project_id: int | None = None
     name: str
     description: str | None
     instructions: str

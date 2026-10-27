@@ -98,7 +98,12 @@ def format_project_skills_context(skills: list[ProjectSkill], query: str | None 
     ]
 
     for skill in selected:
-        scope = "Geteilt" if getattr(skill, "project_id", None) is None else f"Projekt {skill.project_id}"
+        if getattr(skill, "project_id", None) is None:
+            scope = "Global"
+        elif getattr(skill, "source_project_id", None):
+            scope = f"Projekt {skill.project_id} · aus Projekt {skill.source_project_id}"
+        else:
+            scope = f"Projekt {skill.project_id}"
         lines.append(f"- {skill.name} [{scope}]")
         description = (skill.description or "").strip()
         if description:
@@ -129,3 +134,14 @@ async def build_shared_skills_context(db: Any, query: str | None = None, limit: 
 async def build_project_skills_context(db: Any, project_id: int, user_id: int | None = None, query: str | None = None, limit: int = 5) -> str:
     skills = await load_project_skills(db, project_id, user_id=user_id, enabled_only=True)
     return format_project_skills_context(skills, query=query, limit=limit)
+
+
+def clone_skill_for_project(skill: ProjectSkill, target_project_id: int) -> dict[str, Any]:
+    return {
+        "project_id": target_project_id,
+        "source_project_id": skill.project_id,
+        "name": skill.name,
+        "description": skill.description,
+        "instructions": skill.instructions,
+        "is_enabled": skill.is_enabled,
+    }

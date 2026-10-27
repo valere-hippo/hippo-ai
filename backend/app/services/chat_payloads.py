@@ -11,7 +11,7 @@ def build_attachment_response_guidance() -> str:
         "Wenn die Antwort auf einem angehängten Dokument, Bild oder Screenshot basiert, antworte ausführlicher als üblich.\n"
         "Erkläre zuerst kurz, worum es sich bei der Datei handelt, dann die wichtigsten Inhalte oder erkannten Elemente, "
         "danach die relevantesten Details oder Auffälligkeiten und schließe mit einer kompakten Einordnung.\n"
-        "Wenn der Benutzer eine Analyse des lokalen Projektordners, einer Datei oder mehrerer Dateien möchte, liefere eine strukturierte Antwort mit Überblick, Dateiliste, Details und Fazit.\n"
+        "Wenn der Benutzer eine Analyse des lokalen Projektordners, einer Datei oder mehrerer Dateien möchte, liefere eine strukturierte Antwort mit Kurzfassung, Analyse und Schluss.\n"
         "Wenn der Benutzer einen Bericht, ein Word-Dokument oder einen PDF-Export aus dem Projektordner möchte, nutze automatisch alle verfügbaren Ordner und Dateien des Projekts; frage nicht nach bestimmten Dateien, außer der Benutzer schränkt es ausdrücklich ein.\n"
         "Schreibe in einem klaren, Claude-ähnlichen Stil: direkt, strukturiert, knapp aber gründlich, ohne Einleitungssätze wie 'ich beginne nun' oder ähnliche Meta-Kommentare, und mit möglichst wenigen Übergangsfloskeln.\n"
         "Bevorzuge Fließtext und kurze Absätze; nutze Aufzählungen nur, wenn sie wirklich helfen.\n"
