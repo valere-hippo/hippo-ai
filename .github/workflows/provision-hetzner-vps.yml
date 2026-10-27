@@ -44,6 +44,21 @@ on:
         required: false
         type: string
         default: "ubuntu-24.04"
+      public_hostname:
+        description: "Public hostname for the VPS backend"
+        required: false
+        type: string
+        default: "hippo-api.hipposideros-cloud.de"
+      dns_record_name:
+        description: "Hetzner DNS record name (relative to the zone)"
+        required: false
+        type: string
+        default: "hippo-api"
+      dns_ttl:
+        description: "DNS TTL in seconds"
+        required: false
+        type: string
+        default: "300"
 
 permissions:
   contents: read
@@ -61,6 +76,7 @@ jobs:
       provider: ${{ steps.provision.outputs.provider }}
     env:
       HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+      HETZNER_DNS_TOKEN: ${{ secrets.HETZNER_DNS_TOKEN }}
       HCLOUD_SSH_KEY_ID: ${{ vars.HCLOUD_SSH_KEY_ID }}
       HCLOUD_SSH_KEY_NAME: ${{ vars.HCLOUD_SSH_KEY_NAME }}
       HCLOUD_SERVER_TYPE: ${{ vars.HCLOUD_SERVER_TYPE }}
@@ -69,6 +85,9 @@ jobs:
       HIPPO_AI_BASE_URL: ${{ vars.HIPPO_AI_BASE_URL }}
       HIPPO_AI_MODEL: ${{ vars.HIPPO_AI_MODEL }}
       PCLOUD_ACCESS_TOKEN: ${{ vars.PCLOUD_ACCESS_TOKEN }}
+      HETZNER_DNS_ZONE_ID: ${{ vars.HETZNER_DNS_ZONE_ID }}
+      HETZNER_DNS_RECORD_NAME: ${{ vars.HETZNER_DNS_RECORD_NAME || inputs.dns_record_name }}
+      HETZNER_DNS_TTL: ${{ vars.HETZNER_DNS_TTL || inputs.dns_ttl }}
       INPUT_PROVIDER: ${{ inputs.provider }}
       INPUT_API_KEY: ${{ inputs.api_key }}
       INPUT_HIPPO_AI_BASE_URL: ${{ inputs.hippo_ai_base_url }}
@@ -77,6 +96,9 @@ jobs:
       INPUT_SERVER_TYPE: ${{ inputs.server_type }}
       INPUT_LOCATION: ${{ inputs.location }}
       INPUT_IMAGE: ${{ inputs.image }}
+      INPUT_PUBLIC_HOSTNAME: ${{ inputs.public_hostname }}
+      INPUT_DNS_RECORD_NAME: ${{ inputs.dns_record_name }}
+      INPUT_DNS_TTL: ${{ inputs.dns_ttl }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

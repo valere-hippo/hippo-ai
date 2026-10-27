@@ -34,7 +34,7 @@ jobs:
       - name: Write runtime config
         run: node scripts/write-runtime-config.js
         env:
-          HIPPO_API_URL: ${{ secrets.HIPPO_API_URL || 'https://hippo-api.hipposideros-cloud.de' }}
+          HIPPO_API_URL: ${{ vars.HIPPO_API_URL || secrets.HIPPO_API_URL || 'http://hippo-api.hipposideros-cloud.de' }}
 
       - name: Build Windows installer
         run: npm run package:win || npm run package:win:portable
@@ -68,7 +68,7 @@ jobs:
       - name: Write runtime config
         run: node scripts/write-runtime-config.js
         env:
-          HIPPO_API_URL: ${{ secrets.HIPPO_API_URL || 'https://hippo-api.hipposideros-cloud.de' }}
+          HIPPO_API_URL: ${{ vars.HIPPO_API_URL || secrets.HIPPO_API_URL || 'http://hippo-api.hipposideros-cloud.de' }}
 
       - name: Build macOS icon
         run: npm run build:mac-icon

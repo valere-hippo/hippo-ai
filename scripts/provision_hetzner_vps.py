@@ -10,8 +10,8 @@ import urllib.parse
 import urllib.request
 from textwrap import indent
 
-
 API_ROOT = "https://api.hetzner.cloud/v1"
+DNS_API_ROOT = "https://dns.hetzner.com/api/v1"
 
 
 def env(name: str, default: str = "") -> str:
@@ -21,6 +21,10 @@ def env(name: str, default: str = "") -> str:
 def mask(value: str) -> None:
     if value:
         print(f"::add-mask::{value}")
+
+
+def fail(message: str) -> None:
+    raise SystemExit(message)
 
 
 def request_json(method: str, path: str, token: str, payload: dict | None = None) -> dict:
@@ -34,8 +38,15 @@ def request_json(method: str, path: str, token: str, payload: dict | None = None
         return json.load(resp)
 
 
-def fail(message: str) -> None:
-    raise SystemExit(message)
+def request_dns_json(method: str, path: str, token: str, payload: dict | None = None) -> dict:
+    headers = {
+        "Auth-API-Token": token,
+        "Content-Type": "application/json",
+    }
+    data = None if payload is None else json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(f"{DNS_API_ROOT}{path}", data=data, headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return json.load(resp)
 
 
 def wait_for_backend_health(base_url: str, timeout_seconds: int = 900, interval_seconds: int = 10) -> dict:
@@ -50,7 +61,7 @@ def wait_for_backend_health(base_url: str, timeout_seconds: int = 900, interval_
                 if isinstance(payload, dict) and payload.get("status") == "ok":
                     return payload
                 last_error = f"unexpected payload: {payload!r}"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - surface any readiness/network failure
             last_error = str(exc)
         print(f"Waiting for backend health at {health_url} ...")
         time.sleep(interval_seconds)
@@ -64,6 +75,52 @@ def write_github_output(**values: str) -> None:
     with open(output_path, "a", encoding="utf-8") as fh:
         for key, value in values.items():
             fh.write(f"{key}={value}\n")
+
+
+def upsert_dns_a_record(token: str, zone_id: str, record_name: str, ip_address: str, ttl: int = 300) -> dict:
+    records_payload = request_dns_json("GET", f"/records?zone_id={urllib.parse.quote(zone_id)}", token)
+    records = records_payload.get("records", []) if isinstance(records_payload, dict) else []
+    existing = next(
+        (
+            record
+            for record in records
+            if record.get("type") == "A" and record.get("name") == record_name
+        ),
+        None,
+    )
+    payload = {
+        "zone_id": zone_id,
+        "type": "A",
+        "name": record_name,
+        "value": ip_address,
+        "ttl": ttl,
+    }
+    if existing and existing.get("id"):
+        return request_dns_json("PUT", f"/records/{existing['id']}", token, payload)
+    return request_dns_json("POST", "/records", token, payload)
+
+
+def build_nginx_conf(public_hostname: str) -> str:
+    return """server {{
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name {public_hostname} _;
+
+    client_max_body_size 50m;
+
+    location / {{
+        proxy_pass http://api:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 900;
+        proxy_connect_timeout 60;
+        proxy_send_timeout 900;
+    }}
+}}
+""".format(public_hostname=public_hostname)
 
 
 def main() -> int:
@@ -84,6 +141,17 @@ def main() -> int:
     ssh_key_name = env("HCLOUD_SSH_KEY_NAME")
     owner = env("GITHUB_REPOSITORY_OWNER")
 
+    public_hostname = env("HIPPO_PUBLIC_HOSTNAME") or env("INPUT_PUBLIC_HOSTNAME") or "hippo-api.hipposideros-cloud.de"
+    dns_zone_id = env("HETZNER_DNS_ZONE_ID") or env("INPUT_DNS_ZONE_ID")
+    dns_record_name = env("HETZNER_DNS_RECORD_NAME") or env("INPUT_DNS_RECORD_NAME") or public_hostname.split(".")[0]
+    dns_token = env("HETZNER_DNS_TOKEN")
+    dns_ttl_raw = env("HETZNER_DNS_TTL") or env("INPUT_DNS_TTL") or "300"
+    dns_ttl: int = 300
+    try:
+        dns_ttl = int(dns_ttl_raw)
+    except ValueError:
+        fail(f"Invalid DNS TTL: {dns_ttl_raw}")
+
     if provider not in {"openai", "claude"}:
         fail(f"Unsupported provider: {provider}")
     if not api_key:
@@ -94,6 +162,8 @@ def main() -> int:
         fail("HIPPO_AI_MODEL is missing. Set the repo variable or pass the workflow input.")
     if not owner:
         fail("GITHUB_REPOSITORY_OWNER is missing.")
+    if not dns_token or not dns_zone_id:
+        fail("Hetzner DNS config is missing. Set HETZNER_DNS_TOKEN and HETZNER_DNS_ZONE_ID.")
 
     postgres_password = secrets.token_urlsafe(32)
     jwt_secret = secrets.token_urlsafe(48)
@@ -104,6 +174,7 @@ def main() -> int:
     mask(postgres_password)
     mask(jwt_secret)
     mask(pcloud_access_token)
+    mask(dns_token)
 
     if not ssh_key_id and ssh_key_name:
         query = urllib.parse.urlencode({"name": ssh_key_name})
@@ -128,6 +199,7 @@ def main() -> int:
         f"PCLOUD_ACCESS_TOKEN={pcloud_access_token}",
     ]
 
+    nginx_conf = build_nginx_conf(public_hostname)
     compose_file = f"""version: '3.8'
 services:
   postgres:
@@ -157,8 +229,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+
+  nginx:
+    image: nginx:stable-alpine
+    restart: always
+    depends_on:
+      - api
     ports:
-      - \"8000:8000\"
+      - \"80:80\"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   hippo_postgres_data:
@@ -188,6 +268,10 @@ write_files:
     permissions: '0644'
     content: |
 {indent(compose_file.rstrip(), '      ')}
+  - path: /opt/hippo-stack/nginx.conf
+    permissions: '0644'
+    content: |
+{indent(nginx_conf.rstrip(), '      ')}
 
 runcmd:
   - systemctl enable --now docker
@@ -225,9 +309,20 @@ runcmd:
     if not server_ipv4:
         fail("Hetzner server did not return an IPv4 address.")
 
-    backend_url = f"http://{server_ipv4}:8000"
-    health_payload = wait_for_backend_health(backend_url)
-    write_github_output(server_id=str(server_id or ""), server_ipv4=str(server_ipv4), backend_url=backend_url, provider=provider)
+    ip_backend_url = f"http://{server_ipv4}"
+    wait_for_backend_health(ip_backend_url)
+
+    dns_result = upsert_dns_a_record(dns_token, dns_zone_id, dns_record_name, str(server_ipv4), ttl=dns_ttl)
+    public_backend_url = f"http://{public_hostname}"
+    wait_for_backend_health(public_backend_url)
+
+    write_github_output(
+        server_id=str(server_id or ""),
+        server_ipv4=str(server_ipv4),
+        backend_url=public_backend_url,
+        provider=provider,
+        public_hostname=public_hostname,
+    )
 
     print("Created Hetzner server")
     print(f"- id: {server_id}")
@@ -237,8 +332,10 @@ runcmd:
     if server_ipv6:
         print(f"- ipv6: {server_ipv6}")
     print(f"- provider: {provider}")
-    print(f"- api_url_for_desktop: {backend_url}")
-    print(f"- health: {health_payload}")
+    print(f"- dns_record: {dns_record_name}")
+    print(f"- public_hostname: {public_hostname}")
+    print(f"- backend_url: {public_backend_url}")
+    print(f"- dns_result: {dns_result}")
 
     summary = [
         "## Hetzner VPS created",
@@ -246,13 +343,15 @@ runcmd:
         f"- Name: `{server_name}`",
         f"- IPv4: `{server_ipv4}`",
         f"- Provider: `{provider}`",
-        f"- Desktop/backend URL: `{backend_url}`",
-        f"- Health check: `{health_payload.get('status')}`",
+        f"- Public hostname: `{public_hostname}`",
+        f"- Desktop/backend URL: `{public_backend_url}`",
+        f"- Health check: `ok`",
         "",
         "### Runtime config written on the VPS",
         f"- `HIPPO_AI_BASE_URL` = `{hippo_ai_base_url}`",
         f"- `HIPPO_AI_MODEL` = `{hippo_ai_model}`",
         f"- `MODEL_PROVIDER` = `{provider}`",
+        f"- `DNS record` = `{dns_record_name}`",
     ]
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
         fh.write("\n".join(summary) + "\n")
