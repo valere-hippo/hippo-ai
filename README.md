@@ -91,6 +91,12 @@ CI / infra deploy
   - GHCR_TOKEN (GitHub PAT with packages:write)
 - On `hippo-ai`, the workflow now only builds and pushes from `master`.
 - Deployment is handled from `hippoject-infra` on the Hetzner self-hosted runner using `AI_DEPLOY_PATH`.
+- Manual VPS provisioning is available via `.github/workflows/provision-hetzner-vps.yml`.
+  - Required: `HCLOUD_TOKEN` secret.
+  - Optional Hetzner vars: `HCLOUD_SSH_KEY_ID`, `HCLOUD_SSH_KEY_NAME`, `HCLOUD_SERVER_TYPE`, `HCLOUD_LOCATION`, `HCLOUD_IMAGE`.
+  - Required runtime vars or workflow inputs: `HIPPO_AI_BASE_URL`, `HIPPO_AI_MODEL`.
+  - The dispatch input `provider` chooses `openai` or `claude`; the input `api_key` is written into the VPS runtime env as the matching provider key.
+  - The workflow provisions the VPS and boots the backend stack on port `8000`; the desktop app should point its API URL to that server.
 
 Desktop installers
 - The desktop installer workflow builds Windows `.exe` and macOS `.dmg` artifacts.
