@@ -68,6 +68,7 @@ const els = {
   pageTitle: document.getElementById('page-title'),
   selectedInfo: document.getElementById('selected-info'),
   projectPill: document.getElementById('project-pill'),
+  profilePill: document.getElementById('profile-pill'),
   rolePill: document.getElementById('role-pill'),
   desktopAgentBtn: document.getElementById('desktop-agent-btn'),
   chatLog: document.getElementById('chat-log'),
@@ -1040,6 +1041,9 @@ function renderContext() {
   els.projectPill.textContent = project
     ? `${project.name}${currentProfile ? ` · ${currentProfile.name}` : ''}`
     : (currentProfile ? currentProfile.name : 'Global')
+  if (els.profilePill) {
+    els.profilePill.textContent = currentProfile ? `${currentProfile.name} · ${currentProfile.chat_bot_id}` : 'Kein Profil'
+  }
   if (els.projectToolsBtn) {
     els.projectToolsBtn.disabled = !project
   }
