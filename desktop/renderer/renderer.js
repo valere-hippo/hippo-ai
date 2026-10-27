@@ -404,6 +404,59 @@ function setSelectedProfileId(profileId) {
   renderContext()
 }
 
+function ensureComposerProfileSelector() {
+  const composerMeta = document.querySelector('.composer-meta')
+  if (!composerMeta) return
+
+  let wrapper = document.getElementById('composer-profile-wrapper')
+  let select = document.getElementById('composer-profile-select')
+
+  if (!wrapper) {
+    wrapper = document.createElement('span')
+    wrapper.id = 'composer-profile-wrapper'
+    wrapper.className = 'composer-profile-wrapper'
+
+    const label = document.createElement('span')
+    label.className = 'composer-profile-label'
+    label.textContent = 'Profil'
+
+    select = document.createElement('select')
+    select.id = 'composer-profile-select'
+    select.className = 'text-input composer-profile-select'
+    select.addEventListener('change', () => {
+      setSelectedProfileId(select.value ? Number(select.value) : null)
+    })
+
+    wrapper.append(label, select)
+    composerMeta.insertBefore(wrapper, composerMeta.firstChild)
+  }
+
+  if (!select) return
+
+  const project = getContextProject()
+  const currentProfileId = Number(state.selectedProfileId || 0) || null
+  const options = [{ value: '', label: project?.default_profile_id ? 'Projektstandard' : 'Global' }]
+  state.chatProfiles.forEach((profile) => {
+    const scopeLabel = profile.project_id ? `Projekt ${profile.project_id}` : 'Global'
+    options.push({ value: String(profile.id), label: `${profile.name} · ${scopeLabel}` })
+  })
+
+  const currentValues = Array.from(select.options || []).map((option) => option.value)
+  const nextValues = options.map((option) => option.value)
+  const same = currentValues.length === nextValues.length && currentValues.every((value, index) => value === nextValues[index])
+  if (!same) {
+    select.innerHTML = ''
+    options.forEach((optionData) => {
+      const option = document.createElement('option')
+      option.value = optionData.value
+      option.textContent = optionData.label
+      select.appendChild(option)
+    })
+  }
+
+  select.value = currentProfileId ? String(currentProfileId) : ''
+}
+
 function normalizeProjectFolderInput(folderValue) {
   return String(folderValue || '')
     .split(/[\n;]+/)
@@ -1316,6 +1369,7 @@ function renderContext() {
 
   summary.appendChild(actions)
   els.selectedInfo.appendChild(summary)
+  ensureComposerProfileSelector()
 }
 
 function renderProjects() {
