@@ -5364,6 +5364,25 @@ function buildChatProfileManagerContent(project) {
     inputs.set(id, input)
   })
 
+  const shareScopeField = document.createElement('label')
+  shareScopeField.className = 'field'
+  const shareScopeLabel = document.createElement('span')
+  shareScopeLabel.textContent = 'Freigabe-Scope'
+  const shareScopeSelect = document.createElement('select')
+  shareScopeSelect.className = 'text-input'
+  ;[
+    ['private', 'Privat'],
+    ['project', 'Projekt-spezifisch'],
+    ['shared', 'Geteilt / wiederverwendbar'],
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = label
+    shareScopeSelect.appendChild(option)
+  })
+  shareScopeField.append(shareScopeLabel, shareScopeSelect)
+  formSection.appendChild(shareScopeField)
+
   const descriptionField = document.createElement('label')
   descriptionField.className = 'field'
   const descriptionLabel = document.createElement('span')
@@ -5374,6 +5393,17 @@ function buildChatProfileManagerContent(project) {
   descriptionInput.placeholder = 'Kurz beschreiben, wofür dieses Profil gedacht ist.'
   descriptionField.append(descriptionLabel, descriptionInput)
   formSection.appendChild(descriptionField)
+
+  const memoryField = document.createElement('label')
+  memoryField.className = 'field'
+  const memoryLabel = document.createElement('span')
+  memoryLabel.textContent = 'Profil-Gedächtnis'
+  const memoryInput = document.createElement('textarea')
+  memoryInput.className = 'composer-input'
+  memoryInput.style.minHeight = '120px'
+  memoryInput.placeholder = 'Konkrete Fakten, Präferenzen und wiederkehrende Regeln dieses Profils.'
+  memoryField.append(memoryLabel, memoryInput)
+  formSection.appendChild(memoryField)
 
   const promptField = document.createElement('label')
   promptField.className = 'field'
@@ -5435,7 +5465,9 @@ function buildChatProfileManagerContent(project) {
     formState.textContent = 'Neu'
     inputs.forEach((input) => { input.value = '' })
     descriptionInput.value = ''
+    memoryInput.value = ''
     promptInput.value = ''
+    shareScopeSelect.value = project ? 'project' : 'shared'
     sharedSkillsInput.checked = true
     sharedToolsInput.checked = true
     activeInput.checked = true
@@ -5451,7 +5483,9 @@ function buildChatProfileManagerContent(project) {
     inputs.get('profile-provider').value = profile.model_provider || ''
     inputs.get('profile-model').value = profile.model_name || ''
     descriptionInput.value = profile.description || ''
+    memoryInput.value = profile.memory_notes || ''
     promptInput.value = profile.system_prompt || ''
+    shareScopeSelect.value = profile.share_scope || (profile.project_id ? 'project' : 'shared')
     sharedSkillsInput.checked = Boolean(profile.allow_shared_skills)
     sharedToolsInput.checked = Boolean(profile.allow_shared_tools)
     activeInput.checked = Boolean(profile.is_active)
@@ -5480,7 +5514,7 @@ function buildChatProfileManagerContent(project) {
       title.textContent = profile.name || 'Unbenanntes Profil'
       const subtitle = document.createElement('div')
       subtitle.className = 'skill-card-subtitle'
-      subtitle.textContent = `${profile.chat_bot_id || 'bot-id fehlt'} · ${profile.project_id ? `Projekt ${profile.project_id}` : 'Global'}`
+      subtitle.textContent = `${profile.chat_bot_id || 'bot-id fehlt'} · ${profile.project_id ? `Projekt ${profile.project_id}` : 'Global'} · ${profile.share_scope || 'private'}`
       meta.append(title, subtitle)
       const status = document.createElement('div')
       status.className = 'skill-card-status'
@@ -5492,7 +5526,7 @@ function buildChatProfileManagerContent(project) {
 
       const description = document.createElement('div')
       description.className = 'skill-card-instructions'
-      description.textContent = profile.description || profile.system_prompt || ''
+      description.textContent = profile.description || profile.memory_notes || profile.system_prompt || ''
 
       const actions = document.createElement('div')
       actions.className = 'skill-card-actions'
@@ -5584,8 +5618,10 @@ function buildChatProfileManagerContent(project) {
       name,
       chat_bot_id: botId,
       description: descriptionInput.value.trim() || null,
+      memory_notes: memoryInput.value.trim() || null,
       system_prompt: promptInput.value.trim() || null,
       memory_namespace: inputs.get('profile-namespace').value.trim() || null,
+      share_scope: shareScopeSelect.value,
       model_provider: inputs.get('profile-provider').value.trim() || null,
       model_name: inputs.get('profile-model').value.trim() || null,
       allow_shared_skills: sharedSkillsInput.checked,

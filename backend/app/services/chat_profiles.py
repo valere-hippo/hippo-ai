@@ -41,8 +41,12 @@ def build_chat_profile_context(profile: ChatProfile | None, project_name: str | 
         lines.append(f"- Projekt: {project_name}")
     if profile.description:
         lines.append(f"- Beschreibung: {profile.description}")
+    if profile.memory_notes:
+        lines.append("- Profil-Memory:")
+        lines.extend([f"  {line}" for line in profile.memory_notes.splitlines() if line.strip()])
     if profile.memory_namespace:
         lines.append(f"- Memory-Namespace: {profile.memory_namespace}")
+    lines.append(f"- Freigabe: {getattr(profile, 'share_scope', 'private')}")
     if profile.model_provider or profile.model_name:
         lines.append(f"- Modell: {(profile.model_provider or 'default').strip()} / {(profile.model_name or 'default').strip()}")
     lines.append(f"- Geteilte Skills: {'ja' if profile.allow_shared_skills else 'nein'}")
@@ -63,6 +67,10 @@ def build_profile_system_prompt(profile: ChatProfile | None) -> str:
     ]
     if profile.memory_namespace:
         parts.append(f"Nutze den Memory-Namespace {profile.memory_namespace} für dieses Profil.")
+    parts.append(f"Freigabe-Scope des Profils: {getattr(profile, 'share_scope', 'private')}.")
+    if profile.memory_notes:
+        parts.append("Gedächtnis des Profils:")
+        parts.append(profile.memory_notes.strip())
     if profile.system_prompt:
         parts.append(profile.system_prompt.strip())
     return "\n".join(parts)

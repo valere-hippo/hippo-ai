@@ -51,10 +51,20 @@ async def list_profiles(db: DbSession, project_id: int | None = None, current_us
         project = await _load_project(db, project_id)
         visible = []
         for profile in profiles:
-            if profile.project_id is None or profile.owner_id == current_user.id or current_user.role == UserRole.ADMIN or project.owner_id == current_user.id:
+            if (
+                profile.project_id == project_id
+                or profile.share_scope == 'shared'
+                or profile.owner_id == current_user.id
+                or current_user.role == UserRole.ADMIN
+                or project.owner_id == current_user.id
+            ):
                 visible.append(profile)
         return visible
-    return [profile for profile in profiles if profile.project_id is None or profile.owner_id == current_user.id or current_user.role == UserRole.ADMIN]
+    return [
+        profile
+        for profile in profiles
+        if profile.share_scope == 'shared' or profile.owner_id == current_user.id or current_user.role == UserRole.ADMIN
+    ]
 
 
 @router.post("/", response_model=ChatProfileResponse, status_code=status.HTTP_201_CREATED)
@@ -72,8 +82,10 @@ async def create_profile(payload: ChatProfileCreate, db: DbSession, current_user
         name=payload.name.strip(),
         chat_bot_id=payload.chat_bot_id.strip(),
         description=payload.description.strip() if payload.description else None,
+        memory_notes=payload.memory_notes.strip() if payload.memory_notes else None,
         system_prompt=payload.system_prompt.strip() if payload.system_prompt else None,
         memory_namespace=memory_namespace,
+        share_scope=(payload.share_scope or ("project" if payload.project_id else "shared")).strip().lower(),
         model_provider=payload.model_provider.strip().lower() if payload.model_provider else None,
         model_name=payload.model_name.strip() if payload.model_name else None,
         allow_shared_skills=payload.allow_shared_skills,
@@ -102,10 +114,14 @@ async def update_profile(profile_id: int, payload: ChatProfileUpdate, db: DbSess
         updates["chat_bot_id"] = payload.chat_bot_id.strip()
     if payload.description is not None:
         updates["description"] = payload.description.strip()
+    if payload.memory_notes is not None:
+        updates["memory_notes"] = payload.memory_notes.strip()
     if payload.system_prompt is not None:
         updates["system_prompt"] = payload.system_prompt.strip()
     if payload.memory_namespace is not None:
         updates["memory_namespace"] = payload.memory_namespace.strip()
+    if payload.share_scope is not None:
+        updates["share_scope"] = payload.share_scope.strip().lower()
     if payload.model_provider is not None:
         updates["model_provider"] = payload.model_provider.strip().lower()
     if payload.model_name is not None:

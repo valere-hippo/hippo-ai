@@ -66,8 +66,10 @@ async def ensure_database_schema_and_tables(engine: AsyncEngine) -> None:
                 'name VARCHAR(120) NOT NULL, '
                 'chat_bot_id VARCHAR(120) NOT NULL, '
                 'description TEXT NULL, '
+                'memory_notes TEXT NULL, '
                 'system_prompt TEXT NULL, '
                 'memory_namespace VARCHAR(120) NULL, '
+                'share_scope VARCHAR(20) NOT NULL DEFAULT ''private'', '
                 'model_provider VARCHAR(40) NULL, '
                 'model_name VARCHAR(120) NULL, '
                 'allow_shared_skills BOOLEAN NOT NULL DEFAULT TRUE, '
@@ -82,6 +84,18 @@ async def ensure_database_schema_and_tables(engine: AsyncEngine) -> None:
             text(
                 f'ALTER TABLE IF EXISTS "{settings.postgres_schema}"."ai_conversations" '
                 'ADD COLUMN IF NOT EXISTS profile_id INTEGER'
+            )
+        )
+        await conn.execute(
+            text(
+                f'ALTER TABLE IF EXISTS "{settings.postgres_schema}"."ai_chat_profiles" '
+                'ADD COLUMN IF NOT EXISTS memory_notes TEXT'
+            )
+        )
+        await conn.execute(
+            text(
+                f'ALTER TABLE IF EXISTS "{settings.postgres_schema}"."ai_chat_profiles" '
+                'ADD COLUMN IF NOT EXISTS share_scope VARCHAR(20) NOT NULL DEFAULT ''private'''
             )
         )
         await conn.execute(
