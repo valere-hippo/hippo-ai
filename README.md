@@ -96,7 +96,8 @@ CI / infra deploy
   - Optional Hetzner vars: `HCLOUD_SSH_KEY_ID`, `HCLOUD_SSH_KEY_NAME`, `HCLOUD_SERVER_TYPE`, `HCLOUD_LOCATION`, `HCLOUD_IMAGE`.
   - Required runtime vars or workflow inputs: `HIPPO_AI_BASE_URL`, `HIPPO_AI_MODEL`.
   - The dispatch input `provider` chooses `openai` or `claude`; the input `api_key` is written into the VPS runtime env as the matching provider key.
-  - The workflow provisions the VPS and boots the backend stack on port `8000`; the desktop app should point its API URL to that server.
+  - The workflow provisions the VPS, waits for `/health` to return `{"status": "ok"}`, and exposes the backend URL as a job output.
+  - The desktop app should point its API URL to that server.
 
 Desktop installers
 - The desktop installer workflow builds Windows `.exe` and macOS `.dmg` artifacts.

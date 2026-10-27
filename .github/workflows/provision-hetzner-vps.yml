@@ -55,6 +55,10 @@ concurrency:
 jobs:
   provision:
     runs-on: ubuntu-latest
+    outputs:
+      backend_url: ${{ steps.provision.outputs.backend_url }}
+      server_ipv4: ${{ steps.provision.outputs.server_ipv4 }}
+      provider: ${{ steps.provision.outputs.provider }}
     env:
       HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
       HCLOUD_SSH_KEY_ID: ${{ vars.HCLOUD_SSH_KEY_ID }}
@@ -77,5 +81,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Provision VPS on Hetzner
+      - id: provision
+        name: Provision VPS on Hetzner
         run: python3 scripts/provision_hetzner_vps.py

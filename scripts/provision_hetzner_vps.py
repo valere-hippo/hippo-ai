@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -35,6 +36,34 @@ def request_json(method: str, path: str, token: str, payload: dict | None = None
 
 def fail(message: str) -> None:
     raise SystemExit(message)
+
+
+def wait_for_backend_health(base_url: str, timeout_seconds: int = 900, interval_seconds: int = 10) -> dict:
+    deadline = time.time() + timeout_seconds
+    health_url = f"{base_url.rstrip('/')}/health"
+    last_error: str | None = None
+    while time.time() < deadline:
+        try:
+            req = urllib.request.Request(health_url, headers={"Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                payload = json.load(resp)
+                if isinstance(payload, dict) and payload.get("status") == "ok":
+                    return payload
+                last_error = f"unexpected payload: {payload!r}"
+        except Exception as exc:
+            last_error = str(exc)
+        print(f"Waiting for backend health at {health_url} ...")
+        time.sleep(interval_seconds)
+    fail(f"Backend did not become healthy within {timeout_seconds}s: {last_error or 'unknown error'}")
+
+
+def write_github_output(**values: str) -> None:
+    output_path = os.environ.get("GITHUB_OUTPUT")
+    if not output_path:
+        return
+    with open(output_path, "a", encoding="utf-8") as fh:
+        for key, value in values.items():
+            fh.write(f"{key}={value}\n")
 
 
 def main() -> int:
@@ -193,6 +222,13 @@ runcmd:
     server_ipv4 = ipv4.get("ip")
     server_ipv6 = ipv6.get("ip")
 
+    if not server_ipv4:
+        fail("Hetzner server did not return an IPv4 address.")
+
+    backend_url = f"http://{server_ipv4}:8000"
+    health_payload = wait_for_backend_health(backend_url)
+    write_github_output(server_id=str(server_id or ""), server_ipv4=str(server_ipv4), backend_url=backend_url, provider=provider)
+
     print("Created Hetzner server")
     print(f"- id: {server_id}")
     print(f"- name: {server_name}")
@@ -201,7 +237,8 @@ runcmd:
     if server_ipv6:
         print(f"- ipv6: {server_ipv6}")
     print(f"- provider: {provider}")
-    print(f"- api_url_for_desktop: http://{server_ipv4}:8000")
+    print(f"- api_url_for_desktop: {backend_url}")
+    print(f"- health: {health_payload}")
 
     summary = [
         "## Hetzner VPS created",
@@ -209,7 +246,8 @@ runcmd:
         f"- Name: `{server_name}`",
         f"- IPv4: `{server_ipv4}`",
         f"- Provider: `{provider}`",
-        f"- Desktop/backend URL: `http://{server_ipv4}:8000`",
+        f"- Desktop/backend URL: `{backend_url}`",
+        f"- Health check: `{health_payload.get('status')}`",
         "",
         "### Runtime config written on the VPS",
         f"- `HIPPO_AI_BASE_URL` = `{hippo_ai_base_url}`",
