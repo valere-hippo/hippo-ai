@@ -2310,6 +2310,19 @@ async function loadCurrentUser() {
   return user
 }
 
+function applyFallbackAuthenticatedUser(email) {
+  const fallbackUser = {
+    id: null,
+    email,
+    full_name: email,
+    role: 'USER',
+    is_active: true,
+  }
+  state.user = fallbackUser
+  updatePresence()
+  return fallbackUser
+}
+
 async function loadProjects() {
   state.projects = await apiJson('/projects/')
   normalizeActiveConversationState()
@@ -2458,11 +2471,21 @@ async function login() {
     })
     state.token = result.access_token
     localStorage.setItem('hippo.token', state.token)
-    state.user = await loadCurrentUser()
+
+    let userLoaded = false
+    try {
+      await loadCurrentUser()
+      userLoaded = true
+    } catch (userError) {
+      console.warn('Could not load current user after login:', userError)
+      applyFallbackAuthenticatedUser(email)
+    }
+
     setScreen(true)
     updatePresence()
     await loadWorkspace()
-    showToast('Signed in')
+    els.loginResult.textContent = userLoaded ? '' : 'Signed in, profile is loading in the background.'
+    showToast(userLoaded ? 'Signed in' : 'Signed in')
   } catch (error) {
     showToast(error.message || 'Anmeldung fehlgeschlagen', 'error')
     els.loginResult.textContent = error.message || 'Anmeldung fehlgeschlagen'
@@ -6416,7 +6439,12 @@ async function bootstrap() {
   }
 
   try {
-    state.user = await loadCurrentUser()
+    try {
+      await loadCurrentUser()
+    } catch (userError) {
+      console.warn('Could not hydrate current user from saved token:', userError)
+      applyFallbackAuthenticatedUser('')
+    }
     setScreen(true)
     updatePresence()
     await loadWorkspace()
