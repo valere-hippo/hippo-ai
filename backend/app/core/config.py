@@ -1,4 +1,4 @@
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -70,6 +70,22 @@ class Settings(BaseSettings):
     stt_device: str = "cpu"
     stt_compute_type: str = "int8"
     stt_language: str | None = "de"
+
+    @field_validator("hippo_model", mode="before")
+    @classmethod
+    def normalize_hippo_model(cls, value: str | None) -> str:
+        raw = (value or "").strip()
+        if not raw:
+            return "gpt-4o-mini"
+        if raw.lower() == "gpt-5o-mini":
+            return "gpt-4o-mini"
+        return raw
+
+    @field_validator("openai_model", mode="before")
+    @classmethod
+    def normalize_openai_model(cls, value: str | None) -> str:
+        raw = (value or "").strip()
+        return raw or "gpt-4o-mini"
 
     model_config = SettingsConfigDict(
         env_file=".env",
