@@ -41,6 +41,20 @@ import json
 router = APIRouter(prefix="/chat", tags=["chat"])
 logger = logging.getLogger("hippo-ai.chat")
 
+
+def _normalize_chat_base_url(value: str | None) -> str | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    if not raw.startswith(("http://", "https://")):
+        raw = f"https://{raw}"
+    raw = raw.rstrip("/")
+    if raw.endswith("/v1/chat/completions"):
+        return raw
+    if raw.endswith("/v1"):
+        return f"{raw}/chat/completions"
+    return f"{raw}/v1/chat/completions"
+
 class ChatRequest(BaseModel):
     conversation_id: int | None = None
     project_id: int | None = None
@@ -323,6 +337,9 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             if settings.hippo_api_key:
                 headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
             model_name = settings.hippo_model
+            chat_api_url = _normalize_chat_base_url(settings.hippo_api_url)
+            if not chat_api_url:
+                raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
             max_tokens = await resolve_chat_max_tokens(db, settings.hippo_response_max_tokens, settings.hippo_response_max_tokens_long)
             if payload.attachments or conv_project is not None:
                 max_tokens = max(512, min(max_tokens, settings.hippo_response_max_tokens_long))
@@ -345,7 +362,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                 bool(payload.attachments),
             )
             try:
-                r = await client.post(settings.hippo_api_url.rstrip('/') + '/v1/chat/completions', json=model_payload, headers=headers)
+                r = await client.post(chat_api_url, json=model_payload, headers=headers)
                 r.raise_for_status()
                 data = r.json()
                 if isinstance(data, dict) and data.get('choices'):
