@@ -29,9 +29,19 @@ HIPPO_CHAT_MODEL_DISPLAY_NAME = "Hippo AI"
 
 
 def _normalize_base_url(url: str | None) -> str | None:
-    if not url:
+    raw = (url or "").strip()
+    if not raw:
         return None
-    return url.rstrip("/")
+    if not raw.startswith(("http://", "https://")):
+        raw = f"https://{raw}"
+    raw = raw.rstrip("/")
+    if raw.endswith("/v1/models"):
+        return raw[:-len("/models")]
+    if raw.endswith("/models"):
+        return raw
+    if raw.endswith("/v1"):
+        return raw[:-len("/v1")]
+    return raw
 
 
 def _candidate_model_paths() -> tuple[str, ...]:
