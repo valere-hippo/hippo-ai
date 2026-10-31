@@ -23,6 +23,7 @@ const state = {
   users: [],
   selectedProjectId: null,
   currentConversationId: null,
+  currentConversationRagSources: [],
   selectedProfileId: Number(localStorage.getItem('hippo.chat.profile.id') || '0') || null,
   chatProfiles: [],
   draftAttachments: [],
@@ -1138,6 +1139,45 @@ function renderContext() {
   label.textContent = projectLabel || (state.currentConversationId ? 'Globale Unterhaltung' : 'Kein Projekt gewählt')
   summary.appendChild(label)
 
+  if (state.currentConversationId && state.currentConversationRagSources.length) {
+    const ragCard = document.createElement('div')
+    ragCard.className = 'project-sync-progress'
+
+    const ragHeader = document.createElement('div')
+    ragHeader.className = 'project-sync-progress-header'
+
+    const ragTitle = document.createElement('div')
+    ragTitle.className = 'project-sync-progress-title'
+    ragTitle.textContent = 'RAG-Hinweise in dieser Unterhaltung'
+
+    const ragMeta = document.createElement('div')
+    ragMeta.className = 'project-sync-progress-meta'
+    ragMeta.textContent = `${state.currentConversationRagSources.length} Treffer · im Verlauf dieser Unterhaltung verfügbar`
+
+    ragHeader.append(ragTitle, ragMeta)
+
+    const ragList = document.createElement('div')
+    ragList.className = 'message-source-chips'
+    state.currentConversationRagSources.slice(0, 3).forEach((item, index) => {
+      const ragChip = document.createElement('div')
+      ragChip.className = 'message-source-chip'
+      const ragTitleLine = document.createElement('div')
+      ragTitleLine.className = 'message-source-title'
+      ragTitleLine.textContent = item?.metadata?.source || item?.source || `Quelle ${index + 1}`
+      const ragBody = document.createElement('div')
+      ragBody.className = 'message-source-body'
+      ragBody.textContent = String(item?.text || '').slice(0, 220)
+      const ragScore = document.createElement('div')
+      ragScore.className = 'message-source-meta'
+      ragScore.textContent = `Relevanz ${Number(item?.score || 0).toFixed(2)}`
+      ragChip.append(ragTitleLine, ragBody, ragScore)
+      ragList.appendChild(ragChip)
+    })
+
+    ragCard.append(ragHeader, ragList)
+    summary.appendChild(ragCard)
+  }
+
   if (currentProfile) {
     const profileCard = document.createElement('div')
     profileCard.className = 'project-sync-progress'
@@ -1571,6 +1611,7 @@ function renderConversations() {
       const profile = conversation.profile_id ? state.chatProfiles.find((item) => Number(item.id) === Number(conversation.profile_id)) : null
       const subtitleParts = [conversation.created_at ? new Date(conversation.created_at).toLocaleString() : '']
       if (profile) subtitleParts.push(`Profil: ${profile.name}`)
+      if (active && state.currentConversationRagSources.length) subtitleParts.push(`RAG: ${state.currentConversationRagSources.length} Treffer`)
       subtitle.textContent = subtitleParts.filter(Boolean).join(' · ')
       main.append(title, subtitle)
 
@@ -2316,6 +2357,7 @@ function normalizeActiveConversationState() {
   const conversationExists = state.conversations.some((conversation) => conversation.id === state.currentConversationId)
   if (!conversationExists) {
     state.currentConversationId = null
+    state.currentConversationRagSources = []
   }
 
   if (state.selectedProjectId && !state.projects.some((project) => project.id === state.selectedProjectId)) {
@@ -2604,7 +2646,17 @@ async function openConversationById(conversationId) {
   showLoader('Unterhaltung wird geladen...')
   try {
     const payload = await apiJson(`/chat/conversations/${conversationId}`)
+    state.currentConversationRagSources = []
     renderConversationMessages(payload.messages || [])
+    try {
+      const ragPayload = await apiJson(`/chat/conversations/${conversationId}/rag-sources`)
+      state.currentConversationRagSources = Array.isArray(ragPayload?.sources) ? ragPayload.sources : []
+    } catch (ragError) {
+      console.warn('RAG source loading failed', ragError)
+      state.currentConversationRagSources = []
+    }
+    renderConversations()
+    renderContext()
   } catch (error) {
     showToast(error.message || 'Failed to load conversation', 'error')
   } finally {

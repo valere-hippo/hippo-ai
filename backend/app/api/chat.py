@@ -88,6 +88,20 @@ class ConversationResponse(BaseModel):
     messages: list[ChatMessageResponse] | None = None
 
 
+class RagSourceResponse(BaseModel):
+    id: int | str | None = None
+    text: str
+    score: float | None = None
+    metadata: dict[str, object] | None = None
+    source: str | None = None
+
+
+class RagSourcesResponse(BaseModel):
+    conversation_id: int
+    sources: list[RagSourceResponse] = Field(default_factory=list)
+    summary: str = ''
+
+
 class ChatMessageEditRequest(BaseModel):
     content: str = Field(min_length=1, max_length=12000)
 
@@ -569,6 +583,54 @@ async def get_conversation(conv_id: int, db: DbSession, current_user: User = Dep
         },
         'messages': messages,
     }
+
+
+@router.get('/conversations/{conv_id}/rag-sources', response_model=RagSourcesResponse)
+async def get_conversation_rag_sources(conv_id: int, db: DbSession, current_user: User = Depends(get_current_user)):
+    res = await db.execute(select(Conversation).where(Conversation.id == conv_id))
+    conv = res.scalar_one_or_none()
+    if conv is None:
+        raise HTTPException(status_code=404, detail='Nicht gefunden.')
+    if conv.project_id is not None:
+        result = await db.execute(select(Project).where(Project.id == conv.project_id))
+        proj = result.scalar_one_or_none()
+        from app.services.permissions import has_project_permission
+        allowed = await has_project_permission(db, current_user, proj, PermissionLevel.READ)
+        if not allowed:
+            raise HTTPException(status_code=403, detail='Zugriff verweigert.')
+
+    msg_res = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.conversation_id == conv_id, ChatMessage.role == 'user')
+        .order_by(ChatMessage.created_at.desc())
+        .limit(1)
+    )
+    latest_user_message = msg_res.scalar_one_or_none()
+    if latest_user_message is None:
+        return RagSourcesResponse(conversation_id=conv_id, sources=[], summary='')
+
+    try:
+        sources_raw = await search_embedding_context(db, latest_user_message.content, project_id=conv.project_id, limit=6)
+        sources = [
+            RagSourceResponse(
+                id=item.get('id'),
+                text=str(item.get('text') or ''),
+                score=float(item.get('score') or 0.0),
+                metadata=item.get('metadata') if isinstance(item.get('metadata'), dict) else None,
+                source=str(item.get('source') or '') or None,
+            )
+            for item in sources_raw
+            if str(item.get('text') or '').strip()
+        ]
+        summary = format_embedding_context(
+            sources_raw,
+            'Projektspezifische Hinweise aus dem Embedding-Store' if conv.project_id is not None else 'Geteilte Hinweise aus dem Embedding-Store',
+        )
+    except Exception:
+        sources = []
+        summary = ''
+
+    return RagSourcesResponse(conversation_id=conv_id, sources=sources, summary=summary)
 
 
 @router.patch('/messages/{message_id}')
