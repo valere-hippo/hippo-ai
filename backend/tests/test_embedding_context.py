@@ -60,6 +60,19 @@ def test_search_embedding_context_returns_local_results_without_remote(monkeypat
     assert calls == ["local"]
 
 
+def test_build_embedding_context_for_request_labels_project_context(monkeypatch):
+    async def fake_search(db, query: str, project_id=None, limit: int = 5):
+        assert project_id == 7
+        return [{"id": 11, "text": "Gesetzesauszug", "score": 0.91, "metadata": {"source": "local"}}]
+
+    monkeypatch.setattr(ec, "search_embedding_context", fake_search)
+
+    result = asyncio.run(ec.build_embedding_context_for_request(object(), "bitte prüfen", project_id=7, limit=5))
+
+    assert "Projektspezifische Hinweise aus dem Embedding-Store" in result
+    assert "Gesetzesauszug" in result
+
+
 def test_build_embedding_context_for_request_returns_shared_results_without_project(monkeypatch):
     async def fake_search(db, query: str, project_id=None, limit: int = 5):
         assert project_id is None

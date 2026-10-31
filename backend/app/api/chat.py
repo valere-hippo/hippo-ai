@@ -32,6 +32,7 @@ from app.services.project_skills import build_project_skills_context, build_shar
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 from app.services.project_report_fallback import build_project_report_fallback
+from app.services.embedding_context import build_embedding_context_for_request
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.image_generation import build_image_scene_spec
 from app.services.hippo_identity import build_hippo_system_prompt
@@ -293,6 +294,23 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                     ),
                 },
             )
+        except Exception:
+            pass
+
+        try:
+            rag_context = await build_embedding_context_for_request(db, payload.message, project_id=conv_project.id if conv_project is not None else None, limit=6)
+            if rag_context:
+                hippo_messages.insert(
+                    4,
+                    {
+                        "role": "system",
+                        "content": (
+                            f"{rag_context}\n\n"
+                            "Nutze diese Embedding-Hinweise als ergänzende Referenz für Gesetze, Leitfäden, Vorlagen, alte Berichte und domänenspezifisches Wissen. "
+                            "Priorisiere sie nur, wenn sie zur Anfrage passen, und formuliere daraus einen klaren, fachlichen Antwortweg."
+                        ),
+                    },
+                )
         except Exception:
             pass
 
