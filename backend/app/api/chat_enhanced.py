@@ -655,6 +655,18 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     except Exception:
         pass
 
+    report_request = conv_project is not None and (
+        looks_like_file_generation_request(payload.message, payload.attachments)
+        or looks_like_project_detailed_report_request(payload.message)
+    )
+    if report_request and rag_sources:
+        rag_appendix = format_embedding_context(
+            rag_sources,
+            "Verwendete Wissensquellen",
+        )
+        if rag_appendix and "Verwendete Wissensquellen" not in reply_text:
+            reply_text = f"{reply_text.strip()}\n\n{rag_appendix}".strip()
+
     desktop_actions: list[DesktopAction] = []
     if payload.desktop_agent:
         parsed_reply, desktop_actions = _parse_desktop_actions(reply_text)

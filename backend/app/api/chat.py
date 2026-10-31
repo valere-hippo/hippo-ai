@@ -433,6 +433,18 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     except Exception:
         pass
 
+    report_request = conv_project is not None and (
+        looks_like_file_generation_request(payload.message, payload.attachments)
+        or looks_like_project_detailed_report_request(payload.message)
+    )
+    if report_request and rag_sources:
+        rag_appendix = format_embedding_context(
+            rag_sources,
+            "Verwendete Wissensquellen",
+        )
+        if rag_appendix and "Verwendete Wissensquellen" not in reply_text:
+            reply_text = f"{reply_text.strip()}\n\n{rag_appendix}".strip()
+
     generated_files, cleaned_reply = extract_generated_files(reply_text)
     file_request = looks_like_file_generation_request(payload.message, payload.attachments)
     image_request = looks_like_image_generation_request(payload.message, payload.attachments)
