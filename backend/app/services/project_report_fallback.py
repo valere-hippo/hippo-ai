@@ -47,14 +47,12 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
 
     summary_note = (
         "Der Bericht basiert direkt auf dem ermittelten Projektkontext und den extrahierten Inhalten. "
-        "Er bleibt direkt, sachlich und kompakt, ohne unnötige Übergänge oder Meta-Kommentare."
+        "Er bleibt direkt, sachlich und kompakt, ohne unnötige Übergänge oder Meta-Kommentare. "
+        f"Die aktuelle Anfrage lautet: {question_text}."
     )
 
     report: list[str] = [
         f"# {title}",
-        "",
-        "## Anfrage",
-        question_text,
         "",
         "## Zusammenfassung",
         summary_note,
