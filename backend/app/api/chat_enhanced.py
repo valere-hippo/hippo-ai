@@ -584,8 +584,6 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 "messages": hippo_messages,
                 "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
                 "max_tokens": max_tokens,
-                "max_completion_tokens": max_tokens,
-                "max_output_tokens": max_tokens,
             }
             logger.info(
                 "Calling Hippo model | url=%s | model=%s | max_tokens=%s | timeout=%s | auth=%s | project=%s | attachments=%s",
