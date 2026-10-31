@@ -925,6 +925,56 @@ textarea {
   color: var(--text);
 }
 
+.message-sources {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(83, 62, 42, 0.10);
+}
+
+.message-sources-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.55rem;
+}
+
+.message-source-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.message-source-chip {
+  border: 1px solid rgba(122, 31, 43, 0.15);
+  border-radius: 14px;
+  background: rgba(122, 31, 43, 0.04);
+  padding: 0.6rem 0.75rem;
+}
+
+.message-source-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.18rem;
+}
+
+.message-source-body {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.message-source-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 0.35rem;
+}
+
 .message-actions {
   display: flex;
   flex-wrap: wrap;

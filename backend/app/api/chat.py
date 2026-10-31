@@ -32,7 +32,7 @@ from app.services.project_skills import build_project_skills_context, build_shar
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 from app.services.project_report_fallback import build_project_report_fallback
-from app.services.embedding_context import build_embedding_context_for_request
+from app.services.embedding_context import search_embedding_context, format_embedding_context
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.image_generation import build_image_scene_spec
 from app.services.hippo_identity import build_hippo_system_prompt
@@ -69,6 +69,7 @@ class ChatResponse(BaseModel):
     reply: str
     conversation_id: int | None = None
     generated_files: list[dict[str, str]] = Field(default_factory=list)
+    rag_sources: list[dict[str, object]] = Field(default_factory=list)
 
 
 class ChatMessageResponse(BaseModel):
@@ -117,6 +118,7 @@ def _infer_generated_filename(message: str) -> str:
 
 async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends(get_current_user)) -> ChatResponse:
     current_user_id = int(current_user.id)
+    rag_sources: list[dict[str, object]] = []
     resolved_project_id = payload.project_id
     if resolved_project_id is None and payload.conversation_id is not None:
         conv_result = await db.execute(select(Conversation.project_id).where(Conversation.id == payload.conversation_id))
@@ -297,8 +299,13 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         except Exception:
             pass
 
+        rag_sources: list[dict[str, object]] = []
         try:
-            rag_context = await build_embedding_context_for_request(db, payload.message, project_id=conv_project.id if conv_project is not None else None, limit=6)
+            rag_sources = await search_embedding_context(db, payload.message, project_id=conv_project.id if conv_project is not None else None, limit=6)
+            rag_context = format_embedding_context(
+                rag_sources,
+                "Projektspezifische Hinweise aus dem Embedding-Store" if conv_project is not None else "Geteilte Hinweise aus dem Embedding-Store",
+            )
             if rag_context:
                 hippo_messages.insert(
                     4,
@@ -312,7 +319,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                     },
                 )
         except Exception:
-            pass
+            rag_sources = []
 
         try:
             tools_context = await build_tools_context(db, payload.message, limit=6, user_id=int(current_user.id), project_id=conv_project.id if conv_project is not None else None)
@@ -492,7 +499,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     )
     await db.commit()
 
-    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files)
+    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, rag_sources=rag_sources)
 
 
 @router.get('/conversations')
