@@ -40,6 +40,7 @@ class EmbeddingLibraryItem(BaseModel):
     text: str
     metadata: dict[str, Any] | None
     created_at: str
+    scope: str
 
 
 async def _embedding_vector(text: str) -> list[float]:
@@ -118,29 +119,47 @@ async def create_embeddings(payload: EmbeddingRequest, current_user=Depends(get_
 
 
 @library_router.get("/library", response_model=list[EmbeddingLibraryItem])
-async def list_embedding_library(db: DbSession, current_user=Depends(get_current_user)):
+async def list_embedding_library(db: DbSession, current_user=Depends(get_current_user), project_id=None):
     if current_user is None:
         raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+
+    if project_id is not None:
+        project_result = await db.execute(select(Project).where(Project.id == project_id))
+        project = project_result.scalar_one_or_none()
+        if project is None:
+            raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
+        allowed = await has_project_permission(db, current_user, project, PermissionLevel.READ)
+        if not allowed:
+            raise HTTPException(status_code=403, detail="Zugriff verweigert.")
 
     sql = sql_text(
         f"SELECT id, project_id, text, metadata, created_at "
         f"FROM {EMBEDDINGS_TABLE} "
-        "WHERE project_id IS NULL "
-        "ORDER BY created_at DESC "
+        + (
+            "WHERE project_id = :project_id OR project_id IS NULL "
+            if project_id is not None
+            else "WHERE project_id IS NULL "
+        )
+        + "ORDER BY created_at DESC "
         "LIMIT 100"
     )
-    result = await db.execute(sql)
+    params: dict[str, Any] = {}
+    if project_id is not None:
+        params["project_id"] = project_id
+    result = await db.execute(sql, params)
     rows = result.mappings().all()
     items: list[dict[str, Any]] = []
     for row in rows:
         created_at = row.get("created_at")
+        row_project_id = row.get("project_id")
         items.append(
             {
                 "id": int(row.get("id") or 0),
-                "project_id": row.get("project_id"),
+                "project_id": row_project_id,
                 "text": str(row.get("text") or ""),
                 "metadata": row.get("metadata"),
                 "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at or ""),
+                "scope": "project" if row_project_id is not None else "global",
             }
         )
     return items

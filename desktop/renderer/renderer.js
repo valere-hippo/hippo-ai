@@ -1382,6 +1382,10 @@ function renderContext() {
     }
   }, { danger: true })
   menuDivider()
+  addMenuItem('📚 Wissensbasis / Embeddings verwalten', async () => {
+    await openKnowledgeBaseModal()
+  })
+  menuDivider()
   addMenuItem('↻ Projektquellen neu synchronisieren', async () => {
     showLoader('Projektquellen werden aktualisiert...')
     try {
@@ -1396,9 +1400,6 @@ function renderContext() {
   menu.appendChild(menuPanel)
 
   actions.append(menu)
-
-  summary.appendChild(actions)
-  els.selectedInfo.appendChild(summary)
   ensureComposerProfileSelector()
 }
 
@@ -5347,6 +5348,254 @@ async function openToolModal() {
   await openModal({
     title: 'Tools verwalten',
     copy: 'Hier verwaltest du die geteilte Tool-Bibliothek. Alle Projekte können diese Tools nutzen.',
+    content,
+    submitLabel: 'Schließen',
+    width: 'min(1100px, 100%)',
+  })
+}
+
+async function openKnowledgeBaseModal() {
+  const project = getContextProject()
+  const content = document.createElement('div')
+  content.className = 'modal-grid knowledge-base-manager'
+
+  const intro = document.createElement('div')
+  intro.className = 'muted-copy'
+  intro.textContent = project
+    ? 'Hier verwaltest du die Wissensbasis für dieses Projekt. Hippo nutzt diese Hinweise später automatisch in Berichten und Analysen.'
+    : 'Hier verwaltest du die globale Wissensbasis. Hippo nutzt diese Hinweise später automatisch in Berichten und Analysen.'
+
+  const listSection = document.createElement('div')
+  listSection.className = 'skill-manager-section'
+  const listHeading = document.createElement('div')
+  listHeading.className = 'section-heading'
+  const listLabel = document.createElement('span')
+  listLabel.textContent = 'Gespeicherte Hinweise'
+  const listCount = document.createElement('span')
+  listCount.className = 'section-count'
+  listCount.textContent = '0'
+  listHeading.append(listLabel, listCount)
+  const listHint = document.createElement('div')
+  listHint.className = 'muted-copy'
+  listHint.textContent = project
+    ? 'Projekt-Hinweise werden zusammen mit globalen Hinweisen angezeigt. Der Chat priorisiert passende Treffer automatisch.'
+    : 'Nur globale Hinweise werden angezeigt. Projektbezogene Einträge erscheinen im jeweiligen Projekt-Modal.'
+  const list = document.createElement('div')
+  list.className = 'skill-list'
+  listSection.append(listHeading, listHint, list)
+
+  const formSection = document.createElement('div')
+  formSection.className = 'skill-form'
+  const formHeading = document.createElement('div')
+  formHeading.className = 'section-heading'
+  const formLabel = document.createElement('span')
+  formLabel.textContent = 'Hinweis speichern'
+  const formState = document.createElement('span')
+  formState.className = 'section-count'
+  formState.textContent = 'Neu'
+  formHeading.append(formLabel, formState)
+
+  const textField = document.createElement('label')
+  textField.className = 'field'
+  const textLabel = document.createElement('span')
+  textLabel.textContent = 'Text'
+  const textInput = document.createElement('textarea')
+  textInput.className = 'composer-input'
+  textInput.style.minHeight = '180px'
+  textInput.placeholder = 'Hier kannst du einen Gesetzesauszug, Leitfaden, Berichtsauszug oder andere Wissensbausteine speichern.'
+  textField.append(textLabel, textInput)
+
+  const metaField = document.createElement('label')
+  metaField.className = 'field'
+  const metaLabel = document.createElement('span')
+  metaLabel.textContent = 'Quelle / Hinweis'
+  const metaInput = document.createElement('input')
+  metaInput.className = 'text-input'
+  metaInput.placeholder = 'z. B. BNatSchG, QGIS-Leitfaden, Gutachten 2024'
+  metaField.append(metaLabel, metaInput)
+
+  const formActions = document.createElement('div')
+  formActions.className = 'skill-form-actions'
+  const saveButton = document.createElement('button')
+  saveButton.type = 'button'
+  saveButton.className = 'primary-button'
+  saveButton.style.width = 'auto'
+  saveButton.textContent = 'Hinweis speichern'
+  const clearButton = document.createElement('button')
+  clearButton.type = 'button'
+  clearButton.className = 'ghost-action'
+  clearButton.textContent = 'Leeren'
+  formActions.append(clearButton, saveButton)
+
+  const uploadRow = document.createElement('div')
+  uploadRow.className = 'skill-upload-row'
+  const uploadInput = document.createElement('input')
+  uploadInput.type = 'file'
+  uploadInput.accept = '.md,.txt,.pdf,.docx,.rtf'
+  uploadInput.className = 'hidden'
+  const uploadButton = document.createElement('button')
+  uploadButton.type = 'button'
+  uploadButton.className = 'ghost-action'
+  uploadButton.textContent = 'Datei hochladen'
+  uploadButton.addEventListener('click', () => uploadInput.click())
+  const uploadHint = document.createElement('div')
+  uploadHint.className = 'muted-copy'
+  uploadHint.textContent = project
+    ? 'Lade einen Text oder ein Dokument direkt in die projektbezogene Wissensbasis hoch.'
+    : 'Lade einen Text oder ein Dokument direkt in die globale Wissensbasis hoch.'
+  uploadRow.append(uploadButton, uploadInput, uploadHint)
+
+  formSection.append(formHeading, textField, metaField, formActions, uploadRow)
+  content.append(intro, listSection, formSection)
+
+  let libraryItems = []
+  let editingItemId = null
+
+  function renderLibrary() {
+    list.innerHTML = ''
+    listCount.textContent = String(libraryItems.length)
+    if (!libraryItems.length) {
+      const empty = document.createElement('div')
+      empty.className = 'muted-copy'
+      empty.style.padding = '8px 0'
+      empty.textContent = 'Noch keine Wissenseinträge gespeichert.'
+      list.appendChild(empty)
+      return
+    }
+
+    libraryItems.forEach((item) => {
+      const card = document.createElement('div')
+      card.className = 'skill-card'
+      const top = document.createElement('div')
+      top.className = 'skill-card-top'
+
+      const meta = document.createElement('div')
+      const title = document.createElement('div')
+      title.className = 'skill-card-title'
+      title.textContent = item.metadata?.source || 'Wissenseintrag'
+      const subtitle = document.createElement('div')
+      subtitle.className = 'skill-card-subtitle'
+      subtitle.textContent = item.scope === 'project' ? `Projekt ${item.project_id || ''} · ${item.created_at || ''}` : `Global · ${item.created_at || ''}`
+      meta.append(title, subtitle)
+
+      const badgeWrap = document.createElement('div')
+      badgeWrap.className = 'skill-card-status'
+      const scopeBadge = document.createElement('span')
+      scopeBadge.className = 'section-badge'
+      scopeBadge.textContent = item.scope === 'project' ? 'Projekt' : 'Global'
+      badgeWrap.appendChild(scopeBadge)
+      top.append(meta, badgeWrap)
+
+      const body = document.createElement('div')
+      body.className = 'skill-card-instructions'
+      body.textContent = item.text || ''
+
+      const actions = document.createElement('div')
+      actions.className = 'skill-card-actions'
+      const editButton = document.createElement('button')
+      editButton.type = 'button'
+      editButton.className = 'ghost-action'
+      editButton.textContent = 'In Formular übernehmen'
+      editButton.addEventListener('click', () => {
+        formState.textContent = 'Neu'
+        textInput.value = item.text || ''
+        metaInput.value = item.metadata?.source || ''
+        saveButton.textContent = 'Hinweis speichern'
+        textInput.focus()
+      })
+      actions.appendChild(editButton)
+      card.append(top, body, actions)
+      list.appendChild(card)
+    })
+  }
+
+  async function loadLibrary() {
+    showLoader('Wissensbasis wird geladen...')
+    try {
+      const query = project?.id ? `?project_id=${encodeURIComponent(project.id)}` : ''
+      const items = await apiJson(`/embeddings/library${query}`)
+      libraryItems = Array.isArray(items) ? items : []
+      renderLibrary()
+    } catch (error) {
+      libraryItems = []
+      renderLibrary()
+      showToast(error.message || 'Wissensbasis konnte nicht geladen werden', 'error')
+    } finally {
+      hideLoader()
+    }
+  }
+
+  clearButton.addEventListener('click', () => {
+    editingItemId = null
+    formState.textContent = 'Neu'
+    textInput.value = ''
+    metaInput.value = ''
+    saveButton.textContent = 'Hinweis speichern'
+    textInput.focus()
+  })
+
+  saveButton.addEventListener('click', async () => {
+    const text = textInput.value.trim()
+    if (!text) {
+      showToast('Bitte zuerst einen Hinweistext eingeben.', 'error')
+      return
+    }
+    showLoader('Hinweis wird gespeichert...')
+    try {
+      await apiJson('/embeddings/library', {
+        method: 'POST',
+        body: JSON.stringify({
+          text,
+          project_id: project?.id || null,
+          metadata: metaInput.value.trim() ? { source: metaInput.value.trim() } : { source: 'manual' },
+        }),
+      })
+      editingItemId = null
+      formState.textContent = 'Neu'
+      textInput.value = ''
+      metaInput.value = ''
+      saveButton.textContent = 'Hinweis speichern'
+      await loadLibrary()
+      showToast('Hinweis gespeichert')
+    } catch (error) {
+      showToast(error.message || 'Hinweis konnte nicht gespeichert werden', 'error')
+    } finally {
+      hideLoader()
+    }
+  })
+
+  uploadInput.addEventListener('change', async () => {
+    const [file] = uploadInput.files || []
+    if (!file) return
+    const formData = new FormData()
+    formData.append('file', file, file.name)
+    if (project?.id) formData.append('project_id', String(project.id))
+    showLoader('Dokument wird gespeichert...')
+    try {
+      const response = await fetch(`${API}/embeddings/library/upload`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: formData,
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.detail || `HTTP ${response.status}`)
+      }
+      await loadLibrary()
+      showToast('Dokument in der Wissensbasis gespeichert')
+    } catch (error) {
+      showToast(error.message || 'Dokument konnte nicht gespeichert werden', 'error')
+    } finally {
+      uploadInput.value = ''
+      hideLoader()
+    }
+  })
+
+  void loadLibrary()
+
+  await openModal({
+    title: 'Wissensbasis verwalten',
+    copy: 'Hier speicherst du Dokumente und Hinweise, die Hippo später in Berichten und Analysen als RAG-Kontext nutzen kann.',
     content,
     submitLabel: 'Schließen',
     width: 'min(1100px, 100%)',
