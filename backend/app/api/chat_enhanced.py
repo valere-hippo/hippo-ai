@@ -26,6 +26,7 @@ from app.services.chat_payloads import (
     storage_text,
 )
 from app.services.generated_files import GeneratedFile, SCENE_PREFIX, build_generated_file_bytes_with_fallback, extract_generated_files
+from app.services.desktop_workflows import infer_desktop_launch_actions
 from app.services.project_tools import build_tools_context
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context, build_shared_skills_context
@@ -212,47 +213,45 @@ def _looks_like_executable_path(value: str) -> bool:
     return bool(candidate) and candidate.endswith(('.exe', '.app', '.bat', '.cmd', '.com'))
 
 
+def _looks_qgis_related(text: str) -> bool:
+    haystack = (text or '').lower()
+    qgis_keywords = (
+        'qgis',
+        'geo',
+        'geodaten',
+        'geodata',
+        'karte',
+        'kart',
+        'shp',
+        'shx',
+        'dbf',
+        'prj',
+        'cpg',
+        'gpkg',
+        'geojson',
+        'kml',
+        'kmz',
+        'qgz',
+        'qgs',
+        'layer',
+        'map',
+        'maps',
+        'shapefile',
+        'shape file',
+        'shape-file',
+    )
+    return any(keyword in haystack for keyword in qgis_keywords)
+
+
 def _infer_desktop_launch_action(message: str, reply_text: str, profile: str | None = None) -> list[DesktopAction]:
-    haystack = f"{message or ''}\n{reply_text or ''}".lower()
-    if not any(keyword in haystack for keyword in ('öffne', 'oeffne', 'ouvrir', 'ouvre', 'ouvrir le', 'open', 'starte', 'start', 'launch', 'run', 'lance', 'lancer', 'charge', 'charger', 'öffnen', 'oeffnen', 'öffnest', 'öffnet', 'starten')):
-        return []
-
-    open_path = _extract_candidate_open_path(haystack)
-    data_path = _extract_secondary_data_path(haystack, exclude=open_path)
-    actions: list[DesktopAction] = []
-    if open_path:
-        if _looks_like_executable_path(open_path):
-            app_key = 'qgis' if 'qgis' in haystack or profile == 'qgis' else 'word' if ('word' in haystack or 'bericht' in haystack or 'report' in haystack) else 'excel' if 'excel' in haystack else 'libreoffice' if ('libreoffice' in haystack or 'soffice' in haystack) else 'qgis'
-            actions.append(DesktopAction(action='launch_app', command=app_key, path=open_path, file=data_path or None))
-        elif 'qgis' in haystack or profile == 'qgis':
-            actions.append(DesktopAction(action='launch_app', command='qgis', file=open_path))
-        elif 'word' in haystack or 'bericht' in haystack or 'report' in haystack:
-            actions.append(DesktopAction(action='launch_app', command='word', file=open_path))
-        elif 'excel' in haystack:
-            actions.append(DesktopAction(action='launch_app', command='excel', file=open_path))
-        elif 'libreoffice' in haystack or 'soffice' in haystack:
-            actions.append(DesktopAction(action='launch_app', command='libreoffice', file=open_path))
-        else:
-            actions.append(DesktopAction(action='open_file', file=open_path))
-        return actions
-
-    candidates: list[tuple[str, list[str]]] = [
-        ('hipponalyze', ['hipponalyze', 'hippo analyze', 'hippo-analyze']),
-        ('qgis', ['qgis']),
-        ('word', ['word', 'microsoft word']),
-        ('excel', ['excel', 'microsoft excel']),
-        ('libreoffice', ['libreoffice', 'soffice']),
-    ]
-    for app_key, needles in candidates:
-        if any(needle in haystack for needle in needles):
-            return [DesktopAction(action='launch_app', command=app_key)]
-
-    if profile == 'qgis' and ('karte' in haystack or 'geo' in haystack or 'gpkg' in haystack):
-        return [DesktopAction(action='launch_app', command='qgis')]
-    if profile in {'fledermaus', 'bioacoustics'} and any(needle in haystack for needle in ('fledermaus', 'bat', 'ruf', 'rufe', 'akustik')):
-        return [DesktopAction(action='launch_app', command='hipponalyze')]
-
-    return []
+    actions = infer_desktop_launch_actions(message, reply_text, profile)
+    parsed: list[DesktopAction] = []
+    for item in actions:
+        try:
+            parsed.append(DesktopAction.model_validate(item))
+        except Exception:
+            continue
+    return parsed
 
 
 def _desktop_agent_off_reply(message: str, profile: str | None = None) -> str:
@@ -464,6 +463,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "- Wenn der Benutzer einen QGIS-Workflow, eine Datei oder ein Projekt analysieren will, arbeite in dieser Reihenfolge: 1) passende App öffnen, 2) Datei/Projekt laden, 3) Analyse durchführen, 4) Ergebnis als Word-Report liefern.\n"
             "- Wenn der Benutzer ausdrücklich einen Word-Bericht möchte, erzeuge bevorzugt eine .docx-Datei und ergänze sie mit klarer Zusammenfassung statt nur Text in der Chat-Antwort.\n"
             "- Beim QGIS-Profil solltest du Geodaten immer artweise auswerten, Koordinaten und Kontakte prüfen, Cluster und mögliche Brutreviere erkennen und den Nutzer bei Bedarf nach weiteren Kennzahlen fragen.\n"
+            "- Wenn der Benutzer eine QGIS-Datei, ein Shapefile, ein GeoPackage oder eine Projektdatei nennt, starte QGIS direkt mit dieser Datei und lade nicht zuerst einen generischen Viewer.\n"
             "- Halte reply kurz und sag, was du tust.\n"
             "- Wenn du mehr Kontext brauchst, lege mit reply eine Rückfrage und desktop_actions leer.\n"
             "- Wenn ein Schritt riskant oder unklar ist, frage statt zu raten.\n"
