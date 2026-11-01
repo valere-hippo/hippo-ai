@@ -33,7 +33,7 @@ from app.services.project_skills import build_project_skills_context, build_shar
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
 from app.services.project_report_fallback import build_project_report_fallback
-from app.services.embedding_context import search_embedding_context, format_embedding_context
+from app.services.embedding_context import search_embedding_context, format_embedding_context, format_embedding_appendix
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.image_generation import build_image_scene_spec
 from app.services.hippo_identity import build_hippo_system_prompt
@@ -660,7 +660,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         or looks_like_project_detailed_report_request(payload.message)
     )
     if report_request and rag_sources:
-        rag_appendix = format_embedding_context(
+        rag_appendix = format_embedding_appendix(
             rag_sources,
             "Verwendete Wissensquellen",
         )

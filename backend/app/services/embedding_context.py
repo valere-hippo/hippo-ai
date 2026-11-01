@@ -186,10 +186,31 @@ def format_embedding_context(items: list[dict[str, Any]], title: str = "Gefunden
     return "\n".join(lines)
 
 
+def format_embedding_appendix(items: list[dict[str, Any]], title: str = "Verwendete Wissensquellen") -> str:
+    if not items:
+        return ""
+    lines = [f"## {title}", "", "Die folgenden Quellen wurden für die Antwort herangezogen oder priorisiert, weil sie zur Anfrage passen:"]
+    for item in items[:5]:
+        text_value = str(item.get("text") or "").strip()
+        if not text_value:
+            continue
+        score = float(item.get("score") or 0.0)
+        metadata = item.get("metadata")
+        metadata_source = metadata.get("source") if isinstance(metadata, dict) else None
+        source = str(item.get("source") or metadata_source or "store").strip() or "store"
+        excerpt = text_value.replace("\n", " ").strip()
+        if len(excerpt) > 260:
+            excerpt = excerpt[:257].rstrip() + "…"
+        lines.append(f"- {source} · Relevanz {score:.2f}: {excerpt}")
+    if len(lines) <= 3:
+        return ""
+    return "\n".join(lines)
+
+
 async def build_embedding_context_for_request(db: Any, query: str, project_id: int | None = None, limit: int = 5) -> str:
     scoped_items = await search_embedding_context(db, query, project_id=project_id, limit=limit)
     if not scoped_items:
         return ""
 
     title = "Projektspezifische Hinweise aus dem Embedding-Store" if project_id is not None else "Geteilte Hinweise aus dem Embedding-Store"
-    return format_embedding_context(scoped_items, title)
+    return format_embedding_appendix(scoped_items, title)
