@@ -17,23 +17,16 @@ from app.services.chat_payloads import (
     build_attachment_response_guidance,
     build_message_content,
     derive_conversation_title,
-    looks_like_image_analysis_request,
-    looks_like_geodata_visual_request,
-    looks_like_image_generation_request,
-    looks_like_file_generation_request,
-    looks_like_project_inventory_request,
-    looks_like_project_detailed_report_request,
     storage_text,
 )
-from app.services.generated_files import GeneratedFile, SCENE_PREFIX, build_generated_file_bytes_with_fallback, extract_generated_files
+from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.project_tools import build_tools_context
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
-from app.services.project_storage import build_geodata_map_file, build_project_files_context
+from app.services.project_storage import build_project_files_context
 from app.services.embedding_context import search_embedding_context, format_embedding_context
 from app.services.model_registry import resolve_chat_max_tokens
-from app.services.image_generation import build_image_scene_spec
 from app.services.hippo_identity import build_hippo_system_prompt
 import base64
 import json
@@ -114,19 +107,6 @@ def _serialize_message(message: ChatMessage) -> dict[str, object]:
         'content': message.content,
         'created_at': message.created_at.isoformat() if message.created_at else None,
     }
-
-
-def _infer_generated_filename(message: str) -> str:
-    text = (message or '').lower()
-    if 'pdf' in text:
-        return 'hippo-bericht.pdf'
-    if any(token in text for token in ['svg', 'karte', 'map', 'diagramm', 'chart', 'grafik']):
-        return 'hippo-bericht.svg'
-    if any(token in text for token in ['png', 'jpg', 'jpeg', 'bild', 'image', 'foto', 'foto']):
-        return 'hippo-bericht.png'
-    if any(token in text for token in ['rtf']):
-        return 'hippo-bericht.rtf'
-    return 'hippo-bericht.docx'
 
 
 async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends(get_current_user)) -> ChatResponse:
@@ -291,7 +271,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             if payload.project_folder_context and payload.project_folder_context.strip():
                 project_files_context = payload.project_folder_context.strip()
             elif conv_project is not None:
-                project_files_context = await build_project_files_context(conv_project, include_previews=not looks_like_project_inventory_request(payload.message), question=payload.message, source_prefixes=payload.project_source_prefixes)
+                project_files_context = await build_project_files_context(conv_project, include_previews=True, question=payload.message, source_prefixes=payload.project_source_prefixes)
             else:
                 project_files_context = (
                     "Kein lokaler Projektordner-Kontext vom Desktop erhalten. "
@@ -361,66 +341,55 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     if not settings.hippo_api_url:
         raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
 
-    direct_project_reply = None
-    if conv_project is not None and looks_like_project_inventory_request(payload.message):
-        direct_project_reply = project_files_context.strip()
-
-    if direct_project_reply:
-        reply_text = direct_project_reply
-    else:
-        request_timeout = int(getattr(settings, 'hippo_response_timeout_seconds_long' if (payload.attachments or conv_project is not None) else 'hippo_response_timeout_seconds', 600) or 600)
-        request_timeout = max(120, request_timeout)
-        async with httpx.AsyncClient(timeout=httpx.Timeout(request_timeout, connect=15.0)) as client:
-            headers = {"Content-Type": "application/json"}
-            if settings.hippo_api_key:
-                headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
-            model_name = settings.hippo_model
-            chat_api_url = _normalize_chat_base_url(settings.hippo_api_url)
-            if not chat_api_url:
-                raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
-            max_tokens = await resolve_chat_max_tokens(db, settings.hippo_response_max_tokens, settings.hippo_response_max_tokens_long)
-            if payload.attachments or conv_project is not None:
-                max_tokens = max(512, min(max_tokens, settings.hippo_response_max_tokens_long))
-            model_payload = {
-                "model": model_name,
-                "messages": hippo_messages,
-                "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
-                "max_tokens": max_tokens,
-            }
-            logger.info(
-                "Calling Hippo model | url=%s | model=%s | max_tokens=%s | timeout=%s | auth=%s | project=%s | attachments=%s",
-                settings.hippo_api_url,
-                model_name,
-                max_tokens,
-                request_timeout,
-                bool(settings.hippo_api_key),
-                getattr(conv_project, 'id', None),
-                bool(payload.attachments),
-            )
+    request_timeout = int(getattr(settings, 'hippo_response_timeout_seconds_long' if (payload.attachments or conv_project is not None) else 'hippo_response_timeout_seconds', 600) or 600)
+    request_timeout = max(120, request_timeout)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(request_timeout, connect=15.0)) as client:
+        headers = {"Content-Type": "application/json"}
+        if settings.hippo_api_key:
+            headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
+        model_name = settings.hippo_model
+        chat_api_url = _normalize_chat_base_url(settings.hippo_api_url)
+        if not chat_api_url:
+            raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
+        max_tokens = await resolve_chat_max_tokens(db, settings.hippo_response_max_tokens, settings.hippo_response_max_tokens_long)
+        if payload.attachments or conv_project is not None:
+            max_tokens = max(512, min(max_tokens, settings.hippo_response_max_tokens_long))
+        model_payload = {
+            "model": model_name,
+            "messages": hippo_messages,
+            "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
+            "max_tokens": max_tokens,
+        }
+        logger.info(
+            "Calling Hippo model | url=%s | model=%s | max_tokens=%s | timeout=%s | auth=%s | project=%s | attachments=%s",
+            settings.hippo_api_url,
+            model_name,
+            max_tokens,
+            request_timeout,
+            bool(settings.hippo_api_key),
+            getattr(conv_project, 'id', None),
+            bool(payload.attachments),
+        )
+        try:
+            r = await client.post(chat_api_url, json=model_payload, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            if isinstance(data, dict) and data.get('choices'):
+                reply_text = data['choices'][0]['message']['content']
+            else:
+                reply_text = str(data)
+        except httpx.HTTPStatusError as exc:
+            body = ""
             try:
-                r = await client.post(chat_api_url, json=model_payload, headers=headers)
-                r.raise_for_status()
-                data = r.json()
-                if isinstance(data, dict) and data.get('choices'):
-                    reply_text = data['choices'][0]['message']['content']
-                else:
-                    reply_text = str(data)
-            except httpx.HTTPStatusError as exc:
-                body = ""
-                try:
-                    body = exc.response.text[:500]
-                except Exception:
-                    pass
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
-                )
-            except Exception as e:
-                raise HTTPException(status_code=502, detail=f"Hippo API error: {e}")
-    try:
-        reply_text = re.sub(r"<think>[\s\S]*?<\/think>", "", reply_text, flags=re.IGNORECASE)
-    except Exception:
-        pass
+                body = exc.response.text[:500]
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=502,
+                detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
+            )
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Hippo API error: {e}")
 
     generated_files, cleaned_reply = extract_generated_files(reply_text)
     if cleaned_reply:

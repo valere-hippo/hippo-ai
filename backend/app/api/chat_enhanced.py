@@ -17,24 +17,16 @@ from app.services.chat_payloads import (
     build_attachment_response_guidance,
     build_message_content,
     derive_conversation_title,
-    looks_like_image_analysis_request,
-    looks_like_geodata_visual_request,
-    looks_like_image_generation_request,
-    looks_like_file_generation_request,
-    looks_like_project_inventory_request,
-    looks_like_project_detailed_report_request,
     storage_text,
 )
-from app.services.generated_files import GeneratedFile, SCENE_PREFIX, build_generated_file_bytes_with_fallback, extract_generated_files
-from app.services.desktop_workflows import infer_desktop_launch_actions
+from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.project_tools import build_tools_context
 from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
-from app.services.project_storage import build_geodata_map_file, build_project_files_context
+from app.services.project_storage import build_project_files_context
 from app.services.embedding_context import search_embedding_context, format_embedding_context
 from app.services.model_registry import resolve_chat_max_tokens
-from app.services.image_generation import build_image_scene_spec
 from app.services.hippo_identity import build_hippo_system_prompt
 import base64
 import json
@@ -114,19 +106,6 @@ def _extract_json_object(text: str) -> dict | None:
         except Exception:
             return None
     return None
-
-
-def _infer_generated_filename(message: str) -> str:
-    text = (message or '').lower()
-    if 'pdf' in text:
-        return 'hippo-bericht.pdf'
-    if any(token in text for token in ['svg', 'karte', 'map', 'diagramm', 'chart', 'grafik']):
-        return 'hippo-bericht.svg'
-    if any(token in text for token in ['png', 'jpg', 'jpeg', 'bild', 'image', 'foto']):
-        return 'hippo-bericht.png'
-    if 'rtf' in text:
-        return 'hippo-bericht.rtf'
-    return 'hippo-bericht.docx'
 
 
 
@@ -244,28 +223,6 @@ def _looks_qgis_related(text: str) -> bool:
     return any(keyword in haystack for keyword in qgis_keywords)
 
 
-def _infer_desktop_launch_action(message: str, reply_text: str, profile: str | None = None) -> list[DesktopAction]:
-    actions = infer_desktop_launch_actions(message, reply_text, profile)
-    parsed: list[DesktopAction] = []
-    for item in actions:
-        try:
-            parsed.append(DesktopAction.model_validate(item))
-        except Exception:
-            continue
-    return parsed
-
-
-def _desktop_agent_off_reply(message: str, profile: str | None = None) -> str:
-    profile_label = {
-        'qgis': 'QGIS',
-        'fledermaus': 'Fledermaus',
-        'bioacoustics': 'Fledermaus-/Akustik',
-        'custom': 'benutzerdefinierte Programme',
-    }.get((profile or '').strip().lower(), 'Programme')
-    return (
-        f"PC-Agent ist aus. Schalte PC-Agent ein, dann kann ich {profile_label} auf deinem PC öffnen, klicken, tippen und steuern. "
-        "Dann kann ich auch hipponalyze, QGIS, Word, Excel oder LibreOffice direkt bedienen."
-    )
 
 
 def _parse_desktop_actions(reply_text: str) -> tuple[str, list[DesktopAction]]:
@@ -371,14 +328,6 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         )
     )
     await db.commit()
-
-    if not payload.desktop_agent:
-        inferred_launch_actions = _infer_desktop_launch_action(payload.message, payload.message, payload.desktop_profile)
-        if inferred_launch_actions:
-            reply_text = _desktop_agent_off_reply(payload.message, payload.desktop_profile)
-            await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user_id, role='assistant', content=reply_text))
-            await db.commit()
-            return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=[], rag_sources=rag_sources, desktop_actions=[])
 
     conv_title = derive_conversation_title(payload.message, payload.attachments)
     await db.execute(
@@ -519,7 +468,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             if payload.project_folder_context and payload.project_folder_context.strip():
                 project_files_context = payload.project_folder_context.strip()
             elif conv_project is not None:
-                project_files_context = await build_project_files_context(conv_project, include_previews=not looks_like_project_inventory_request(payload.message), question=payload.message, source_prefixes=payload.project_source_prefixes)
+                project_files_context = await build_project_files_context(conv_project, include_previews=True, question=payload.message, source_prefixes=payload.project_source_prefixes)
             else:
                 project_files_context = (
                     "Kein lokaler Projektordner-Kontext vom Desktop erhalten. "
@@ -583,13 +532,6 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     if not settings.hippo_api_url:
         raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
 
-    direct_project_reply = None
-    if conv_project is not None and looks_like_project_inventory_request(payload.message):
-        direct_project_reply = project_files_context.strip()
-
-    if direct_project_reply:
-        reply_text = direct_project_reply
-    else:
         request_timeout = int(getattr(settings, 'hippo_response_timeout_seconds_long' if (payload.attachments or conv_project is not None) else 'hippo_response_timeout_seconds', 600) or 600)
         request_timeout = max(120, request_timeout)
         async with httpx.AsyncClient(timeout=httpx.Timeout(request_timeout, connect=15.0)) as client:
@@ -650,8 +592,6 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     if payload.desktop_agent:
         parsed_reply, desktop_actions = _parse_desktop_actions(reply_text)
         reply_text = parsed_reply
-        if not desktop_actions:
-            desktop_actions = _infer_desktop_launch_action(payload.message, reply_text, payload.desktop_profile)
 
     generated_files, cleaned_reply = extract_generated_files(reply_text)
     if cleaned_reply:
