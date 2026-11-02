@@ -32,8 +32,7 @@ from app.services.vision_analysis import build_vision_enriched_text
 from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.project_storage import build_geodata_map_file, build_project_files_context
-from app.services.project_report_fallback import build_project_report_fallback
-from app.services.embedding_context import search_embedding_context, format_embedding_context, format_embedding_appendix
+from app.services.embedding_context import search_embedding_context, format_embedding_context
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.image_generation import build_image_scene_spec
 from app.services.hippo_identity import build_hippo_system_prompt
@@ -634,38 +633,18 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                     body = exc.response.text[:500]
                 except Exception:
                     pass
-                report_request = conv_project is not None and (looks_like_file_generation_request(payload.message, payload.attachments) or looks_like_project_detailed_report_request(payload.message))
-                if report_request:
-                    reply_text = build_project_report_fallback(payload.message, project_files_context, getattr(conv_project, 'name', None))
-                else:
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
-                    )
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
+                )
             except Exception as e:
-                report_request = conv_project is not None and (looks_like_file_generation_request(payload.message, payload.attachments) or looks_like_project_detailed_report_request(payload.message))
-                if report_request:
-                    reply_text = build_project_report_fallback(payload.message, project_files_context, getattr(conv_project, 'name', None))
-                else:
-                    raise HTTPException(status_code=502, detail=f'Fehler der Hippo-API: {e}')
+                raise HTTPException(status_code=502, detail=f'Fehler der Hippo-API: {e}')
 
     # sanitize & store
     try:
         reply_text = re.sub(r"<think>[\s\S]*?<\/think>", "", reply_text, flags=re.IGNORECASE)
     except Exception:
         pass
-
-    report_request = conv_project is not None and (
-        looks_like_file_generation_request(payload.message, payload.attachments)
-        or looks_like_project_detailed_report_request(payload.message)
-    )
-    if report_request and rag_sources:
-        rag_appendix = format_embedding_appendix(
-            rag_sources,
-            "Verwendete Wissensquellen",
-        )
-        if rag_appendix and "Verwendete Wissensquellen" not in reply_text:
-            reply_text = f"{reply_text.strip()}\n\n{rag_appendix}".strip()
 
     desktop_actions: list[DesktopAction] = []
     if payload.desktop_agent:
@@ -675,52 +654,11 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             desktop_actions = _infer_desktop_launch_action(payload.message, reply_text, payload.desktop_profile)
 
     generated_files, cleaned_reply = extract_generated_files(reply_text)
-    file_request = looks_like_file_generation_request(payload.message, payload.attachments)
-    image_request = looks_like_image_generation_request(payload.message, payload.attachments)
-    geodata_visual_request = looks_like_geodata_visual_request(payload.message, payload.attachments)
-    geodata_direct_svg: tuple[str, str] | None = None
-
-    if image_request and conv_project is not None and geodata_visual_request:
-        geodata_file = build_geodata_map_file(conv_project, payload.message)
-        if geodata_file:
-            generated_files = [GeneratedFile(filename=geodata_file[0], content=geodata_file[1])]
-            geodata_direct_svg = geodata_file
-
-    if file_request and not generated_files and (cleaned_reply or reply_text.strip()):
-        generated_files = [GeneratedFile(filename=_infer_generated_filename(payload.message), content=(cleaned_reply or reply_text).strip())]
-
-    has_image_attachment = any((getattr(att, 'mime_type', '') or '').lower().startswith('image/') for att in (payload.attachments or []))
-    discarded_visual = False
-    if has_image_attachment and not image_request and looks_like_image_analysis_request(payload.message, payload.attachments):
-        if generated_files:
-            discarded_visual = True
-        generated_files = []
-
-    if image_request and not geodata_visual_request:
-        scene = await build_image_scene_spec(payload.message, cleaned_reply or reply_text)
-        fallback_title = derive_conversation_title(payload.message, payload.attachments)
-        fallback_name = re.sub(r"[^A-Za-z0-9]+", "_", fallback_title).strip("_").lower() or "hippo_image"
-        generated_files = [
-            GeneratedFile(
-                filename=f"{fallback_name}.png",
-                content=f"{SCENE_PREFIX}{json.dumps(scene, ensure_ascii=False)}",
-            )
-        ]
-        used_image_fallback = True
-    else:
-        used_image_fallback = False
+    if cleaned_reply:
+        reply_text = cleaned_reply
     serialized_files: list[dict[str, str]] = []
     for file in generated_files:
         try:
-            if geodata_direct_svg and file.filename == geodata_direct_svg[0]:
-                serialized_files.append(
-                    {
-                        "filename": file.filename,
-                        "mime_type": "image/svg+xml",
-                        "data_base64": base64.b64encode(file.content.encode("utf-8")).decode("ascii"),
-                    }
-                )
-                continue
             data, mime_type, filename = build_generated_file_bytes_with_fallback(file.filename, file.content)
         except Exception:
             # Skip unsupported render targets instead of crashing the chat route.
@@ -732,16 +670,6 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 "data_base64": base64.b64encode(data).decode("ascii"),
             }
         )
-    if used_image_fallback:
-        reply_text = "Datei wurde erstellt."
-    elif geodata_direct_svg and not cleaned_reply:
-        reply_text = "Karte wurde erstellt."
-    elif discarded_visual and not cleaned_reply:
-        reply_text = "Ich habe das Bild visuell analysiert, antworte aber bewusst als Text statt mit einer neuen Datei."
-    elif cleaned_reply:
-        reply_text = cleaned_reply
-    elif generated_files:
-        reply_text = "Datei wurde erstellt."
 
     await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user_id, role='assistant', content=reply_text))
     await db.commit()
