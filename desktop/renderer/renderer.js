@@ -1792,41 +1792,6 @@ function renderMessage(role, content, extras = {}) {
     bubble.appendChild(actions)
   }
 
-  if (extras.ragSources?.length && role === 'assistant') {
-    const sources = document.createElement('div')
-    sources.className = 'message-sources'
-
-    const label = document.createElement('div')
-    label.className = 'message-sources-label'
-    label.textContent = 'Verwendete Wissensquellen'
-
-    const chips = document.createElement('div')
-    chips.className = 'message-source-chips'
-
-    extras.ragSources.slice(0, 6).forEach((sourceItem, index) => {
-      const chip = document.createElement('div')
-      chip.className = 'message-source-chip'
-
-      const title = document.createElement('div')
-      title.className = 'message-source-title'
-      title.textContent = sourceItem?.metadata?.source || sourceItem?.source || `Quelle ${index + 1}`
-
-      const body = document.createElement('div')
-      body.className = 'message-source-body'
-      body.textContent = String(sourceItem?.text || '').slice(0, 180)
-
-      const meta = document.createElement('div')
-      meta.className = 'message-source-meta'
-      const score = Number(sourceItem?.score || 0)
-      meta.textContent = `Relevanz ${Number.isFinite(score) ? score.toFixed(2) : '0.00'}`
-      chip.append(title, body, meta)
-      chips.appendChild(chip)
-    })
-
-    sources.append(label, chips)
-    bubble.appendChild(sources)
-  }
-
   if (extras.generatedFiles?.length) {
     const artifacts = document.createElement('div')
     artifacts.className = 'generated-artifacts'
@@ -6405,7 +6370,7 @@ async function sendChat() {
       ? `${response.reply ? `${response.reply}\n\n` : ''}${savedReportNote}`
       : response.reply
     if (assistantReply) {
-      renderMessage('assistant', assistantReply, { generatedFiles: response.generated_files, ragSources: response.rag_sources })
+      renderMessage('assistant', assistantReply, { generatedFiles: response.generated_files })
     } else if (response.generated_files?.length) {
       renderMessage('assistant', 'Datei wurde erstellt.', { generatedFiles: response.generated_files })
     } else {

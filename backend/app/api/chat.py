@@ -20,12 +20,8 @@ from app.services.chat_payloads import (
     storage_text,
 )
 from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
-from app.services.project_tools import build_tools_context
-from app.services.vision_analysis import build_vision_enriched_text
-from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.project_storage import build_project_files_context
-from app.services.embedding_context import search_embedding_context, format_embedding_context
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.hippo_identity import build_hippo_system_prompt
 import base64
@@ -61,7 +57,6 @@ class ChatResponse(BaseModel):
     reply: str
     conversation_id: int | None = None
     generated_files: list[dict[str, str]] = Field(default_factory=list)
-    rag_sources: list[dict[str, object]] = Field(default_factory=list)
 
 
 class ChatMessageResponse(BaseModel):
@@ -78,20 +73,6 @@ class ConversationResponse(BaseModel):
     title: str | None
     created_at: str
     messages: list[ChatMessageResponse] | None = None
-
-
-class RagSourceResponse(BaseModel):
-    id: int | str | None = None
-    text: str
-    score: float | None = None
-    metadata: dict[str, object] | None = None
-    source: str | None = None
-
-
-class RagSourcesResponse(BaseModel):
-    conversation_id: int
-    sources: list[RagSourceResponse] = Field(default_factory=list)
-    summary: str = ''
 
 
 class ChatMessageEditRequest(BaseModel):
@@ -247,25 +228,6 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 
-        try:
-            if conv_project is not None:
-                project_skills_context = await build_project_skills_context(db, conv_project.id, int(current_user.id), payload.message, limit=5)
-            else:
-                project_skills_context = await build_shared_skills_context(db, payload.message, limit=5)
-            if project_skills_context:
-                hippo_messages.insert(
-                    2,
-                    {
-                        "role": "system",
-                        "content": (
-                            f"{project_skills_context}\n\n"
-                            "Diese Skills gelten für jeden Chat dieses Projekts. Behandle sie als verbindliche Projektrichtlinien und priorisiere sie vor allgemeinen Formulierungen, solange sie der Benutzeranfrage nicht widersprechen."
-                        ),
-                    },
-                )
-        except Exception:
-            pass
-
         project_files_context = ''
         try:
             if payload.project_folder_context and payload.project_folder_context.strip():
@@ -289,46 +251,6 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                     ),
                 },
             )
-        except Exception:
-            pass
-
-        rag_sources: list[dict[str, object]] = []
-        try:
-            rag_sources = await search_embedding_context(db, payload.message, project_id=conv_project.id if conv_project is not None else None, limit=6)
-            rag_context = format_embedding_context(
-                rag_sources,
-                "Projektspezifische Hinweise aus dem Embedding-Store" if conv_project is not None else "Geteilte Hinweise aus dem Embedding-Store",
-            )
-            if rag_context:
-                hippo_messages.insert(
-                    4,
-                    {
-                        "role": "system",
-                        "content": (
-                            f"{rag_context}\n\n"
-                            "Nutze diese Embedding-Hinweise als ergänzende Referenz für Gesetze, Leitfäden, Vorlagen, alte Berichte und domänenspezifisches Wissen. "
-                            "Priorisiere sie nur, wenn sie zur Anfrage passen, und formuliere daraus einen klaren, fachlichen Antwortweg."
-                        ),
-                    },
-                )
-        except Exception:
-            rag_sources = []
-
-        try:
-            tools_context = await build_tools_context(db, payload.message, limit=6, user_id=int(current_user.id), project_id=conv_project.id if conv_project is not None else None)
-            if tools_context:
-                hippo_messages.insert(
-                    4,
-                    {
-                        "role": "system",
-                        "content": (
-                            f"{tools_context}\n\n"
-                            "Diese Tools stehen dem Agenten zur Verfügung. Nutze sie nur, wenn sie zur aktuellen Frage passen. "
-                            "Bevorzuge klar formatbezogene Tools für PDFs, Tabellen, Präsentationen, Bilder und Geodaten, wenn solche Dateien im Projekt vorhanden sind. "
-                            "Bevorzuge klare, ausführbare Workflows statt allgemeiner Vermutungen."
-                        ),
-                    },
-                )
         except Exception:
             pass
 
@@ -420,7 +342,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     )
     await db.commit()
 
-    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, rag_sources=rag_sources)
+    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files)
 
 
 @router.get('/conversations')
@@ -490,54 +412,6 @@ async def get_conversation(conv_id: int, db: DbSession, current_user: User = Dep
         },
         'messages': messages,
     }
-
-
-@router.get('/conversations/{conv_id}/rag-sources', response_model=RagSourcesResponse)
-async def get_conversation_rag_sources(conv_id: int, db: DbSession, current_user: User = Depends(get_current_user)):
-    res = await db.execute(select(Conversation).where(Conversation.id == conv_id))
-    conv = res.scalar_one_or_none()
-    if conv is None:
-        raise HTTPException(status_code=404, detail='Nicht gefunden.')
-    if conv.project_id is not None:
-        result = await db.execute(select(Project).where(Project.id == conv.project_id))
-        proj = result.scalar_one_or_none()
-        from app.services.permissions import has_project_permission
-        allowed = await has_project_permission(db, current_user, proj, PermissionLevel.READ)
-        if not allowed:
-            raise HTTPException(status_code=403, detail='Zugriff verweigert.')
-
-    msg_res = await db.execute(
-        select(ChatMessage)
-        .where(ChatMessage.conversation_id == conv_id, ChatMessage.role == 'user')
-        .order_by(ChatMessage.created_at.desc())
-        .limit(1)
-    )
-    latest_user_message = msg_res.scalar_one_or_none()
-    if latest_user_message is None:
-        return RagSourcesResponse(conversation_id=conv_id, sources=[], summary='')
-
-    try:
-        sources_raw = await search_embedding_context(db, latest_user_message.content, project_id=conv.project_id, limit=6)
-        sources = [
-            RagSourceResponse(
-                id=item.get('id'),
-                text=str(item.get('text') or ''),
-                score=float(item.get('score') or 0.0),
-                metadata=item.get('metadata') if isinstance(item.get('metadata'), dict) else None,
-                source=str(item.get('source') or '') or None,
-            )
-            for item in sources_raw
-            if str(item.get('text') or '').strip()
-        ]
-        summary = format_embedding_context(
-            sources_raw,
-            'Projektspezifische Hinweise aus dem Embedding-Store' if conv.project_id is not None else 'Geteilte Hinweise aus dem Embedding-Store',
-        )
-    except Exception:
-        sources = []
-        summary = ''
-
-    return RagSourcesResponse(conversation_id=conv_id, sources=sources, summary=summary)
 
 
 @router.patch('/messages/{message_id}')

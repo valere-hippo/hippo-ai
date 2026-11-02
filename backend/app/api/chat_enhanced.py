@@ -20,12 +20,8 @@ from app.services.chat_payloads import (
     storage_text,
 )
 from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
-from app.services.project_tools import build_tools_context
-from app.services.vision_analysis import build_vision_enriched_text
-from app.services.project_skills import build_project_skills_context, build_shared_skills_context
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.project_storage import build_project_files_context
-from app.services.embedding_context import search_embedding_context, format_embedding_context
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.hippo_identity import build_hippo_system_prompt
 import base64
@@ -82,7 +78,6 @@ class ChatResponse(BaseModel):
     reply: str
     conversation_id: int | None = None
     generated_files: list[dict[str, str]] = Field(default_factory=list)
-    rag_sources: list[dict[str, object]] = Field(default_factory=list)
     desktop_actions: list[DesktopAction] = Field(default_factory=list)
 
 
@@ -444,25 +439,6 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         )
         hippo_messages.insert(1, {"role": "system", "content": project_sys})
 
-        try:
-            if conv_project is not None:
-                project_skills_context = await build_project_skills_context(db, conv_project.id, int(current_user.id), payload.message, limit=5)
-            else:
-                project_skills_context = await build_shared_skills_context(db, payload.message, limit=5)
-            if project_skills_context:
-                hippo_messages.insert(
-                    2,
-                    {
-                        "role": "system",
-                        "content": (
-                            f"{project_skills_context}\n\n"
-                            "Diese Skills gelten für jeden Chat dieses Projekts. Behandle sie als verbindliche Projektrichtlinien und priorisiere sie vor allgemeinen Formulierungen, solange sie der Benutzeranfrage nicht widersprechen."
-                        ),
-                    },
-                )
-        except Exception:
-            pass
-
         project_files_context = ''
         try:
             if payload.project_folder_context and payload.project_folder_context.strip():
@@ -489,98 +465,58 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             pass
 
-    rag_sources: list[dict[str, object]] = []
-    try:
-        rag_sources = await search_embedding_context(db, payload.message, project_id=conv_project.id if conv_project is not None else None, limit=6)
-        rag_context = format_embedding_context(
-            rag_sources,
-            "Projektspezifische Hinweise aus dem Embedding-Store" if conv_project is not None else "Geteilte Hinweise aus dem Embedding-Store",
-        )
-        if rag_context:
-            hippo_messages.insert(
-                4,
-                {
-                    "role": "system",
-                    "content": (
-                        f"{rag_context}\n\n"
-                        "Nutze diese Embedding-Hinweise als ergänzende Referenz für Gesetze, Leitfäden, Vorlagen, alte Berichte und domänenspezifisches Wissen. "
-                        "Priorisiere sie nur, wenn sie zur Anfrage passen, und formuliere daraus einen klaren, fachlichen Antwortweg."
-                    ),
-                },
-            )
-    except Exception:
-        rag_sources = []
-
-    try:
-        tools_context = await build_tools_context(db, payload.message, limit=6, user_id=int(current_user.id), project_id=conv_project.id if conv_project is not None else None)
-        if tools_context:
-            hippo_messages.insert(
-                1 if conv_project is None else 4,
-                {
-                    "role": "system",
-                    "content": (
-                        f"{tools_context}\n\n"
-                        "Diese Tools stehen dem Agenten zur Verfügung. Nutze sie als Arbeitsmittel und beschreibe danach klar die Ergebnisse. "
-                        "Bevorzuge klar formatbezogene Tools für PDFs, Tabellen, Präsentationen, Bilder und Geodaten, wenn solche Dateien im Projekt vorhanden sind."
-                    ),
-                },
-            )
-    except Exception:
-        pass
-
-    # call Hippo chat completions
     if not settings.hippo_api_url:
         raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
 
-        request_timeout = int(getattr(settings, 'hippo_response_timeout_seconds_long' if (payload.attachments or conv_project is not None) else 'hippo_response_timeout_seconds', 600) or 600)
-        request_timeout = max(120, request_timeout)
-        async with httpx.AsyncClient(timeout=httpx.Timeout(request_timeout, connect=15.0)) as client:
-            headers = {"Content-Type": "application/json"}
-            if settings.hippo_api_key:
-                headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
-            model_name = settings.hippo_model
-            chat_api_url = _normalize_chat_base_url(settings.hippo_api_url)
-            if not chat_api_url:
-                raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
-            max_tokens = await resolve_chat_max_tokens(db, settings.hippo_response_max_tokens, settings.hippo_response_max_tokens_long)
-            if payload.attachments or conv_project is not None:
-                max_tokens = max(512, min(max_tokens, settings.hippo_response_max_tokens_long))
-            payload_h = {
-                "model": model_name,
-                "messages": hippo_messages,
-                "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
-                "max_tokens": max_tokens,
-            }
-            logger.info(
-                "Calling Hippo model | url=%s | model=%s | max_tokens=%s | timeout=%s | auth=%s | project=%s | attachments=%s",
-                settings.hippo_api_url,
-                model_name,
-                max_tokens,
-                request_timeout,
-                bool(settings.hippo_api_key),
-                getattr(conv_project, 'id', None),
-                bool(payload.attachments),
-            )
+    request_timeout = int(getattr(settings, 'hippo_response_timeout_seconds_long' if (payload.attachments or conv_project is not None) else 'hippo_response_timeout_seconds', 600) or 600)
+    request_timeout = max(120, request_timeout)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(request_timeout, connect=15.0)) as client:
+        headers = {"Content-Type": "application/json"}
+        if settings.hippo_api_key:
+            headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
+        model_name = settings.hippo_model
+        chat_api_url = _normalize_chat_base_url(settings.hippo_api_url)
+        if not chat_api_url:
+            raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
+        max_tokens = await resolve_chat_max_tokens(db, settings.hippo_response_max_tokens, settings.hippo_response_max_tokens_long)
+        if payload.attachments or conv_project is not None:
+            max_tokens = max(512, min(max_tokens, settings.hippo_response_max_tokens_long))
+        payload_h = {
+            "model": model_name,
+            "messages": hippo_messages,
+            "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
+            "max_tokens": max_tokens,
+        }
+        logger.info(
+            "Calling Hippo model | url=%s | model=%s | max_tokens=%s | timeout=%s | auth=%s | project=%s | attachments=%s",
+            settings.hippo_api_url,
+            model_name,
+            max_tokens,
+            request_timeout,
+            bool(settings.hippo_api_key),
+            getattr(conv_project, 'id', None),
+            bool(payload.attachments),
+        )
+        try:
+            r = await client.post(chat_api_url, json=payload_h, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            if isinstance(data, dict) and data.get('choices'):
+                reply_text = data['choices'][0]['message']['content']
+            else:
+                reply_text = str(data)
+        except httpx.HTTPStatusError as exc:
+            body = ""
             try:
-                r = await client.post(chat_api_url, json=payload_h, headers=headers)
-                r.raise_for_status()
-                data = r.json()
-                if isinstance(data, dict) and data.get('choices'):
-                    reply_text = data['choices'][0]['message']['content']
-                else:
-                    reply_text = str(data)
-            except httpx.HTTPStatusError as exc:
-                body = ""
-                try:
-                    body = exc.response.text[:500]
-                except Exception:
-                    pass
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
-                )
-            except Exception as e:
-                raise HTTPException(status_code=502, detail=f'Fehler der Hippo-API: {e}')
+                body = exc.response.text[:500]
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=502,
+                detail=f"Hippo-API antwortete mit HTTP {exc.response.status_code}. {body}".strip(),
+            )
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f'Fehler der Hippo-API: {e}')
 
     # sanitize & store
     try:
@@ -614,4 +550,4 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user_id, role='assistant', content=reply_text))
     await db.commit()
 
-    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, rag_sources=rag_sources, desktop_actions=desktop_actions)
+    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, desktop_actions=desktop_actions)
