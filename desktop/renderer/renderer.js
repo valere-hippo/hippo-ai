@@ -1163,7 +1163,10 @@ function renderContext() {
       ragChip.className = 'message-source-chip'
       const ragTitleLine = document.createElement('div')
       ragTitleLine.className = 'message-source-title'
-      ragTitleLine.textContent = item?.metadata?.source || item?.source || `Quelle ${index + 1}`
+      const ragSourceName = String(item?.metadata?.source || item?.source || '').trim().toLowerCase()
+      ragTitleLine.textContent = ragSourceName && !['global', 'store', 'remote', 'local'].includes(ragSourceName)
+        ? String(item?.metadata?.source || item?.source)
+        : `Hinweis ${index + 1}`
       const ragBody = document.createElement('div')
       ragBody.className = 'message-source-body'
       ragBody.textContent = String(item?.text || '').slice(0, 220)
@@ -1621,7 +1624,7 @@ function renderConversations() {
         const project = state.projects.find((item) => item.id === conversation.project_id)
         chip.textContent = project ? project.name : 'Projekt'
       } else {
-        chip.textContent = 'Global'
+        chip.remove()
       }
 
       const actions = document.createElement('div')
