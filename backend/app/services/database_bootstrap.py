@@ -88,6 +88,16 @@ async def ensure_database_schema_and_tables(engine: AsyncEngine) -> None:
         )
         await conn.execute(
             text(
+                f'CREATE TABLE IF NOT EXISTS "{settings.postgres_schema}"."ai_conversation_memories" ('
+                'conversation_id INTEGER PRIMARY KEY REFERENCES "' + settings.postgres_schema + '"."ai_conversations"(id) ON DELETE CASCADE, '
+                'summary_text TEXT NULL, '
+                'facts_text TEXT NULL, '
+                'updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()'
+                ')'
+            )
+        )
+        await conn.execute(
+            text(
                 f'ALTER TABLE IF EXISTS "{settings.postgres_schema}"."ai_chat_profiles" '
                 'ADD COLUMN IF NOT EXISTS memory_notes TEXT'
             )

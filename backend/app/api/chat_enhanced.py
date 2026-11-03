@@ -21,6 +21,7 @@ from app.services.chat_payloads import (
 )
 from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
+from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory
 from app.services.project_storage import build_project_files_context
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.hippo_identity import build_hippo_system_prompt
@@ -338,20 +339,16 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     res = await db.execute(q)
     messages = res.scalars().all()
 
-    hippo_messages = []
-    for m in messages:
-        role = 'user' if m.role == 'user' else 'assistant' if m.role == 'assistant' else 'system'
-        hippo_messages.append({"role": role, "content": m.content})
-
-    if payload.attachments:
-        hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=True)
-
-    # global system prompt
-    hippo_messages.insert(0, {"role": "system", "content": build_hippo_system_prompt()})
+    memory = await load_conversation_memory(db, conv_id)
+    hippo_messages = [{"role": "system", "content": build_hippo_system_prompt()}]
     if chat_profile is not None:
         profile_context = build_chat_profile_context(chat_profile, conv_project.name if conv_project else None)
         if profile_context:
-            hippo_messages.insert(1, {"role": "system", "content": profile_context})
+            hippo_messages.append({"role": "system", "content": profile_context})
+    if memory is not None:
+        memory_context = build_conversation_memory_context(memory)
+        if memory_context:
+            hippo_messages.append({"role": "system", "content": memory_context})
 
     if payload.desktop_agent:
         profile = (payload.desktop_profile or 'generic').strip().lower()
@@ -465,6 +462,11 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             pass
 
+    recent_messages = messages[-18:]
+    for m in recent_messages:
+        role = 'user' if m.role == 'user' else 'assistant' if m.role == 'assistant' else 'system'
+        hippo_messages.append({"role": role, "content": m.content})
+
     if not settings.hippo_api_url:
         raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
 
@@ -549,5 +551,17 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
     await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user_id, role='assistant', content=reply_text))
     await db.commit()
+
+    try:
+        await refresh_conversation_memory(
+            db,
+            conv_id,
+            recent_messages=messages[-18:],
+            assistant_reply=reply_text,
+            project_name=conv_project.name if conv_project else None,
+            profile_name=getattr(chat_profile, 'name', None),
+        )
+    except Exception:
+        logger.warning("conversation memory update failed for conversation %s", conv_id)
 
     return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, desktop_actions=desktop_actions)

@@ -21,6 +21,7 @@ from app.services.chat_payloads import (
 )
 from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
+from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory
 from app.services.project_storage import build_project_files_context
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.hippo_identity import build_hippo_system_prompt
@@ -193,16 +194,16 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
     res = await db.execute(q)
     messages = res.scalars().all()
 
-    hippo_messages = []
-    for m in messages:
-        role = 'user' if m.role == 'user' else 'assistant' if m.role == 'assistant' else 'system'
-        hippo_messages.append({"role": role, "content": m.content})
-
-    hippo_messages.insert(0, {"role": "system", "content": build_hippo_system_prompt()})
+    memory = await load_conversation_memory(db, conv_id)
+    hippo_messages = [{"role": "system", "content": build_hippo_system_prompt()}]
     if profile is not None:
         profile_context = build_chat_profile_context(profile, conv_project.name if conv_project else None)
         if profile_context:
-            hippo_messages.insert(1, {"role": "system", "content": profile_context})
+            hippo_messages.append({"role": "system", "content": profile_context})
+    if memory is not None:
+        memory_context = build_conversation_memory_context(memory)
+        if memory_context:
+            hippo_messages.append({"role": "system", "content": memory_context})
 
     # If conversation is tied to a project, inform the assistant it may generate files for that project
     if conv_project is not None:
@@ -226,7 +227,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, and spatial clusters.\n"
             f"{build_attachment_response_guidance()}"
         )
-        hippo_messages.insert(1, {"role": "system", "content": project_sys})
+        hippo_messages.append({"role": "system", "content": project_sys})
 
         project_files_context = ''
         try:
@@ -239,8 +240,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                     "Kein lokaler Projektordner-Kontext vom Desktop erhalten. "
                     "Antworte nicht mit erfundenen Dateinamen und fordere bei Bedarf den Benutzer auf, den lokalen Ordner im Desktop zu verbinden."
                 )
-            hippo_messages.insert(
-                3,
+            hippo_messages.append(
                 {
                     "role": "system",
                     "content": (
@@ -253,6 +253,11 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             )
         except Exception:
             pass
+
+    recent_messages = messages[-18:]
+    for m in recent_messages:
+        role = 'user' if m.role == 'user' else 'assistant' if m.role == 'assistant' else 'system'
+        hippo_messages.append({"role": role, "content": m.content})
 
     if payload.attachments:
         hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=True)
@@ -341,6 +346,18 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         )
     )
     await db.commit()
+
+    try:
+        await refresh_conversation_memory(
+            db,
+            conv_id,
+            recent_messages=messages[-18:],
+            assistant_reply=reply_text,
+            project_name=conv_project.name if conv_project else None,
+            profile_name=getattr(profile, 'name', None),
+        )
+    except Exception:
+        logger.warning("conversation memory update failed for conversation %s", conv_id)
 
     return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files)
 
