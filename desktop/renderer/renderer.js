@@ -29,6 +29,7 @@ const state = {
   recording: null,
   isRecording: false,
   projectConversationMemory: new Map(),
+  currentConversationMemory: null,
   projectFolderContextCache: new Map(),
   projectFolderScanState: new Map(),
   projectRefreshJobs: new Map(),
@@ -1167,6 +1168,80 @@ function renderContext() {
     summary.appendChild(profileCard)
   }
 
+  if (state.currentConversationId) {
+    const memoryCard = document.createElement('div')
+    memoryCard.className = 'project-sync-progress'
+
+    const memoryHeader = document.createElement('div')
+    memoryHeader.className = 'project-sync-progress-header'
+
+    const memoryTitle = document.createElement('div')
+    memoryTitle.className = 'project-sync-progress-title'
+    memoryTitle.textContent = 'Konversations-Memory'
+
+    const memoryMeta = document.createElement('div')
+    memoryMeta.className = 'project-sync-progress-meta'
+    memoryMeta.textContent = state.currentConversationMemory?.updated_at
+      ? `Zuletzt gespeichert: ${new Date(state.currentConversationMemory.updated_at).toLocaleString()}`
+      : 'Noch keine gespeicherte Memory vorhanden.'
+
+    memoryHeader.append(memoryTitle, memoryMeta)
+
+    const summaryField = document.createElement('div')
+    summaryField.className = 'field-group'
+    const summaryLabel = document.createElement('label')
+    summaryLabel.className = 'field-label'
+    summaryLabel.textContent = 'Zusammenfassung'
+    const summaryInput = document.createElement('textarea')
+    summaryInput.className = 'text-input'
+    summaryInput.rows = 4
+    summaryInput.placeholder = 'Kurze, dauerhafte Zusammenfassung dieses Chats...'
+    summaryInput.value = state.currentConversationMemory?.summary_text || ''
+    summaryField.append(summaryLabel, summaryInput)
+
+    const factsField = document.createElement('div')
+    factsField.className = 'field-group'
+    const factsLabel = document.createElement('label')
+    factsLabel.className = 'field-label'
+    factsLabel.textContent = 'Stabile Fakten / Entscheidungen'
+    const factsInput = document.createElement('textarea')
+    factsInput.className = 'text-input'
+    factsInput.rows = 5
+    factsInput.placeholder = 'Wichtige Fakten, Entscheidungen, offene Punkte...'
+    factsInput.value = state.currentConversationMemory?.facts_text || ''
+    factsField.append(factsLabel, factsInput)
+
+    const memoryActions = document.createElement('div')
+    memoryActions.className = 'project-sync-progress-actions'
+    const saveButton = document.createElement('button')
+    saveButton.type = 'button'
+    saveButton.className = 'ghost-action'
+    saveButton.textContent = 'Memory speichern'
+    saveButton.addEventListener('click', async () => {
+      saveButton.disabled = true
+      try {
+        const payload = await apiJson(`/chat/conversations/${state.currentConversationId}/memory`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            summary_text: summaryInput.value,
+            facts_text: factsInput.value,
+          }),
+        })
+        state.currentConversationMemory = payload
+        renderContext()
+        showToast('Memory gespeichert')
+      } catch (error) {
+        showToast(error.message || 'Memory konnte nicht gespeichert werden', 'error')
+      } finally {
+        saveButton.disabled = false
+      }
+    })
+    memoryActions.appendChild(saveButton)
+
+    memoryCard.append(memoryHeader, summaryField, factsField, memoryActions)
+    summary.appendChild(memoryCard)
+  }
+
   const syncJob = project ? state.projectRefreshJobs.get(project.id) : null
   if (syncJob) {
     const progressCard = document.createElement('div')
@@ -2279,11 +2354,13 @@ function normalizeActiveConversationState() {
   const conversationExists = state.conversations.some((conversation) => conversation.id === state.currentConversationId)
   if (!conversationExists) {
     state.currentConversationId = null
+    state.currentConversationMemory = null
   }
 
   if (state.selectedProjectId && !state.projects.some((project) => project.id === state.selectedProjectId)) {
     state.selectedProjectId = null
     state.currentConversationId = null
+    state.currentConversationMemory = null
   }
 
   for (const [projectId, conversationId] of state.projectConversationMemory.entries()) {
@@ -2537,6 +2614,7 @@ async function selectProject(projectId) {
 
 async function startNewChat() {
   state.currentConversationId = null
+  state.currentConversationMemory = null
   renderConversations()
   renderContext()
   clearChatLog()
@@ -2567,6 +2645,7 @@ async function openConversationById(conversationId) {
   showLoader('Unterhaltung wird geladen...')
   try {
     const payload = await apiJson(`/chat/conversations/${conversationId}`)
+    state.currentConversationMemory = payload.memory || null
     renderConversationMessages(payload.messages || [])
     renderContext()
   } catch (error) {
@@ -2574,6 +2653,16 @@ async function openConversationById(conversationId) {
   } finally {
     hideLoader()
   }
+}
+
+async function saveCurrentConversationMemory(summaryText, factsText) {
+  if (!state.currentConversationId) return null
+  const payload = await apiJson(`/chat/conversations/${state.currentConversationId}/memory`, {
+    method: 'PUT',
+    body: JSON.stringify({ summary_text: summaryText, facts_text: factsText }),
+  })
+  state.currentConversationMemory = payload
+  return payload
 }
 
 function resizeComposer() {

@@ -56,6 +56,15 @@ async def load_conversation_memory(db: Any, conversation_id: int) -> Conversatio
     return result.scalar_one_or_none()
 
 
+async def save_conversation_memory(
+    db: Any,
+    conversation_id: int,
+    summary_text: str,
+    facts_text: str,
+) -> None:
+    await _upsert_conversation_memory(db, conversation_id, summary_text, facts_text)
+
+
 def build_conversation_memory_context(memory: ConversationMemory | None) -> str:
     if memory is None:
         return ""

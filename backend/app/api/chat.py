@@ -7,6 +7,7 @@ import logging
 from app.api.dependencies import get_current_user, DbSession
 from app.models.user import User, UserRole
 from app.models.chat import Conversation, ChatMessage
+from app.models.conversation_memory import ConversationMemory
 from app.services.conversation_threads import choose_project_conversation_id
 from app.models.project import Project
 from app.models.permission import PermissionLevel
@@ -21,7 +22,7 @@ from app.services.chat_payloads import (
 )
 from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
-from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory
+from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory, save_conversation_memory
 from app.services.project_storage import build_project_files_context
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.hippo_identity import build_hippo_system_prompt
@@ -78,6 +79,18 @@ class ConversationResponse(BaseModel):
 
 class ChatMessageEditRequest(BaseModel):
     content: str = Field(min_length=1, max_length=12000)
+
+
+class ConversationMemoryResponse(BaseModel):
+    conversation_id: int
+    summary_text: str | None = None
+    facts_text: str | None = None
+    updated_at: str | None = None
+
+
+class ConversationMemoryUpdateRequest(BaseModel):
+    summary_text: str | None = Field(default=None, max_length=20000)
+    facts_text: str | None = Field(default=None, max_length=20000)
 
 
 def _serialize_message(message: ChatMessage) -> dict[str, object]:
@@ -419,6 +432,7 @@ async def get_conversation(conv_id: int, db: DbSession, current_user: User = Dep
     # fetch messages
     msgs = await db.execute(select(ChatMessage).where(ChatMessage.conversation_id == conv_id).order_by(ChatMessage.created_at))
     messages = [_serialize_message(message) for message in msgs.scalars().all()]
+    memory = await load_conversation_memory(db, conv_id)
     return {
         'conversation': {
             'id': conv.id,
@@ -428,6 +442,38 @@ async def get_conversation(conv_id: int, db: DbSession, current_user: User = Dep
             'created_at': conv.created_at.isoformat() if conv.created_at else None,
         },
         'messages': messages,
+        'memory': {
+            'conversation_id': conv_id,
+            'summary_text': getattr(memory, 'summary_text', None),
+            'facts_text': getattr(memory, 'facts_text', None),
+            'updated_at': memory.updated_at.isoformat() if memory is not None and memory.updated_at else None,
+        },
+    }
+
+
+@router.put('/conversations/{conv_id}/memory')
+async def update_conversation_memory(conv_id: int, payload: ConversationMemoryUpdateRequest, db: DbSession, current_user: User = Depends(get_current_user)):
+    res = await db.execute(select(Conversation).where(Conversation.id == conv_id))
+    conv = res.scalar_one_or_none()
+    if conv is None:
+        raise HTTPException(status_code=404, detail='Nicht gefunden.')
+    if conv.project_id is not None:
+        result = await db.execute(select(Project).where(Project.id == conv.project_id))
+        proj = result.scalar_one_or_none()
+        from app.services.permissions import has_project_permission
+        allowed = await has_project_permission(db, current_user, proj, PermissionLevel.READ)
+        if not allowed:
+            raise HTTPException(status_code=403, detail='Zugriff verweigert.')
+
+    summary_text = (payload.summary_text or '').strip()
+    facts_text = (payload.facts_text or '').strip()
+    await save_conversation_memory(db, conv_id, summary_text, facts_text)
+    memory = await load_conversation_memory(db, conv_id)
+    return {
+        'conversation_id': conv_id,
+        'summary_text': getattr(memory, 'summary_text', None),
+        'facts_text': getattr(memory, 'facts_text', None),
+        'updated_at': memory.updated_at.isoformat() if memory is not None and memory.updated_at else None,
     }
 
 
