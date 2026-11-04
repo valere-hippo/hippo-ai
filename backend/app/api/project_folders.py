@@ -11,6 +11,7 @@ from app.models.project import Project
 from app.models.user import UserRole
 from app.services.permissions import has_project_permission
 from app.models.permission import PermissionLevel
+from app.services.project_access import build_default_source_scope
 
 router = APIRouter(prefix="/projects", tags=["project-folders"]) 
 
@@ -55,7 +56,11 @@ async def set_project_folder(project_id: int, db: DbSession, payload: ProjectFol
     path = Path(folder).expanduser()
     if not (path.is_absolute() or PureWindowsPath(folder).is_absolute()):
         raise HTTPException(status_code=400, detail='Bitte einen absoluten Ordnerpfad auswählen.')
-    await db.execute(update(Project).where(Project.id == project_id).values(watched_folder=str(path)))
+    source_scope = build_default_source_scope(str(path))
+    values = {'watched_folder': str(path)}
+    if source_scope is not None:
+        values['source_scope'] = json.dumps(source_scope, ensure_ascii=False)
+    await db.execute(update(Project).where(Project.id == project_id).values(**values))
     await db.commit()
     return {'project_id': project_id, 'folder': str(path)}
 

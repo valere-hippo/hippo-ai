@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path, PureWindowsPath
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,6 +13,7 @@ from app.models.chat_profile import ChatProfile
 from app.models.user import UserRole
 from app.schemas.project import ProjectCreate, ProjectMemoryUpdate, ProjectResponse
 from app.services.notifications import notify_project_created
+from app.services.project_access import build_default_source_scope
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -59,6 +61,8 @@ async def create_project(payload: ProjectCreate, db: DbSession, current_user=Dep
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
         default_profile_id = profile.id
 
+    source_scope = build_default_source_scope(watched_folder)
+
     stmt = insert(Project).values(
         name=payload.name.strip(),
         description=payload.description,
@@ -70,6 +74,7 @@ async def create_project(payload: ProjectCreate, db: DbSession, current_user=Dep
         default_profile_id=default_profile_id,
         pcloud_path=pcloud_path,
         pcloud_folder_id=pcloud_folder_id,
+        source_scope=json.dumps(source_scope, ensure_ascii=False) if source_scope else None,
     ).returning(Project)
 
     result = await db.execute(stmt)
@@ -133,6 +138,7 @@ async def update_project(project_id: int, payload: ProjectCreate, db: DbSession,
         if profile.owner_id != current_user.id and current_user.role != UserRole.ADMIN:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
         default_profile_id = profile.id
+    source_scope = build_default_source_scope(watched_folder)
     updates = {
         "name": payload.name.strip(),
         "description": payload.description,
@@ -143,6 +149,7 @@ async def update_project(project_id: int, payload: ProjectCreate, db: DbSession,
         "default_profile_id": default_profile_id,
         "pcloud_path": pcloud_path,
         "pcloud_folder_id": pcloud_folder_id,
+        "source_scope": json.dumps(source_scope, ensure_ascii=False) if source_scope else None,
     }
     await db.execute(Project.__table__.update().where(Project.id == project_id).values(**updates))
     await db.commit()
