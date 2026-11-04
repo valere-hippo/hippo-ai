@@ -16,6 +16,11 @@ class ProjectCreate(BaseModel):
     pcloud_folder_id: int | None = Field(default=None, ge=1)
 
 
+class ProjectMemoryUpdate(BaseModel):
+    memory_summary: str | None = None
+    memory_facts: str | None = None
+
+
 class ProjectResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

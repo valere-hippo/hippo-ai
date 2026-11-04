@@ -1147,7 +1147,7 @@ function renderContext() {
 
     const profileTitle = document.createElement('div')
     profileTitle.className = 'project-sync-progress-title'
-    profileTitle.textContent = `Aktives Profil: ${currentProfile.name}`
+    profileTitle.textContent = `Globales Profil: ${currentProfile.name}`
 
     const profileMeta = document.createElement('div')
     profileMeta.className = 'project-sync-progress-meta'
@@ -1252,7 +1252,7 @@ function renderContext() {
 
     const memoryTitle = document.createElement('div')
     memoryTitle.className = 'project-sync-progress-title'
-    memoryTitle.textContent = 'Konversations-Memory'
+    memoryTitle.textContent = 'Chat-Memory'
 
     const memoryMeta = document.createElement('div')
     memoryMeta.className = 'project-sync-progress-meta'

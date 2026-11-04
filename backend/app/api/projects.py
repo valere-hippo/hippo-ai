@@ -10,7 +10,7 @@ from app.models.permission import PermissionLevel, ProjectPermission
 from app.models.project import Project
 from app.models.chat_profile import ChatProfile
 from app.models.user import UserRole
-from app.schemas.project import ProjectCreate, ProjectResponse
+from app.schemas.project import ProjectCreate, ProjectMemoryUpdate, ProjectResponse
 from app.services.notifications import notify_project_created
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -178,13 +178,13 @@ async def set_project_default_profile(project_id: int, payload: dict, db: DbSess
 
 
 @router.put("/{project_id}/memory")
-async def update_project_memory(project_id: int, payload: dict, db: DbSession, current_user=Depends(get_current_user)):
+async def update_project_memory(project_id: int, payload: ProjectMemoryUpdate, db: DbSession, current_user=Depends(get_current_user)):
     project = await _load_project(db, project_id)
     if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
 
-    memory_summary = str(payload.get("memory_summary") or "").strip() or None
-    memory_facts = str(payload.get("memory_facts") or "").strip() or None
+    memory_summary = (payload.memory_summary or '').strip() or None
+    memory_facts = (payload.memory_facts or '').strip() or None
     await db.execute(
         Project.__table__.update()
         .where(Project.id == project_id)
