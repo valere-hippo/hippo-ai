@@ -242,6 +242,19 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         )
         hippo_messages.append({"role": "system", "content": project_sys})
 
+        project_memory_context = []
+        if getattr(conv_project, 'memory_summary', None):
+            project_memory_context.append('Projekt-Memory-Zusammenfassung:')
+            project_memory_context.append(str(conv_project.memory_summary).strip())
+        if getattr(conv_project, 'memory_facts', None):
+            project_memory_context.append('Projekt-Memory-Fakten:')
+            project_memory_context.append(str(conv_project.memory_facts).strip())
+        if project_memory_context:
+            hippo_messages.append({
+                "role": "system",
+                "content": "\n".join(project_memory_context),
+            })
+
         project_files_context = ''
         try:
             if payload.project_folder_context and payload.project_folder_context.strip():

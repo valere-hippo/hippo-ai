@@ -8,6 +8,8 @@ class ProjectCreate(BaseModel):
     description: str | None = None
     watched_folder: str | None = Field(default=None, max_length=2000)
     delivery_folder: str | None = Field(default=None, max_length=1000)
+    memory_summary: str | None = None
+    memory_facts: str | None = None
     source_scope: str | None = Field(default=None)
     default_profile_id: int | None = None
     pcloud_path: str | None = Field(default=None, max_length=1000)
@@ -26,6 +28,8 @@ class ProjectResponse(BaseModel):
     delivery_folder: str | None = None
     active_conversation_id: int | None = None
     default_profile_id: int | None = None
+    memory_summary: str | None = None
+    memory_facts: str | None = None
     source_scope: str | None = None
     pcloud_path: str | None = None
     pcloud_folder_id: int | None = None

@@ -65,6 +65,8 @@ async def create_project(payload: ProjectCreate, db: DbSession, current_user=Dep
         owner_id=current_user.id,
         watched_folder=watched_folder,
         delivery_folder=delivery_folder,
+        memory_summary=payload.memory_summary,
+        memory_facts=payload.memory_facts,
         default_profile_id=default_profile_id,
         pcloud_path=pcloud_path,
         pcloud_folder_id=pcloud_folder_id,
@@ -136,6 +138,8 @@ async def update_project(project_id: int, payload: ProjectCreate, db: DbSession,
         "description": payload.description,
         "watched_folder": watched_folder,
         "delivery_folder": delivery_folder,
+        "memory_summary": payload.memory_summary,
+        "memory_facts": payload.memory_facts,
         "default_profile_id": default_profile_id,
         "pcloud_path": pcloud_path,
         "pcloud_folder_id": pcloud_folder_id,
@@ -171,6 +175,24 @@ async def set_project_default_profile(project_id: int, payload: dict, db: DbSess
     await db.execute(Project.__table__.update().where(Project.id == project_id).values(default_profile_id=profile.id))
     await db.commit()
     return {"project_id": project_id, "default_profile_id": profile.id}
+
+
+@router.put("/{project_id}/memory")
+async def update_project_memory(project_id: int, payload: dict, db: DbSession, current_user=Depends(get_current_user)):
+    project = await _load_project(db, project_id)
+    if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zugriff verweigert.")
+
+    memory_summary = str(payload.get("memory_summary") or "").strip() or None
+    memory_facts = str(payload.get("memory_facts") or "").strip() or None
+    await db.execute(
+        Project.__table__.update()
+        .where(Project.id == project_id)
+        .values(memory_summary=memory_summary, memory_facts=memory_facts)
+    )
+    await db.commit()
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    return result.scalar_one()
 
 
 @router.delete("/{project_id}")

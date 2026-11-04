@@ -1168,6 +1168,81 @@ function renderContext() {
     summary.appendChild(profileCard)
   }
 
+  if (project) {
+    const projectMemoryCard = document.createElement('div')
+    projectMemoryCard.className = 'project-sync-progress'
+
+    const projectMemoryHeader = document.createElement('div')
+    projectMemoryHeader.className = 'project-sync-progress-header'
+
+    const projectMemoryTitle = document.createElement('div')
+    projectMemoryTitle.className = 'project-sync-progress-title'
+    projectMemoryTitle.textContent = 'Projekt-Memory'
+
+    const projectMemoryMeta = document.createElement('div')
+    projectMemoryMeta.className = 'project-sync-progress-meta'
+    projectMemoryMeta.textContent = project.memory_summary || project.memory_facts ? 'Projektwissen gespeichert' : 'Noch kein Projekt-Memory gespeichert.'
+
+    projectMemoryHeader.append(projectMemoryTitle, projectMemoryMeta)
+
+    const projectSummaryField = document.createElement('div')
+    projectSummaryField.className = 'field-group'
+    const projectSummaryLabel = document.createElement('label')
+    projectSummaryLabel.className = 'field-label'
+    projectSummaryLabel.textContent = 'Projekt-Zusammenfassung'
+    const projectSummaryInput = document.createElement('textarea')
+    projectSummaryInput.className = 'text-input'
+    projectSummaryInput.rows = 4
+    projectSummaryInput.placeholder = 'Dauerhafte Zusammenfassung des Projekts...'
+    projectSummaryInput.value = project.memory_summary || ''
+    projectSummaryField.append(projectSummaryLabel, projectSummaryInput)
+
+    const projectFactsField = document.createElement('div')
+    projectFactsField.className = 'field-group'
+    const projectFactsLabel = document.createElement('label')
+    projectFactsLabel.className = 'field-label'
+    projectFactsLabel.textContent = 'Projekt-Fakten / Entscheidungen'
+    const projectFactsInput = document.createElement('textarea')
+    projectFactsInput.className = 'text-input'
+    projectFactsInput.rows = 5
+    projectFactsInput.placeholder = 'Wichtige Fakten, Entscheidungen, wiederkehrende Regeln...'
+    projectFactsInput.value = project.memory_facts || ''
+    projectFactsField.append(projectFactsLabel, projectFactsInput)
+
+    const projectMemoryActions = document.createElement('div')
+    projectMemoryActions.className = 'project-sync-progress-actions'
+    const projectMemorySave = document.createElement('button')
+    projectMemorySave.type = 'button'
+    projectMemorySave.className = 'ghost-action'
+    projectMemorySave.textContent = 'Projekt-Memory speichern'
+    projectMemorySave.addEventListener('click', async () => {
+      projectMemorySave.disabled = true
+      try {
+        const payload = await apiJson(`/projects/${project.id}/memory`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            memory_summary: projectSummaryInput.value,
+            memory_facts: projectFactsInput.value,
+          }),
+        })
+        const next = state.projects.find((item) => item.id === project.id)
+        if (next && payload) {
+          Object.assign(next, payload)
+        }
+        renderContext()
+        showToast('Projekt-Memory gespeichert')
+      } catch (error) {
+        showToast(error.message || 'Projekt-Memory konnte nicht gespeichert werden', 'error')
+      } finally {
+        projectMemorySave.disabled = false
+      }
+    })
+    projectMemoryActions.appendChild(projectMemorySave)
+
+    projectMemoryCard.append(projectMemoryHeader, projectSummaryField, projectFactsField, projectMemoryActions)
+    summary.appendChild(projectMemoryCard)
+  }
+
   if (state.currentConversationId) {
     const memoryCard = document.createElement('div')
     memoryCard.className = 'project-sync-progress'

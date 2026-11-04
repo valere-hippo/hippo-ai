@@ -14,6 +14,8 @@ class Project(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("hippoai.ai_users.id"), nullable=False)
     watched_folder: Mapped[str] = mapped_column(String(2000), nullable=True)
     delivery_folder: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    memory_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    memory_facts: Mapped[str | None] = mapped_column(Text, nullable=True)
     active_conversation_id: Mapped[int | None] = mapped_column(ForeignKey("hippoai.ai_conversations.id"), nullable=True)
     default_profile_id: Mapped[int | None] = mapped_column(ForeignKey("hippoai.ai_chat_profiles.id", ondelete="SET NULL"), nullable=True, index=True)
     source_scope: Mapped[str | None] = mapped_column(Text, nullable=True)

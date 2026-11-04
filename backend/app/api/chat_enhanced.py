@@ -434,7 +434,20 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "For SHP/SHX/DBF/PRJ/CPG data, interpret the geodata as ecological field data when appropriate and surface contact counts, seasonality, habitat clues, spatial clusters, species-specific patterns, and possible territories / breeding areas. If the user wants more depth, extend the analysis with additional metrics, maps, or statistical summaries.\n"
             f"{build_attachment_response_guidance()}"
         )
-        hippo_messages.insert(1, {"role": "system", "content": project_sys})
+        hippo_messages.append({"role": "system", "content": project_sys})
+
+        project_memory_context = []
+        if getattr(conv_project, 'memory_summary', None):
+            project_memory_context.append('Projekt-Memory-Zusammenfassung:')
+            project_memory_context.append(str(conv_project.memory_summary).strip())
+        if getattr(conv_project, 'memory_facts', None):
+            project_memory_context.append('Projekt-Memory-Fakten:')
+            project_memory_context.append(str(conv_project.memory_facts).strip())
+        if project_memory_context:
+            hippo_messages.append({
+                "role": "system",
+                "content": "\n".join(project_memory_context),
+            })
 
         project_files_context = ''
         try:
