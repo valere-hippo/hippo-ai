@@ -493,6 +493,55 @@ function searchExecutableInRoots(rootDirs, candidateNames, maxDepth = 3) {
   return null
 }
 
+function findWindowsExecutableByName(candidateNames, roots = []) {
+  const names = (candidateNames || []).map((name) => String(name || '').trim()).filter(Boolean)
+  if (!names.length) return ''
+  const searchRoots = (roots || []).map((root) => String(root || '').trim()).filter(Boolean)
+  const searchNames = names.map((name) => `'${escapePowerShellSingleQuoted(name)}'`).join(', ')
+  const searchRootsLiteral = searchRoots.map((root) => `'${escapePowerShellSingleQuoted(root)}'`).join(', ')
+  const script = `
+$ErrorActionPreference = 'SilentlyContinue'
+$names = @(${searchNames})
+$roots = @(${searchRootsLiteral})
+foreach ($name in $names) {
+  try {
+    $cmd = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
+    if ($cmd) { Write-Output $cmd; exit 0 }
+  } catch {}
+}
+$registryRoots = @(
+  'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+  'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+  'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
+)
+foreach ($root in $registryRoots) {
+  foreach ($item in Get-ItemProperty $root) {
+    if ($item.DisplayName -and $item.DisplayName -like 'QGIS*') {
+      $installLocation = [string]$item.InstallLocation
+      if ($installLocation) {
+        foreach ($name in $names) {
+          $candidate = Join-Path $installLocation $name
+          if (Test-Path $candidate) { Write-Output $candidate; exit 0 }
+          $candidate = Join-Path (Join-Path $installLocation 'bin') $name
+          if (Test-Path $candidate) { Write-Output $candidate; exit 0 }
+        }
+      }
+    }
+  }
+}
+foreach ($root in $roots) {
+  if (-not (Test-Path $root)) { continue }
+  foreach ($name in $names) {
+    $match = Get-ChildItem -Path $root -Recurse -Filter $name -File -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+    if ($match) { Write-Output $match; exit 0 }
+  }
+}
+`
+  const result = runWindowsPowerShell(script)
+  if (!result.ok) return ''
+  return String(result.stdout || '').trim().split(/\r?\n/).find(Boolean) || ''
+}
+
 function discoverAppExecutable(appKey, candidates) {
   const key = String(appKey || '').trim().toLowerCase()
   const cacheKey = `${process.platform}:${key}:${(candidates || []).map((item) => String(item || '').trim().toLowerCase()).join('|')}`
@@ -504,6 +553,7 @@ function discoverAppExecutable(appKey, candidates) {
       process.env.ProgramW6432,
       process.env['ProgramFiles(x86)'],
       process.env.ProgramFiles,
+      process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs') : '',
       'C:\\OSGeo4W64',
       'C:\\OSGeo4W',
       path.join(process.env.ProgramFiles || '', 'QGIS'),
@@ -511,7 +561,11 @@ function discoverAppExecutable(appKey, candidates) {
     ].filter(Boolean)
     const names = (candidates || []).map((candidate) => path.basename(String(candidate || '').trim())).filter(Boolean)
     const qgisNames = ['qgis-ltr-bin.exe', 'qgis-bin.exe', 'qgis.exe', 'qgis-ltr.exe', 'qgis.exe']
-    result = searchExecutableInRoots(roots, names.length ? names : (key === 'qgis' ? qgisNames : []), key === 'qgis' ? 4 : 3) || ''
+    const searchNames = names.length ? names : (key === 'qgis' ? qgisNames : [])
+    result = searchExecutableInRoots(roots, searchNames, key === 'qgis' ? 4 : 3) || ''
+    if (!result && searchNames.length) {
+      result = findWindowsExecutableByName(searchNames, roots)
+    }
   }
 
   appExecutableCache.set(cacheKey, result)
