@@ -385,8 +385,19 @@ function runMacJavaScript(script) {
   return { ok: true, stdout: result.stdout || '' }
 }
 
-function getAppPreset(appKey) {
+function normalizeAppKey(appKey) {
   const key = String(appKey || '').trim().toLowerCase()
+  if (!key) return ''
+  if (key.includes('qgis')) return 'qgis'
+  if (key.includes('hipponalyze') || key.includes('hippo analyze') || key.includes('hippo-analyze') || key.includes('fledermaus') || key.includes('akustik') || key.includes('bat') || key.includes('ruf')) return 'hipponalyze'
+  if (key.includes('microsoft word') || key.includes('word') || key.includes('bericht') || key.includes('report') || key.includes('.docx') || key.includes('.doc') || key.includes('.odt')) return 'word'
+  if (key.includes('microsoft excel') || key.includes('excel') || key.includes('.xlsx') || key.includes('.xlsm') || key.includes('.xls') || key.includes('.csv') || key.includes('.ods')) return 'excel'
+  if (key.includes('libreoffice') || key.includes('soffice')) return 'libreoffice'
+  return key
+}
+
+function getAppPreset(appKey) {
+  const key = normalizeAppKey(appKey)
   const presets = {
     hipponalyze: {
       windows: ['hipponalyze.exe', 'hipponalyze'],
@@ -627,7 +638,7 @@ function canLaunchApp(appKey) {
 }
 
 function inferAppKeyFromPayload(payload = {}) {
-  const explicit = String(payload.app || payload.command || '').trim().toLowerCase()
+  const explicit = normalizeAppKey(payload.app || payload.command || '')
   if (explicit) return explicit
 
   const profile = String(payload.profile || payload.desktopProfile || '').trim().toLowerCase()
