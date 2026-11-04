@@ -1169,31 +1169,31 @@ function renderContext() {
   }
 
   if (project) {
-    const projectMemoryCard = document.createElement('div')
-    projectMemoryCard.className = 'project-sync-progress'
+    const projectMemoryDisclosure = document.createElement('details')
+    projectMemoryDisclosure.className = 'memory-disclosure'
 
-    const projectMemoryHeader = document.createElement('div')
-    projectMemoryHeader.className = 'project-sync-progress-header'
+    const projectMemorySummary = document.createElement('summary')
+    projectMemorySummary.className = 'memory-disclosure-summary'
+    const projectMemorySummaryTitle = document.createElement('div')
+    projectMemorySummaryTitle.className = 'project-sync-progress-title'
+    projectMemorySummaryTitle.textContent = 'Projekt-Memory'
+    const projectMemorySummaryMeta = document.createElement('div')
+    projectMemorySummaryMeta.className = 'project-sync-progress-meta'
+    projectMemorySummaryMeta.textContent = project.memory_summary || project.memory_facts ? 'Projektwissen gespeichert' : 'Noch kein Projekt-Memory gespeichert.'
+    projectMemorySummary.append(projectMemorySummaryTitle, projectMemorySummaryMeta)
 
-    const projectMemoryTitle = document.createElement('div')
-    projectMemoryTitle.className = 'project-sync-progress-title'
-    projectMemoryTitle.textContent = 'Projekt-Memory'
-
-    const projectMemoryMeta = document.createElement('div')
-    projectMemoryMeta.className = 'project-sync-progress-meta'
-    projectMemoryMeta.textContent = project.memory_summary || project.memory_facts ? 'Projektwissen gespeichert' : 'Noch kein Projekt-Memory gespeichert.'
-
-    projectMemoryHeader.append(projectMemoryTitle, projectMemoryMeta)
+    const projectMemoryBody = document.createElement('div')
+    projectMemoryBody.className = 'memory-disclosure-body'
 
     const projectSummaryField = document.createElement('div')
     projectSummaryField.className = 'field-group'
     const projectSummaryLabel = document.createElement('label')
     projectSummaryLabel.className = 'field-label'
-    projectSummaryLabel.textContent = 'Projekt-Zusammenfassung'
+    projectSummaryLabel.textContent = 'Zusammenfassung'
     const projectSummaryInput = document.createElement('textarea')
     projectSummaryInput.className = 'text-input'
-    projectSummaryInput.rows = 4
-    projectSummaryInput.placeholder = 'Dauerhafte Zusammenfassung des Projekts...'
+    projectSummaryInput.rows = 3
+    projectSummaryInput.placeholder = 'Kurz zusammenfassen…'
     projectSummaryInput.value = project.memory_summary || ''
     projectSummaryField.append(projectSummaryLabel, projectSummaryInput)
 
@@ -1201,11 +1201,11 @@ function renderContext() {
     projectFactsField.className = 'field-group'
     const projectFactsLabel = document.createElement('label')
     projectFactsLabel.className = 'field-label'
-    projectFactsLabel.textContent = 'Projekt-Fakten / Entscheidungen'
+    projectFactsLabel.textContent = 'Fakten / Entscheidungen'
     const projectFactsInput = document.createElement('textarea')
     projectFactsInput.className = 'text-input'
-    projectFactsInput.rows = 5
-    projectFactsInput.placeholder = 'Wichtige Fakten, Entscheidungen, wiederkehrende Regeln...'
+    projectFactsInput.rows = 4
+    projectFactsInput.placeholder = 'Wichtige Fakten, Entscheidungen, Regeln…'
     projectFactsInput.value = project.memory_facts || ''
     projectFactsField.append(projectFactsLabel, projectFactsInput)
 
@@ -1214,7 +1214,7 @@ function renderContext() {
     const projectMemorySave = document.createElement('button')
     projectMemorySave.type = 'button'
     projectMemorySave.className = 'ghost-action'
-    projectMemorySave.textContent = 'Projekt-Memory speichern'
+    projectMemorySave.textContent = 'Speichern'
     projectMemorySave.addEventListener('click', async () => {
       projectMemorySave.disabled = true
       try {
@@ -1239,28 +1239,29 @@ function renderContext() {
     })
     projectMemoryActions.appendChild(projectMemorySave)
 
-    projectMemoryCard.append(projectMemoryHeader, projectSummaryField, projectFactsField, projectMemoryActions)
-    summary.appendChild(projectMemoryCard)
+    projectMemoryBody.append(projectSummaryField, projectFactsField, projectMemoryActions)
+    projectMemoryDisclosure.append(projectMemorySummary, projectMemoryBody)
+    summary.appendChild(projectMemoryDisclosure)
   }
 
   if (state.currentConversationId) {
-    const memoryCard = document.createElement('div')
-    memoryCard.className = 'project-sync-progress'
+    const memoryDisclosure = document.createElement('details')
+    memoryDisclosure.className = 'memory-disclosure'
 
-    const memoryHeader = document.createElement('div')
-    memoryHeader.className = 'project-sync-progress-header'
-
+    const memorySummary = document.createElement('summary')
+    memorySummary.className = 'memory-disclosure-summary'
     const memoryTitle = document.createElement('div')
     memoryTitle.className = 'project-sync-progress-title'
     memoryTitle.textContent = 'Chat-Memory'
-
     const memoryMeta = document.createElement('div')
     memoryMeta.className = 'project-sync-progress-meta'
     memoryMeta.textContent = state.currentConversationMemory?.updated_at
       ? `Zuletzt gespeichert: ${new Date(state.currentConversationMemory.updated_at).toLocaleString()}`
       : 'Noch keine gespeicherte Memory vorhanden.'
+    memorySummary.append(memoryTitle, memoryMeta)
 
-    memoryHeader.append(memoryTitle, memoryMeta)
+    const memoryBody = document.createElement('div')
+    memoryBody.className = 'memory-disclosure-body'
 
     const summaryField = document.createElement('div')
     summaryField.className = 'field-group'
@@ -1269,8 +1270,8 @@ function renderContext() {
     summaryLabel.textContent = 'Zusammenfassung'
     const summaryInput = document.createElement('textarea')
     summaryInput.className = 'text-input'
-    summaryInput.rows = 4
-    summaryInput.placeholder = 'Kurze, dauerhafte Zusammenfassung dieses Chats...'
+    summaryInput.rows = 3
+    summaryInput.placeholder = 'Kurz zusammenfassen…'
     summaryInput.value = state.currentConversationMemory?.summary_text || ''
     summaryField.append(summaryLabel, summaryInput)
 
@@ -1278,11 +1279,11 @@ function renderContext() {
     factsField.className = 'field-group'
     const factsLabel = document.createElement('label')
     factsLabel.className = 'field-label'
-    factsLabel.textContent = 'Stabile Fakten / Entscheidungen'
+    factsLabel.textContent = 'Fakten / Entscheidungen'
     const factsInput = document.createElement('textarea')
     factsInput.className = 'text-input'
-    factsInput.rows = 5
-    factsInput.placeholder = 'Wichtige Fakten, Entscheidungen, offene Punkte...'
+    factsInput.rows = 4
+    factsInput.placeholder = 'Wichtige Fakten, Entscheidungen, offene Punkte…'
     factsInput.value = state.currentConversationMemory?.facts_text || ''
     factsField.append(factsLabel, factsInput)
 
@@ -1291,7 +1292,7 @@ function renderContext() {
     const saveButton = document.createElement('button')
     saveButton.type = 'button'
     saveButton.className = 'ghost-action'
-    saveButton.textContent = 'Memory speichern'
+    saveButton.textContent = 'Speichern'
     saveButton.addEventListener('click', async () => {
       saveButton.disabled = true
       try {
@@ -1313,8 +1314,9 @@ function renderContext() {
     })
     memoryActions.appendChild(saveButton)
 
-    memoryCard.append(memoryHeader, summaryField, factsField, memoryActions)
-    summary.appendChild(memoryCard)
+    memoryBody.append(summaryField, factsField, memoryActions)
+    memoryDisclosure.append(memorySummary, memoryBody)
+    summary.appendChild(memoryDisclosure)
   }
 
   const syncJob = project ? state.projectRefreshJobs.get(project.id) : null

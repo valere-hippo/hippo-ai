@@ -722,6 +722,57 @@ textarea {
   background: rgba(255, 255, 255, 0.985);
 }
 
+.memory-disclosure {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.985);
+}
+
+.memory-disclosure > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.memory-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.memory-disclosure-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.memory-disclosure-body {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.memory-disclosure .field-group {
+  gap: 5px;
+}
+
+.memory-disclosure .field-label {
+  font-size: 11px;
+}
+
+.memory-disclosure .text-input {
+  min-height: 68px;
+}
+
+.memory-disclosure[open] {
+  border-color: rgba(122, 31, 43, 0.22);
+}
+
+.memory-disclosure[open] .memory-disclosure-summary .project-sync-progress-meta {
+  color: rgba(122, 31, 43, 0.88);
+}
+
 .project-sync-progress-header {
   display: flex;
   justify-content: space-between;
