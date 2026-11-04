@@ -39,7 +39,7 @@ const state = {
   chatQuery: '',
   adminOverview: null,
   thinkingMessage: null,
-  desktopAgentMode: false,
+  desktopAgentMode: localStorage.getItem('hippo.desktop.agent.mode') !== '0',
   desktopAgentProfile: localStorage.getItem('hippo.desktop.profile') || 'generic',
 }
 
@@ -796,6 +796,15 @@ function getConversationTitle(conversation) {
   return conversation.title || conversation.preview_title || conversation.first_message || `Chat #${conversation.id}`
 }
 
+function deriveConversationTitle(message, attachments = []) {
+  const base = (message || '').trim().replace(/\s+/g, ' ')
+  if (base) {
+    return base.length > 64 ? `${base.slice(0, 63).trim()}…` : base
+  }
+  const firstAttachment = attachments.find((attachment) => attachment?.filename)
+  return firstAttachment?.filename || 'Neuer Chat'
+}
+
 function computeProjectFolderFingerprint(files) {
   const entries = Array.isArray(files) ? files : []
   let hash = 2166136261
@@ -824,8 +833,8 @@ async function quickProjectFolderFingerprint(project, folders) {
   if (!rawFolders.length) return ''
   const scan = await window.electron.scanProjectFolderFiles({
     folder: rawFolders.join('\n'),
-    maxDepth: 999,
-    maxFiles: 50000,
+    maxDepth: 2,
+    maxFiles: 5000,
   })
   if (!scan?.ok) return ''
   return computeProjectFolderFingerprint(scan.files || [])
@@ -4320,6 +4329,7 @@ function setDesktopAgentProfile(profile) {
 
 function setDesktopAgentMode(enabled) {
   state.desktopAgentMode = Boolean(enabled)
+  localStorage.setItem('hippo.desktop.agent.mode', state.desktopAgentMode ? '1' : '0')
   if (els.desktopAgentBtn) {
     els.desktopAgentBtn.classList.toggle('active', state.desktopAgentMode)
     const labels = {
@@ -6809,6 +6819,11 @@ async function startRecording() {
 }
 
 function bindComposerEvents() {
+  els.chatForm?.addEventListener('submit', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    sendChat()
+  })
   els.chatInput.addEventListener('input', resizeComposer)
   els.chatInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
