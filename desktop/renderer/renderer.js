@@ -2990,7 +2990,7 @@ async function openCreateProjectModal() {
   const form = buildProjectForm()
   const result = await openModal({
     title: 'Projekt erstellen',
-    copy: 'Hippo verwendet automatisch alle lokalen Projektordner. Es werden keine Dateiauswahlen mehr abgefragt.',
+    copy: 'Hippo verwendet automatisch alle lokalen Projektordner. Sobald du einen Quellordner einträgst, wird er direkt für Lesen und Schreiben freigegeben und im Projekt gespeichert.',
     content: form,
     submitLabel: 'Erstellen',
     validate: (values) => Boolean(values.name?.trim() && values.folder?.trim() && values.delivery_folder?.trim()),
@@ -3014,13 +3014,14 @@ async function openCreateProjectModal() {
     })
     await loadWorkspace()
     if (createdProject?.id) {
-      await saveProjectSourceScope(createdProject, normalizeProjectFolderInput(createdProject.watched_folder), { consented: true })
+      const refreshedCreatedProject = state.projects.find((item) => item.id === createdProject.id) || createdProject
+      await saveProjectSourceScope(refreshedCreatedProject, normalizeProjectFolderInput(refreshedCreatedProject.watched_folder), { consented: true })
       state.selectedProjectId = createdProject.id
       syncSelectedProjectConversation()
       renderProjects()
       renderConversations()
       renderContext()
-      scheduleProjectSourceSync(createdProject, normalizeProjectFolderInput(createdProject.watched_folder), { silent: true })
+      scheduleProjectSourceSync(refreshedCreatedProject, normalizeProjectFolderInput(refreshedCreatedProject.watched_folder), { silent: true })
     }
     hideLoader()
     showToast('Projekt erstellt')
@@ -3138,13 +3139,9 @@ async function openEditProjectModal(project) {
     })
     await loadProjects()
     await loadConversations()
-    if (state.selectedProjectId === project.id) {
-      const refreshedProject = state.projects.find((item) => item.id === project.id) || null
-      if (refreshedProject) {
-        await saveProjectSourceScope(refreshedProject, normalizeProjectFolderInput(refreshedProject.watched_folder), { consented: true })
-        scheduleProjectSourceSync(refreshedProject, normalizeProjectFolderInput(refreshedProject.watched_folder), { silent: true })
-      }
-    }
+    const refreshedProject = state.projects.find((item) => item.id === project.id) || project
+    await saveProjectSourceScope(refreshedProject, normalizeProjectFolderInput(refreshedProject.watched_folder), { consented: true })
+    scheduleProjectSourceSync(refreshedProject, normalizeProjectFolderInput(refreshedProject.watched_folder), { silent: true })
     showToast('Projekt gespeichert')
   } catch (error) {
     showToast(error.message || 'Projekt konnte nicht gespeichert werden', 'error')
