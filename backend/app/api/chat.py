@@ -271,8 +271,9 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                     project_context_parts.append(backend_project_context.strip())
             if not project_context_parts:
                 project_context_parts.append(
-                    "Kein lokaler Projektordner-Kontext vom Desktop erhalten. "
-                    "Antworte nicht mit erfundenen Dateinamen und fordere bei Bedarf den Benutzer auf, den lokalen Ordner im Desktop zu verbinden."
+                    "Der Desktop-Agent ist aktiv und kann den Computer bedienen. "
+                    "Lokale Projektordner werden im Hintergrund erkannt und aktualisiert; "
+                    "wenn der Kontext noch leer ist, antworte ohne erfundene Dateinamen und bitte nur um eine kurze Hintergrundaktualisierung."
                 )
             project_files_context = "\n\n".join(project_context_parts)
             hippo_messages.append(

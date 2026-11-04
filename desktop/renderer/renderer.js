@@ -783,7 +783,7 @@ async function refreshProjectFolderContext(project, { force = false, requireCons
 function queueProjectFolderRefresh(project) {
   if (!project?.id || !project.watched_folder) return Promise.resolve('')
   if (state.projectFolderScanState.get(project.id) === 'loading') return Promise.resolve(state.projectFolderContextCache.get(project.id) || '')
-  return refreshProjectFolderContext(project, { force: true, requireConsent: false }).then(() => {
+  return refreshProjectFolderContext(project, { force: false, requireConsent: false }).then(() => {
     if (state.selectedProjectId === project.id) {
       renderContext()
     }
@@ -834,7 +834,7 @@ async function quickProjectFolderFingerprint(project, folders) {
   const scan = await window.electron.scanProjectFolderFiles({
     folder: rawFolders.join('\n'),
     maxDepth: 1,
-    maxFiles: 2000,
+    maxFiles: 500,
   })
   if (!scan?.ok) return ''
   return computeProjectFolderFingerprint(scan.files || [])
