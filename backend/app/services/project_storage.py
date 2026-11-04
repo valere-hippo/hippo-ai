@@ -1455,7 +1455,12 @@ async def build_project_files_context(project: Any, max_files: int | None = None
             if max_files is not None:
                 files = files[:max_files]
             if not files:
-                return "Im ausgewählten Ordnersatz sind aktuell keine Dateien sichtbar."
+                folder = str(getattr(project, "watched_folder", "") or "").strip()
+                return (
+                    "Im ausgewählten Ordnersatz konnten aktuell noch keine Dateien zuverlässig ausgelesen werden.\n"
+                    f"Ordnerpfad: {folder or 'unbekannt'}\n"
+                    "Wenn der Benutzer Dateien erwartet, erwähne den laufenden lokalen Scan oder prüfe den Projektkontext erneut, statt einen Mangel an Dateien zu behaupten."
+                )
             lines = [f"Im ausgewählten Ordnersatz des Projekts sind {len(files)} sichtbare Dateien vorhanden:"]
             if not _project_uses_pcloud(project):
                 try:
@@ -1535,8 +1540,9 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                 f"{tree_context}"
             )
         return (
-            "Im lokalen Projektordner sind aktuell keine Dateien sichtbar.\n"
-            "Wenn der Benutzer Dateien erwartet, erkläre ihm bitte, dass der Ordner leer ist oder die lokale Synchronisierung noch nicht abgeschlossen wurde."
+            "Im lokalen Projektordner konnten aktuell noch keine Dateien zuverlässig ausgelesen werden.\n"
+            f"Ordnerpfad: {folder or 'unbekannt'}\n"
+            "Wenn der Benutzer Dateien erwartet, erwähne den laufenden lokalen Scan oder prüfe den Projektkontext erneut, statt einen Mangel an Dateien zu behaupten."
         )
 
     files_by_name = {item.filename: item for item in files}
