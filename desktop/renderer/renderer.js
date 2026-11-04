@@ -2759,7 +2759,7 @@ async function selectProject(projectId) {
   if (project) {
     const scope = loadProjectSourceScope(project)
     const folders = scope?.sourceFolders?.length ? scope.sourceFolders : normalizeProjectFolderInput(project.watched_folder)
-    if (folders.length) {
+    if (folders.length && !state.desktopAgentMode) {
       scheduleProjectSourceSync(project, folders, { silent: true })
     }
   }
@@ -6538,7 +6538,9 @@ async function sendChat() {
     if (!state.desktopAgentMode && (looksLikeQgisRequest(message) || looksLikeFileGenerationRequest(message) || state.draftAttachments.length > 0)) {
       setDesktopAgentMode(true)
     }
-    void queueProjectFolderRefresh(project)
+    if (!state.desktopAgentMode) {
+      void queueProjectFolderRefresh(project)
+    }
     projectFolderContext = state.projectFolderContextCache.get(project.id) || ''
     if (accessGranted) {
       const authorizedContext = `Lokale Projektordner autorisiert: ${scope.sourceFolders.join(' | ')}`
@@ -6546,7 +6548,7 @@ async function sendChat() {
         projectFolderContext = projectFolderContext ? `${authorizedContext}\n${projectFolderContext}` : authorizedContext
       }
     }
-    if (scope?.refresh) {
+    if (scope?.refresh && !state.desktopAgentMode) {
       scheduleProjectSourceSync(project, projectSourcePrefixes, { silent: true })
       showToast('Quellordner werden im Hintergrund synchronisiert.')
     }

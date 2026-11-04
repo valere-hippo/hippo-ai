@@ -425,6 +425,8 @@ function getAppExecutableOverride(appKey) {
   return candidate || null
 }
 
+const appExecutableCache = new Map()
+
 function isExecutablePath(value) {
   const target = String(value || '').trim()
   if (!target) return false
@@ -443,6 +445,66 @@ function windowsStartProcess(target, args = [], cwd) {
   const workDir = cwd ? ` -WorkingDirectory '${escapePowerShellSingleQuoted(cwd)}'` : ''
   const script = `Start-Process -FilePath '${escapePowerShellSingleQuoted(target)}'${argList}${workDir}`
   return runWindowsPowerShell(script)
+}
+
+function searchExecutableInRoots(rootDirs, candidateNames, maxDepth = 3) {
+  const targets = new Set((candidateNames || []).map((name) => String(name || '').trim().toLowerCase()).filter(Boolean))
+  const roots = (rootDirs || []).map((root) => String(root || '').trim()).filter(Boolean)
+  if (!targets.size || !roots.length) return null
+
+  const queue = roots.map((root) => ({ dir: root, depth: 0 }))
+  const visited = new Set()
+
+  while (queue.length) {
+    const current = queue.shift()
+    if (!current || visited.has(current.dir)) continue
+    visited.add(current.dir)
+
+    let entries = []
+    try {
+      entries = fs.readdirSync(current.dir, { withFileTypes: true })
+    } catch (error) {
+      continue
+    }
+
+    for (const entry of entries) {
+      const absPath = path.join(current.dir, entry.name)
+      const normalizedName = String(entry.name || '').trim().toLowerCase()
+      if (entry.isFile() && targets.has(normalizedName)) {
+        return absPath
+      }
+      if (entry.isDirectory() && current.depth < maxDepth) {
+        queue.push({ dir: absPath, depth: current.depth + 1 })
+      }
+    }
+  }
+
+  return null
+}
+
+function discoverAppExecutable(appKey, candidates) {
+  const key = String(appKey || '').trim().toLowerCase()
+  const cacheKey = `${process.platform}:${key}:${(candidates || []).map((item) => String(item || '').trim().toLowerCase()).join('|')}`
+  if (appExecutableCache.has(cacheKey)) return appExecutableCache.get(cacheKey)
+
+  let result = ''
+  if (process.platform === 'win32') {
+    const roots = [
+      process.env.ProgramW6432,
+      process.env['ProgramFiles(x86)'],
+      process.env.ProgramFiles,
+      'C:\\OSGeo4W64',
+      'C:\\OSGeo4W',
+      path.join(process.env.ProgramFiles || '', 'QGIS'),
+      path.join(process.env['ProgramFiles(x86)'] || '', 'QGIS'),
+    ].filter(Boolean)
+    const names = (candidates || []).map((candidate) => path.basename(String(candidate || '').trim())).filter(Boolean)
+    const qgisNames = ['qgis-ltr-bin.exe', 'qgis-bin.exe', 'qgis.exe', 'qgis-ltr.exe', 'qgis.exe']
+    result = searchExecutableInRoots(roots, names.length ? names : (key === 'qgis' ? qgisNames : []), key === 'qgis' ? 4 : 3) || ''
+  }
+
+  appExecutableCache.set(cacheKey, result)
+  return result
 }
 
 function launchAppByPreset(appKey, options = {}) {
@@ -477,6 +539,25 @@ function launchAppByPreset(appKey, options = {}) {
       launchArgs.push(...extraArgs)
       const pid = spawnDetached(genericTarget, launchArgs, { cwd, env: process.env })
       return { ok: true, pid, launched: genericTarget, app: rawKey || genericTarget, file: file || null, override: true }
+    }
+  }
+
+  const discovered = discoverAppExecutable(rawKey, candidates)
+  if (discovered) {
+    const launchArgs = []
+    if (file) launchArgs.push(file)
+    launchArgs.push(...extraArgs)
+    if (process.platform === 'win32') {
+      const result = windowsStartProcess(discovered, launchArgs, cwd)
+      if (result.ok) {
+        return { ok: true, pid: result.pid || null, launched: discovered, app: rawKey, file: file || null, discovered: true }
+      }
+    } else if (process.platform === 'darwin') {
+      const pid = spawnDetached('/usr/bin/open', ['-a', discovered, ...launchArgs], { cwd, env: process.env })
+      return { ok: true, pid, launched: discovered, app: rawKey, file: file || null, discovered: true }
+    } else {
+      const pid = spawnDetached(discovered, launchArgs, { cwd, env: process.env })
+      return { ok: true, pid, launched: discovered, app: rawKey, file: file || null, discovered: true }
     }
   }
 
