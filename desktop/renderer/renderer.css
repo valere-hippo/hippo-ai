@@ -724,9 +724,9 @@ textarea {
 
 .memory-disclosure {
   display: grid;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  gap: 6px;
+  padding: 9px 11px;
+  border-radius: 14px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.985);
 }
@@ -734,6 +734,7 @@ textarea {
 .memory-disclosure > summary {
   list-style: none;
   cursor: pointer;
+  display: block;
 }
 
 .memory-disclosure > summary::-webkit-details-marker {
@@ -744,25 +745,26 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .memory-disclosure-body {
   display: grid;
-  gap: 10px;
-  padding-top: 4px;
+  gap: 8px;
+  padding-top: 2px;
 }
 
 .memory-disclosure .field-group {
-  gap: 5px;
+  gap: 4px;
 }
 
 .memory-disclosure .field-label {
-  font-size: 11px;
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
 }
 
 .memory-disclosure .text-input {
-  min-height: 68px;
+  min-height: 60px;
 }
 
 .memory-disclosure[open] {

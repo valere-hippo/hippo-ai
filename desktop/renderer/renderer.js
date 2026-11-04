@@ -1139,33 +1139,35 @@ function renderContext() {
   summary.appendChild(label)
 
   if (currentProfile) {
-    const profileCard = document.createElement('div')
-    profileCard.className = 'project-sync-progress'
+    const profileDisclosure = document.createElement('details')
+    profileDisclosure.className = 'memory-disclosure'
 
-    const profileHeader = document.createElement('div')
-    profileHeader.className = 'project-sync-progress-header'
-
+    const profileSummary = document.createElement('summary')
+    profileSummary.className = 'memory-disclosure-summary'
     const profileTitle = document.createElement('div')
     profileTitle.className = 'project-sync-progress-title'
-    profileTitle.textContent = `Globales Profil: ${currentProfile.name}`
-
+    profileTitle.textContent = 'Profil'
     const profileMeta = document.createElement('div')
     profileMeta.className = 'project-sync-progress-meta'
     profileMeta.textContent = `${currentProfile.chat_bot_id || 'bot-id fehlt'} · ${currentProfile.share_scope || 'private'} · ${currentProfile.memory_namespace || 'kein namespace'}`
+    profileSummary.append(profileTitle, profileMeta)
 
-    profileHeader.append(profileTitle, profileMeta)
+    const profileBody = document.createElement('div')
+    profileBody.className = 'memory-disclosure-body'
 
-    const memoryBlock = document.createElement('div')
-    memoryBlock.className = 'project-context-line'
-    const memoryLines = [
+    const profileLines = [
       currentProfile.description ? `Beschreibung: ${currentProfile.description}` : null,
       currentProfile.memory_notes ? `Gedächtnis: ${currentProfile.memory_notes}` : null,
       currentProfile.system_prompt ? `Systemprompt: ${currentProfile.system_prompt}` : null,
     ].filter(Boolean)
-    memoryBlock.textContent = memoryLines.length ? memoryLines.join(' · ') : 'Keine zusätzlichen Profilhinweise gespeichert.'
 
-    profileCard.append(profileHeader, memoryBlock)
-    summary.appendChild(profileCard)
+    const profileText = document.createElement('div')
+    profileText.className = 'project-context-line'
+    profileText.textContent = profileLines.length ? profileLines.join(' · ') : 'Keine zusätzlichen Profilhinweise gespeichert.'
+
+    profileBody.appendChild(profileText)
+    profileDisclosure.append(profileSummary, profileBody)
+    summary.appendChild(profileDisclosure)
   }
 
   if (project) {
