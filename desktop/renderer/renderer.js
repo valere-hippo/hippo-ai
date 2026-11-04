@@ -31,6 +31,7 @@ const state = {
   projectConversationMemory: new Map(),
   currentConversationMemory: null,
   projectFolderContextCache: new Map(),
+  projectFolderFingerprintCache: new Map(),
   projectFolderScanState: new Map(),
   projectRefreshJobs: new Map(),
   projectMenuCleanup: null,
@@ -738,16 +739,25 @@ async function refreshProjectFolderContext(project, { force = false, requireCons
   const folders = normalizeProjectFolderInput(project.watched_folder)
   if (!folders.length || !window.electron?.inspectProjectFolder) {
     state.projectFolderContextCache.set(project.id, '')
+    state.projectFolderFingerprintCache.set(project.id, '')
     state.projectFolderScanState.set(project.id, 'idle')
     return ''
   }
   if (requireConsent && !await requestProjectFolderConsent(project)) {
     state.projectFolderContextCache.set(project.id, '')
+    state.projectFolderFingerprintCache.set(project.id, '')
     state.projectFolderScanState.set(project.id, 'consent')
     return ''
   }
   state.projectFolderScanState.set(project.id, 'loading')
   try {
+    const quickFingerprint = await quickProjectFolderFingerprint(project, folders)
+    const previousFingerprint = state.projectFolderFingerprintCache.get(project.id) || ''
+    if (quickFingerprint && quickFingerprint === previousFingerprint && cached) {
+      state.projectFolderScanState.set(project.id, 'ready')
+      return cached
+    }
+
     const folderInfo = await window.electron.inspectProjectFolder({
       folder: folders.join('\n'),
       maxDepth: 3,
@@ -757,6 +767,9 @@ async function refreshProjectFolderContext(project, { force = false, requireCons
     })
     const context = String(folderInfo?.context || '')
     state.projectFolderContextCache.set(project.id, context)
+    if (quickFingerprint) {
+      state.projectFolderFingerprintCache.set(project.id, quickFingerprint)
+    }
     state.projectFolderScanState.set(project.id, folderInfo?.ok ? 'ready' : 'error')
     return context
   } catch (error) {
@@ -783,13 +796,39 @@ function getConversationTitle(conversation) {
   return conversation.title || conversation.preview_title || conversation.first_message || `Chat #${conversation.id}`
 }
 
-function deriveConversationTitle(message, attachments = []) {
-  const base = (message || '').trim().replace(/\s+/g, ' ')
-  if (base) {
-    return base.length > 64 ? `${base.slice(0, 63).trim()}…` : base
+function computeProjectFolderFingerprint(files) {
+  const entries = Array.isArray(files) ? files : []
+  let hash = 2166136261
+  const mix = (text) => {
+    const source = String(text || '')
+    for (let index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index)
+      hash = Math.imul(hash, 16777619)
+    }
   }
-  const firstAttachment = attachments.find((attachment) => attachment?.filename)
-  return firstAttachment?.filename || 'Neuer Chat'
+  mix(entries.length)
+  entries
+    .slice()
+    .sort((a, b) => String(a?.relative_path || a?.path || '').localeCompare(String(b?.relative_path || b?.path || ''), 'de'))
+    .forEach((entry) => {
+      mix(entry?.relative_path || entry?.path || '')
+      mix(entry?.size || 0)
+      mix(entry?.modified_at || '')
+    })
+  return `fp:${(hash >>> 0).toString(16)}:${entries.length}`
+}
+
+async function quickProjectFolderFingerprint(project, folders) {
+  if (!project?.id || !window.electron?.scanProjectFolderFiles) return ''
+  const rawFolders = (Array.isArray(folders) ? folders : normalizeProjectFolderInput(project?.watched_folder)).filter(Boolean)
+  if (!rawFolders.length) return ''
+  const scan = await window.electron.scanProjectFolderFiles({
+    folder: rawFolders.join('\n'),
+    maxDepth: 999,
+    maxFiles: 50000,
+  })
+  if (!scan?.ok) return ''
+  return computeProjectFolderFingerprint(scan.files || [])
 }
 
 function looksLikeImageGenerationRequest(message) {
@@ -2700,6 +2739,14 @@ async function selectProject(projectId) {
   renderProjects()
   renderConversations()
   renderContext()
+
+  if (project) {
+    const scope = loadProjectSourceScope(project)
+    const folders = scope?.sourceFolders?.length ? scope.sourceFolders : normalizeProjectFolderInput(project.watched_folder)
+    if (folders.length) {
+      scheduleProjectSourceSync(project, folders, { silent: true })
+    }
+  }
 
   if (state.currentConversationId) {
     await openConversationById(state.currentConversationId)
@@ -6459,7 +6506,8 @@ async function sendChat() {
     if (accessGranted) {
       projectSourcePrefixes = scope.sourceFolders
     }
-    projectFolderContext = await queueProjectFolderRefresh(project)
+    void queueProjectFolderRefresh(project)
+    projectFolderContext = state.projectFolderContextCache.get(project.id) || ''
     if (accessGranted) {
       const authorizedContext = `Lokale Projektordner autorisiert: ${scope.sourceFolders.join(' | ')}`
       if (!projectFolderContext || /Der lokale Ordner konnte nicht gelesen werden|Ordneranalyse fehlgeschlagen/i.test(projectFolderContext)) {
@@ -6743,19 +6791,12 @@ async function startRecording() {
 }
 
 function bindComposerEvents() {
-  els.chatForm?.addEventListener('submit', (event) => {
-    event.preventDefault()
-    sendChat()
-  })
   els.chatInput.addEventListener('input', resizeComposer)
   els.chatInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
-      if (els.chatForm?.requestSubmit) {
-        els.chatForm.requestSubmit()
-      } else {
-        sendChat()
-      }
+      event.stopPropagation()
+      sendChat()
     }
   })
 
