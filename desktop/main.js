@@ -545,6 +545,28 @@ function canLaunchApp(appKey) {
   return Boolean(getAppPreset(appKey))
 }
 
+function inferAppKeyFromPayload(payload = {}) {
+  const explicit = String(payload.app || payload.command || '').trim().toLowerCase()
+  if (explicit) return explicit
+
+  const profile = String(payload.profile || payload.desktopProfile || '').trim().toLowerCase()
+  const text = [payload.file, payload.path, payload.executable, payload.exePath, payload.programPath, payload.args]
+    .flat()
+    .filter(Boolean)
+    .map((item) => String(item))
+    .join(' ')
+    .toLowerCase()
+
+  if (/\bqgis\b|\.qgz\b|\.qgs\b|\.shp\b|\.shx\b|\.dbf\b|\.gpkg\b|\.geojson\b|\.kml\b|\.kmz\b/.test(text) || profile === 'qgis') {
+    return 'qgis'
+  }
+  if (/\bword\b|\.docx\b|\.doc\b|bericht|report|\.odt\b/.test(text)) return 'word'
+  if (/\bexcel\b|\.xlsx\b|\.xlsm\b|\.xls\b|\.csv\b|\.ods\b/.test(text)) return 'excel'
+  if (/\blibreoffice\b|\bsoffice\b/.test(text)) return 'libreoffice'
+  if (/\bhipponalyze\b|fledermaus|akustik|bat|ruf/.test(text)) return 'hipponalyze'
+  return ''
+}
+
 function spawnDetached(command, args = [], options = {}) {
   const child = spawn(command, args, {
     detached: true,
@@ -575,13 +597,19 @@ ipcMain.handle('desktop-control', async (event, payload = {}) => {
   }
 
   if (action === 'launch_app') {
-    const appKey = String(payload.app || payload.command || '').trim()
-    if (!appKey) return { ok: false, error: 'Please provide an application name.' }
     const cwd = String(payload.cwd || '').trim() || undefined
     const args = Array.isArray(payload.args) ? payload.args.map((item) => String(item)) : []
     const file = String(payload.file || payload.path || '').trim()
     const executable = String(payload.path || payload.executable || payload.exePath || payload.programPath || '').trim()
+    const appKey = inferAppKeyFromPayload(payload) || (file && !executable ? inferAppKeyFromPayload({ ...payload, app: file }) : '')
+    if (!appKey) {
+      if (file) return openFileWithDefaultApp(file, cwd)
+      return { ok: false, error: 'Please provide an application name.' }
+    }
     const result = launchAppByPreset(appKey, { cwd, args, file, path: executable })
+    if (!result?.ok && file) {
+      return openFileWithDefaultApp(file, cwd)
+    }
     return result
   }
 
