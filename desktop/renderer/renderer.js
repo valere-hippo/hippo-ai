@@ -2729,6 +2729,13 @@ async function selectProject(projectId) {
   const project = getContextProject()
   const storedProfile = Number(localStorage.getItem(getProfileStorageKey(projectId)) || '0') || null
   state.selectedProfileId = storedProfile || project?.default_profile_id || null
+  if (project) {
+    const scope = loadProjectSourceScope(project)
+    const hasLocalSources = Boolean((scope?.sourceFolders?.length && scope.consented) || normalizeProjectFolderInput(project.watched_folder).length)
+    if (hasLocalSources) {
+      setDesktopAgentMode(true)
+    }
+  }
   renderProjects()
   renderConversations()
   renderContext()
@@ -2772,6 +2779,14 @@ async function openConversation(conversation) {
     state.selectedProjectId = conversation.project_id
     state.selectedProfileId = Number(conversation.profile_id || 0) || state.selectedProfileId
     state.projectConversationMemory.set(getProjectConversationMemoryKey(conversation.project_id, conversation.profile_id), conversation.id)
+    const project = getContextProject()
+    if (project) {
+      const scope = loadProjectSourceScope(project)
+      const hasLocalSources = Boolean((scope?.sourceFolders?.length && scope.consented) || normalizeProjectFolderInput(project.watched_folder).length)
+      if (hasLocalSources) {
+        setDesktopAgentMode(true)
+      }
+    }
   }
   renderProjects()
   renderConversations()
@@ -6505,6 +6520,9 @@ async function sendChat() {
     const accessGranted = Boolean(scope?.sourceFolders?.length && scope.consented)
     if (accessGranted) {
       projectSourcePrefixes = scope.sourceFolders
+    }
+    if (!state.desktopAgentMode && (looksLikeQgisRequest(message) || looksLikeFileGenerationRequest(message) || state.draftAttachments.length > 0)) {
+      setDesktopAgentMode(true)
     }
     void queueProjectFolderRefresh(project)
     projectFolderContext = state.projectFolderContextCache.get(project.id) || ''
