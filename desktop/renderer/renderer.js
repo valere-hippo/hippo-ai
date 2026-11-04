@@ -39,7 +39,7 @@ const state = {
   chatQuery: '',
   adminOverview: null,
   thinkingMessage: null,
-  desktopAgentMode: localStorage.getItem('hippo.desktop.agent.mode') !== '0',
+  desktopAgentMode: true,
   desktopAgentProfile: localStorage.getItem('hippo.desktop.profile') || 'generic',
 }
 
@@ -760,10 +760,10 @@ async function refreshProjectFolderContext(project, { force = false, requireCons
 
     const folderInfo = await window.electron.inspectProjectFolder({
       folder: folders.join('\n'),
-      maxDepth: 3,
-      maxEntries: 250,
-      maxTextChars: 8000,
-      timeoutMs: 15000,
+      maxDepth: 1,
+      maxEntries: 80,
+      maxTextChars: 4000,
+      timeoutMs: 8000,
     })
     const context = String(folderInfo?.context || '')
     state.projectFolderContextCache.set(project.id, context)
@@ -833,8 +833,8 @@ async function quickProjectFolderFingerprint(project, folders) {
   if (!rawFolders.length) return ''
   const scan = await window.electron.scanProjectFolderFiles({
     folder: rawFolders.join('\n'),
-    maxDepth: 2,
-    maxFiles: 5000,
+    maxDepth: 1,
+    maxFiles: 2000,
   })
   if (!scan?.ok) return ''
   return computeProjectFolderFingerprint(scan.files || [])
@@ -6525,6 +6525,10 @@ async function sendChat() {
   let projectSourcePrefixes = null
   let projectFolderContext = ''
 
+  if (!state.desktopAgentMode) {
+    setDesktopAgentMode(true)
+  }
+
   if (project) {
     const scope = loadProjectSourceScope(project)
     const accessGranted = Boolean(scope?.sourceFolders?.length && scope.consented)
@@ -6936,6 +6940,7 @@ async function bootstrap() {
       console.warn('Could not hydrate current user from saved token:', userError)
       applyFallbackAuthenticatedUser('')
     }
+    setDesktopAgentMode(true)
     setScreen(true)
     updatePresence()
     await loadWorkspace()
