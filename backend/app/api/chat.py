@@ -255,17 +255,25 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                 "content": "\n".join(project_memory_context),
             })
 
-        project_files_context = ''
+        project_context_parts: list[str] = []
         try:
             if payload.project_folder_context and payload.project_folder_context.strip():
-                project_files_context = payload.project_folder_context.strip()
-            elif conv_project is not None:
-                project_files_context = await build_project_files_context(conv_project, include_previews=True, question=payload.message, source_prefixes=payload.project_source_prefixes)
-            else:
-                project_files_context = (
+                project_context_parts.append(payload.project_folder_context.strip())
+            if conv_project is not None:
+                backend_project_context = await build_project_files_context(
+                    conv_project,
+                    include_previews=True,
+                    question=payload.message,
+                    source_prefixes=payload.project_source_prefixes,
+                )
+                if backend_project_context.strip():
+                    project_context_parts.append(backend_project_context.strip())
+            if not project_context_parts:
+                project_context_parts.append(
                     "Kein lokaler Projektordner-Kontext vom Desktop erhalten. "
                     "Antworte nicht mit erfundenen Dateinamen und fordere bei Bedarf den Benutzer auf, den lokalen Ordner im Desktop zu verbinden."
                 )
+            project_files_context = "\n\n".join(project_context_parts)
             hippo_messages.append(
                 {
                     "role": "system",

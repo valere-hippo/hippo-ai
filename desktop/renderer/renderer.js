@@ -797,6 +797,23 @@ function looksLikeImageGenerationRequest(message) {
   return /(?:erstell|generier|male|zeichne|render|bild|png|jpg|jpeg|photo|foto|illustration|grafik|logo|icon|karte|map)/i.test(text)
 }
 
+function looksLikeFileGenerationRequest(message) {
+  const text = String(message || '').toLowerCase()
+  return /(?:datei|bericht|report|pdf|docx|word|export|speichere|als\s+datei|als\s+bericht|als\s+pdf|als\s+word)/i.test(text)
+}
+
+function looksLikeQgisRequest(message) {
+  const text = String(message || '').toLowerCase()
+  return /(?:qgis|geodaten|geodata|shp|shx|dbf|prj|cpg|gpkg|geojson|kml|kmz|shapefile|karte|layer|gis)/i.test(text)
+}
+
+function getThinkingIndicatorLabel(message, attachments = []) {
+  if (looksLikeImageGenerationRequest(message)) return 'Bild wird erstellt…'
+  if (looksLikeFileGenerationRequest(message)) return 'Datei wird erstellt…'
+  if (looksLikeQgisRequest([message, ...attachments.map((attachment) => attachment?.filename || '')].join(' '))) return 'QGIS wird gestartet…'
+  return 'Hippo denkt nach…'
+}
+
 function formatFileSize(bytes) {
   const value = Number(bytes || 0)
   if (!Number.isFinite(value) || value <= 0) return '0 B'
@@ -6473,7 +6490,7 @@ async function sendChat() {
   renderMessage('user', message || 'Anhang', { attachments: state.draftAttachments })
   resetComposer()
 
-  showThinkingIndicator(looksLikeImageGenerationRequest(message) ? 'Bild wird erstellt…' : 'Hippo denkt nach…')
+  showThinkingIndicator(getThinkingIndicatorLabel(message, state.draftAttachments))
   try {
     const response = await apiJson('/chat-enhanced/', {
       method: 'POST',
@@ -6515,19 +6532,6 @@ async function sendChat() {
         const lastFailure = [...(actionResult.results || [])].reverse().find((entry) => entry && entry.ok === false)
         const detail = lastFailure?.error ? ` (${lastFailure.error})` : ''
         showToast(`Ein Schritt der PC-Steuerung ist fehlgeschlagen${detail}`, 'error')
-      }
-    }
-
-    const docxReportPath = savedArtifacts.find((filePath) => String(filePath || '').toLowerCase().endsWith('.docx'))
-    const shouldOpenWordReport = Boolean(
-      docxReportPath
-      && state.desktopAgentMode
-      && /\b(word|bericht|report|analyse|rapport)\b/i.test(message)
-    )
-    if (shouldOpenWordReport) {
-      const openResult = await window.electron.desktopControl({ action: 'open_file', file: docxReportPath })
-      if (!openResult?.ok) {
-        showToast(openResult?.error || 'Word-Bericht konnte nicht automatisch geöffnet werden', 'error')
       }
     }
 

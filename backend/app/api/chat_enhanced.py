@@ -23,6 +23,7 @@ from app.services.generated_files import build_generated_file_bytes_with_fallbac
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory
 from app.services.project_storage import build_project_files_context
+from app.services.desktop_workflows import infer_desktop_launch_actions
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.hippo_identity import build_hippo_system_prompt
 import base64
@@ -449,17 +450,25 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 "content": "\n".join(project_memory_context),
             })
 
-        project_files_context = ''
+        project_context_parts: list[str] = []
         try:
             if payload.project_folder_context and payload.project_folder_context.strip():
-                project_files_context = payload.project_folder_context.strip()
-            elif conv_project is not None:
-                project_files_context = await build_project_files_context(conv_project, include_previews=True, question=payload.message, source_prefixes=payload.project_source_prefixes)
-            else:
-                project_files_context = (
+                project_context_parts.append(payload.project_folder_context.strip())
+            if conv_project is not None:
+                backend_project_context = await build_project_files_context(
+                    conv_project,
+                    include_previews=True,
+                    question=payload.message,
+                    source_prefixes=payload.project_source_prefixes,
+                )
+                if backend_project_context.strip():
+                    project_context_parts.append(backend_project_context.strip())
+            if not project_context_parts:
+                project_context_parts.append(
                     "Kein lokaler Projektordner-Kontext vom Desktop erhalten. "
                     "Antworte nicht mit erfundenen Dateinamen und fordere bei Bedarf den Benutzer auf, den lokalen Ordner im Desktop zu verbinden."
                 )
+            project_files_context = "\n\n".join(project_context_parts)
             hippo_messages.insert(
                 3,
                 {
@@ -543,6 +552,34 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     if payload.desktop_agent:
         parsed_reply, desktop_actions = _parse_desktop_actions(reply_text)
         reply_text = parsed_reply
+    inferred_actions: list[DesktopAction] = []
+    try:
+        qgis_context = ' '.join(
+            part for part in [
+                payload.message or '',
+                ' '.join(getattr(attachment, 'filename', '') for attachment in (payload.attachments or [])),
+                reply_text or '',
+            ]
+            if part
+        )
+        if _looks_qgis_related(qgis_context) or (payload.desktop_profile or '').strip().lower() == 'qgis':
+            inferred_actions = [
+                DesktopAction.model_validate(action)
+                for action in infer_desktop_launch_actions(qgis_context, reply_text, payload.desktop_profile)
+                if isinstance(action, dict) and str(action.get('command') or '').strip().lower() == 'qgis'
+            ]
+    except Exception:
+        inferred_actions = []
+    if inferred_actions:
+        existing = {
+            json.dumps(action.model_dump(exclude_none=True), sort_keys=True, ensure_ascii=False)
+            for action in desktop_actions
+        }
+        for action in inferred_actions:
+            serialized = json.dumps(action.model_dump(exclude_none=True), sort_keys=True, ensure_ascii=False)
+            if serialized not in existing:
+                desktop_actions.append(action)
+                existing.add(serialized)
 
     generated_files, cleaned_reply = extract_generated_files(reply_text)
     if cleaned_reply:

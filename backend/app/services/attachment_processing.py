@@ -130,6 +130,21 @@ def _extract_text_from_image(data: bytes) -> str:
         return ""
 
 
+GEO_ATTACHMENT_EXTENSIONS = (
+    ".shp",
+    ".shx",
+    ".dbf",
+    ".prj",
+    ".cpg",
+    ".gpkg",
+    ".qgz",
+    ".qgs",
+    ".geojson",
+    ".kml",
+    ".kmz",
+)
+
+
 def extract_attachment_text(attachment: Any) -> str:
     existing_text = (getattr(attachment, "ocr_text", None) or "").strip()
     if existing_text:
@@ -137,25 +152,37 @@ def extract_attachment_text(attachment: Any) -> str:
 
     mime_type = _attachment_mime_type(attachment)
     filename = _attachment_name(attachment)
+    lower_name = filename.lower()
     data = _decode_attachment_bytes(attachment)
     if not data:
+        if lower_name.endswith(GEO_ATTACHMENT_EXTENSIONS):
+            return _truncate(
+                f"[Geodaten-Datei: {filename}] Diese Datei gehört zu einem GIS/QGIS-Datensatz. "
+                "Für eine echte inhaltliche Analyse müssen die Begleitdateien bzw. der Projektkontext mitausgewertet werden."
+            )
         return ""
 
-    if mime_type == "application/pdf" or filename.lower().endswith(".pdf"):
+    if mime_type == "application/pdf" or lower_name.endswith(".pdf"):
         return _extract_text_from_pdf(data)
 
     if (
         mime_type
         == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        or filename.lower().endswith(".docx")
+        or lower_name.endswith(".docx")
     ):
         return _extract_text_from_docx(data)
 
-    if mime_type.startswith("image/") or filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff")):
+    if mime_type.startswith("image/") or lower_name.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff")):
         return _extract_text_from_image(data)
 
-    if mime_type.startswith("text/") or filename.lower().endswith((".txt", ".md", ".csv", ".log", ".rtf")):
+    if mime_type.startswith("text/") or lower_name.endswith((".txt", ".md", ".csv", ".log", ".rtf")):
         return _extract_text_from_plain_text(data)
+
+    if lower_name.endswith(GEO_ATTACHMENT_EXTENSIONS):
+        return _truncate(
+            f"[Geodaten-Datei: {filename}] Diese Datei gehört zu einem GIS/QGIS-Datensatz. "
+            "Für eine echte inhaltliche Analyse müssen die Begleitdateien bzw. der Projektkontext mitausgewertet werden."
+        )
 
     return ""
 
