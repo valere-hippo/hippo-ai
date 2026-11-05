@@ -492,7 +492,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             if not project_context_parts:
                 project_context_parts.append(
                     "Der Desktop-Agent ist aktiv und kann den Computer bedienen. "
-                    "Lokale Projektordner werden nicht dauerhaft tief gescannt; "
+                    "Lokale Projektordner werden direkt über den vorhandenen Projektkontext gelesen; "
                     "wenn der Kontext noch leer ist, antworte ohne erfundene Dateinamen und fordere nur eine kurze direkte Ordnerauflistung an."
                 )
             project_files_context = "\n\n".join(project_context_parts)
