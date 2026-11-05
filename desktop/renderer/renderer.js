@@ -640,7 +640,7 @@ async function authorizeProjectLocalFolders(project) {
   updateProjectAccessSummary(project)
   await loadProjects()
   renderContext()
-  if (state.selectedProjectId === project.id) {
+  if (state.selectedProjectId === project.id && !state.desktopAgentMode) {
     scheduleProjectSourceSync(project, persisted?.sourceFolders || folders, { silent: true })
   }
   return persisted || { sourceFolders: folders, consented: true }
@@ -760,10 +760,10 @@ async function refreshProjectFolderContext(project, { force = false, requireCons
 
     const folderInfo = await window.electron.inspectProjectFolder({
       folder: folders.join('\n'),
-      maxDepth: 1,
-      maxEntries: 80,
-      maxTextChars: 4000,
-      timeoutMs: 8000,
+      maxDepth: 0,
+      maxEntries: 40,
+      maxTextChars: 2000,
+      timeoutMs: 2500,
     })
     const context = String(folderInfo?.context || '')
     state.projectFolderContextCache.set(project.id, context)
@@ -833,8 +833,8 @@ async function quickProjectFolderFingerprint(project, folders) {
   if (!rawFolders.length) return ''
   const scan = await window.electron.scanProjectFolderFiles({
     folder: rawFolders.join('\n'),
-    maxDepth: 1,
-    maxFiles: 500,
+    maxDepth: 0,
+    maxFiles: 120,
   })
   if (!scan?.ok) return ''
   return computeProjectFolderFingerprint(scan.files || [])
@@ -2756,10 +2756,10 @@ async function selectProject(projectId) {
   renderConversations()
   renderContext()
 
-  if (project) {
+  if (project && !state.desktopAgentMode) {
     const scope = loadProjectSourceScope(project)
     const folders = scope?.sourceFolders?.length ? scope.sourceFolders : normalizeProjectFolderInput(project.watched_folder)
-    if (folders.length && !state.desktopAgentMode) {
+    if (folders.length) {
       scheduleProjectSourceSync(project, folders, { silent: true })
     }
   }
@@ -3092,7 +3092,9 @@ async function openCreateProjectModal() {
       renderProjects()
       renderConversations()
       renderContext()
-      scheduleProjectSourceSync(refreshedCreatedProject, normalizeProjectFolderInput(refreshedCreatedProject.watched_folder), { silent: true })
+      if (!state.desktopAgentMode) {
+        scheduleProjectSourceSync(refreshedCreatedProject, normalizeProjectFolderInput(refreshedCreatedProject.watched_folder), { silent: true })
+      }
     }
     hideLoader()
     showToast('Projekt erstellt')
@@ -6421,7 +6423,7 @@ async function refreshLocalProjectSources(project, sourceFolders = null, options
     let totalFiles = 0
     for (const [folderIndex, folder] of folders.entries()) {
       emitPhase?.(`scanne Ordner ${folderIndex + 1}/${folders.length}`)
-      const scan = await window.electron.scanProjectFolderFiles({ folder, maxDepth: 999, maxFiles: 50000 })
+      const scan = await window.electron.scanProjectFolderFiles({ folder, maxDepth: 0, maxFiles: 120 })
       if (!scan?.ok) {
         throw new Error(scan?.error || `Ordner konnte nicht gescannt werden: ${folder}`)
       }
@@ -6537,9 +6539,6 @@ async function sendChat() {
     }
     if (!state.desktopAgentMode && (looksLikeQgisRequest(message) || looksLikeFileGenerationRequest(message) || state.draftAttachments.length > 0)) {
       setDesktopAgentMode(true)
-    }
-    if (!state.desktopAgentMode) {
-      void queueProjectFolderRefresh(project)
     }
     projectFolderContext = state.projectFolderContextCache.get(project.id) || ''
     if (accessGranted) {

@@ -405,6 +405,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "- Nutze desktop_actions nur für echte PC-Steuerung.\n"
             "- Wenn der Benutzer einen QGIS-Workflow, eine Datei oder ein Projekt analysieren will, arbeite in dieser Reihenfolge: 1) passende App öffnen, 2) Datei/Projekt laden, 3) Analyse durchführen, 4) Ergebnis als Word-Report liefern.\n"
             "- Der Desktop-Agent hat Zugriff auf den Computer des Benutzers. Sage nicht, dass du keinen Zugriff auf lokale Dateien oder auf den Computer hast, wenn desktop_agent aktiv ist.\n"
+            "- Wenn es um Projektdateien geht, verlange keinen Scan als Voraussetzung; nutze den vorhandenen Projektordner-Kontext oder frage den Desktop-Agenten nach einer direkten, kurzen Verzeichnisliste statt eines Tiefenscans.\n"
             "- Wenn der Benutzer ausdrücklich einen Word-Bericht möchte, erzeuge bevorzugt eine .docx-Datei und ergänze sie mit klarer Zusammenfassung statt nur Text in der Chat-Antwort.\n"
             "- Beim QGIS-Profil solltest du Geodaten immer artweise auswerten, Koordinaten und Kontakte prüfen, Cluster und mögliche Brutreviere erkennen und den Nutzer bei Bedarf nach weiteren Kennzahlen fragen.\n"
             "- Wenn der Benutzer eine QGIS-Datei, ein Shapefile, ein GeoPackage oder eine Projektdatei nennt, starte QGIS direkt mit dieser Datei und lade nicht zuerst einen generischen Viewer.\n"
@@ -467,8 +468,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             if not project_context_parts:
                 project_context_parts.append(
                     "Der Desktop-Agent ist aktiv und kann den Computer bedienen. "
-                    "Lokale Projektordner werden im Hintergrund erkannt und aktualisiert; "
-                    "wenn der Kontext noch leer ist, antworte ohne erfundene Dateinamen und bitte nur um eine kurze Hintergrundaktualisierung."
+                    "Lokale Projektordner werden nicht dauerhaft tief gescannt; "
+                    "wenn der Kontext noch leer ist, antworte ohne erfundene Dateinamen und fordere nur eine kurze direkte Ordnerauflistung an."
                 )
             project_files_context = "\n\n".join(project_context_parts)
             hippo_messages.insert(
