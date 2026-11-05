@@ -33,6 +33,7 @@ const state = {
   projectFolderContextCache: new Map(),
   projectFolderFingerprintCache: new Map(),
   projectFolderScanState: new Map(),
+  projectFolderWarmJobs: new Map(),
   projectRefreshJobs: new Map(),
   projectMenuCleanup: null,
   projectQuery: '',
@@ -41,6 +42,48 @@ const state = {
   thinkingMessage: null,
   desktopAgentMode: true,
   desktopAgentProfile: localStorage.getItem('hippo.desktop.profile') || 'generic',
+}
+
+const PROJECT_FOLDER_CONTEXT_CACHE_KEY = 'hippo.project.folder.context.cache.v2'
+
+function loadProjectFolderContextSnapshot() {
+  try {
+    const raw = localStorage.getItem(PROJECT_FOLDER_CONTEXT_CACHE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return {}
+    return parsed
+  } catch (error) {
+    console.warn('Failed to load project folder cache', error)
+    return {}
+  }
+}
+
+function saveProjectFolderContextSnapshot() {
+  try {
+    const snapshot = {}
+    for (const [projectId, context] of state.projectFolderContextCache.entries()) {
+      if (!context) continue
+      snapshot[String(projectId)] = {
+        context,
+        fingerprint: state.projectFolderFingerprintCache.get(projectId) || '',
+        updatedAt: new Date().toISOString(),
+      }
+    }
+    localStorage.setItem(PROJECT_FOLDER_CONTEXT_CACHE_KEY, JSON.stringify(snapshot))
+  } catch (error) {
+    console.warn('Failed to save project folder cache', error)
+  }
+}
+
+const persistedProjectFolderSnapshot = loadProjectFolderContextSnapshot()
+for (const [projectId, entry] of Object.entries(persistedProjectFolderSnapshot)) {
+  if (!entry || typeof entry !== 'object') continue
+  const context = String(entry.context || '')
+  if (!context) continue
+  state.projectFolderContextCache.set(projectId, context)
+  state.projectFolderFingerprintCache.set(projectId, String(entry.fingerprint || ''))
+  state.projectFolderScanState.set(projectId, 'ready')
 }
 
 const els = {
@@ -732,13 +775,60 @@ function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) 
   return promise
 }
 
+async function warmProjectFolderContext(project, folders, fingerprint = '') {
+  if (!project?.id || !window.electron?.inspectProjectFolder) return ''
+  const existingJob = state.projectFolderWarmJobs.get(project.id)
+  if (existingJob?.promise) return existingJob.promise
+
+  const job = { promise: null, startedAt: new Date().toISOString() }
+  const promise = window.electron.inspectProjectFolder({
+    folder: folders.join('\n'),
+    maxDepth: 2,
+    maxEntries: 120,
+    maxTextChars: 4000,
+    timeoutMs: 2500,
+  })
+    .then((folderInfo) => {
+      const context = String(folderInfo?.context || '')
+      if (context) {
+        state.projectFolderContextCache.set(project.id, context)
+        if (fingerprint) {
+          state.projectFolderFingerprintCache.set(project.id, fingerprint)
+        }
+        state.projectFolderScanState.set(project.id, folderInfo?.ok ? 'ready' : 'error')
+        saveProjectFolderContextSnapshot()
+        if (state.selectedProjectId === project.id) {
+          renderContext()
+        }
+      }
+      return context
+    })
+    .catch((error) => {
+      const fallback = state.projectFolderContextCache.get(project.id) || `Der lokale Ordner konnte nicht gelesen werden: ${error.message}`
+      state.projectFolderContextCache.set(project.id, fallback)
+      state.projectFolderScanState.set(project.id, 'error')
+      saveProjectFolderContextSnapshot()
+      return fallback
+    })
+    .finally(() => {
+      state.projectFolderWarmJobs.delete(project.id)
+      if (state.selectedProjectId === project.id) {
+        renderContext()
+      }
+    })
+
+  job.promise = promise
+  state.projectFolderWarmJobs.set(project.id, job)
+  return promise
+}
+
 async function refreshProjectFolderContext(project, { force = false, requireConsent = false } = {}) {
   if (!project?.id) return ''
   const cached = state.projectFolderContextCache.get(project.id)
   const cachedState = state.projectFolderScanState.get(project.id)
   if (cached && !force && cachedState === 'ready') return cached
   const folders = normalizeProjectFolderInput(project.watched_folder)
-  if (!folders.length || !window.electron?.inspectProjectFolder) {
+  if (!folders.length) {
     state.projectFolderContextCache.set(project.id, '')
     state.projectFolderFingerprintCache.set(project.id, '')
     state.projectFolderScanState.set(project.id, 'idle')
@@ -750,33 +840,37 @@ async function refreshProjectFolderContext(project, { force = false, requireCons
     state.projectFolderScanState.set(project.id, 'consent')
     return ''
   }
+  if (!window.electron?.scanProjectFolderFiles) {
+    state.projectFolderScanState.set(project.id, 'loading')
+    return warmProjectFolderContext(project, folders)
+  }
+
   state.projectFolderScanState.set(project.id, 'loading')
   try {
     const quickFingerprint = await quickProjectFolderFingerprint(project, folders)
-    const previousFingerprint = state.projectFolderFingerprintCache.get(project.id) || ''
-    if (quickFingerprint && quickFingerprint === previousFingerprint && cached) {
-      state.projectFolderScanState.set(project.id, 'ready')
-      return cached
-    }
-
-    const folderInfo = await window.electron.inspectProjectFolder({
+    const scan = await window.electron.scanProjectFolderFiles({
       folder: folders.join('\n'),
-      maxDepth: 2,
-      maxEntries: 80,
-      maxTextChars: 4000,
-      timeoutMs: 5000,
+      maxDepth: 0,
+      maxFiles: 2000,
     })
-    const context = String(folderInfo?.context || '')
-    state.projectFolderContextCache.set(project.id, context)
+    const files = Array.isArray(scan?.files) ? scan.files : []
+    const quickContext = formatScannedFolderContext(files, folders[0] || project.watched_folder)
+    state.projectFolderContextCache.set(project.id, quickContext)
     if (quickFingerprint) {
       state.projectFolderFingerprintCache.set(project.id, quickFingerprint)
     }
-    state.projectFolderScanState.set(project.id, folderInfo?.ok ? 'ready' : 'error')
-    return context
+    state.projectFolderScanState.set(project.id, scan?.ok ? 'ready' : 'error')
+    saveProjectFolderContextSnapshot()
+    if (scan?.ok) {
+      void warmProjectFolderContext(project, folders, quickFingerprint)
+    }
+    return quickContext
   } catch (error) {
-    const context = `Der lokale Ordner konnte nicht gelesen werden: ${error.message}`
+    const context = cached || `Der lokale Ordner konnte nicht gelesen werden: ${error.message}`
     state.projectFolderContextCache.set(project.id, context)
     state.projectFolderScanState.set(project.id, 'error')
+    saveProjectFolderContextSnapshot()
+    void warmProjectFolderContext(project, folders, '')
     return context
   }
 }
