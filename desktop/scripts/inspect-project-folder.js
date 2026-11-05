@@ -6,9 +6,19 @@ function isProbablyTextFile(filename) {
   return new Set(['.txt', '.md', '.markdown', '.csv', '.json', '.yml', '.yaml', '.xml', '.rtf', '.log', '.ini', '.py', '.js', '.ts', '.html', '.htm', '.css']).has(ext)
 }
 
+function readPreview(filePath, maxTextChars) {
+  try {
+    const rawContent = fs.readFileSync(filePath, 'utf8')
+    const preview = rawContent.replace(/\s+/g, ' ').trim().slice(0, maxTextChars)
+    return preview
+  } catch (error) {
+    return ''
+  }
+}
+
 function summarizeLocalFolder(folderPath, options = {}) {
-  const maxDepth = Number.isFinite(options.maxDepth) ? options.maxDepth : 2
-  const maxEntries = Number.isFinite(options.maxEntries) ? options.maxEntries : 60
+  const maxDepth = Number.isFinite(options.maxDepth) ? options.maxDepth : 3
+  const maxEntries = Number.isFinite(options.maxEntries) ? options.maxEntries : 120
   const maxTextChars = Number.isFinite(options.maxTextChars) ? options.maxTextChars : 12000
   const raw = String(folderPath || '').trim()
   if (!raw) return { ok: false, context: 'Kein Ordnerpfad angegeben.' }
@@ -22,7 +32,29 @@ function summarizeLocalFolder(folderPath, options = {}) {
   let chars = 0
   let entries = 0
 
-  const walk = (dir, depth = 0) => {
+  const recordFile = (filePath, depth, labelPrefix = '') => {
+    if (entries >= maxEntries) return
+    const indent = '  '.repeat(depth)
+    const baseName = path.basename(filePath)
+    let line = `${indent}- ${labelPrefix}${baseName}`
+    try {
+      const stat = fs.statSync(filePath)
+      line += ` (${stat.size} bytes)`
+      if (isProbablyTextFile(baseName)) {
+        const preview = readPreview(filePath, maxTextChars)
+        if (preview) {
+          line += ` | Inhalt: ${preview}`
+          chars += preview.length
+        }
+      }
+    } catch (error) {
+      line += ` | nicht lesbar: ${error.message}`
+    }
+    lines.push(line)
+    entries += 1
+  }
+
+  const walk = (dir, depth = 0, rootLabel = '') => {
     if (entries >= maxEntries || depth > maxDepth) return
     let dirEntries = []
     try {
@@ -42,38 +74,33 @@ function summarizeLocalFolder(folderPath, options = {}) {
       if (entry.isDirectory()) {
         lines.push(`${'  '.repeat(depth + 1)}[Ordner] ${entry.name}`)
         entries += 1
-        walk(absPath, depth + 1)
+        walk(absPath, depth + 1, rootLabel)
         continue
       }
       if (!entry.isFile()) continue
-
-      let line = `${'  '.repeat(depth + 1)}- ${entry.name}`
-      try {
-        const stat = fs.statSync(absPath)
-        line += ` (${stat.size} bytes)`
-        if (isProbablyTextFile(entry.name)) {
-          const rawContent = fs.readFileSync(absPath, 'utf8')
-          const preview = rawContent.replace(/\s+/g, ' ').trim().slice(0, maxTextChars)
-          if (preview) {
-            line += ` | Inhalt: ${preview}`
-            chars += preview.length
-          }
-        }
-      } catch (error) {
-        line += ` | nicht lesbar: ${error.message}`
-      }
-      lines.push(line)
-      entries += 1
+      const label = rootLabel ? `${rootLabel}/` : ''
+      recordFile(absPath, depth + 1, label)
     }
   }
 
   for (const root of roots) {
     if (entries >= maxEntries) break
-    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    if (!fs.existsSync(root)) {
       lines.push(`- Der Ordner ist nicht erreichbar: ${root}`)
       continue
     }
-    walk(root, 0)
+
+    const stat = fs.statSync(root)
+    if (stat.isFile()) {
+      recordFile(root, 0)
+      continue
+    }
+    if (!stat.isDirectory()) {
+      lines.push(`- Der Pfad ist weder Datei noch Ordner: ${root}`)
+      continue
+    }
+
+    walk(root, 0, path.basename(root))
   }
 
   if (lines.length === 1) lines.push('Keine Dateien gefunden.')

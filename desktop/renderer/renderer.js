@@ -736,7 +736,7 @@ async function refreshProjectFolderContext(project, { force = false, requireCons
   if (!project?.id) return ''
   const cached = state.projectFolderContextCache.get(project.id)
   const cachedState = state.projectFolderScanState.get(project.id)
-  if (cached && !force && cachedState === 'ready' && !/unvollständig|nicht gelesen|nicht erreichbar|fehlgeschlagen|leer/i.test(String(cached))) return cached
+  if (cached && !force && cachedState === 'ready') return cached
   const folders = normalizeProjectFolderInput(project.watched_folder)
   if (!folders.length || !window.electron?.inspectProjectFolder) {
     state.projectFolderContextCache.set(project.id, '')
