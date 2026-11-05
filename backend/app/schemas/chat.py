@@ -8,6 +8,7 @@ class ChatAttachment(BaseModel):
     data_url: str | None = None
     raw_base64: str | None = None
     ocr_text: str | None = None
+    file_path: str | None = None
 
 
 class ChatMessageCreate(BaseModel):

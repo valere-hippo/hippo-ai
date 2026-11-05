@@ -29,3 +29,17 @@ def test_infer_desktop_launch_actions_uses_qgis_profile_for_geodata_paths():
     assert first['action'] == 'launch_app'
     assert first['command'] == 'qgis'
     assert first['file'] == '/data/fotos.shp'
+
+
+def test_infer_desktop_launch_actions_uses_file_path_from_attachment_context():
+    actions = infer_desktop_launch_actions(
+        'Bitte analysiere diese Datei.',
+        'Desktop input includes [Attachment: Biotopkartierung.shp | application/octet-stream] [Local path] C:\\Users\\ValereYoubi\\Documents\\check\\Biotopkartierung.shp',
+        profile='qgis',
+    )
+
+    assert actions, 'Expected at least one desktop action'
+    first = actions[0]
+    assert first['action'] == 'launch_app'
+    assert first['command'] == 'qgis'
+    assert first['file'] == 'C:\\Users\\ValereYoubi\\Documents\\check\\Biotopkartierung.shp'

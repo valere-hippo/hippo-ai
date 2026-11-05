@@ -588,7 +588,15 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         qgis_context = ' '.join(
             part for part in [
                 payload.message or '',
-                ' '.join(getattr(attachment, 'filename', '') for attachment in (payload.attachments or [])),
+                ' '.join(
+                    item
+                    for attachment in (payload.attachments or [])
+                    for item in (
+                        (getattr(attachment, 'filename', '') or '').strip(),
+                        (getattr(attachment, 'file_path', '') or '').strip(),
+                    )
+                    if item
+                ),
                 reply_text or '',
             ]
             if part

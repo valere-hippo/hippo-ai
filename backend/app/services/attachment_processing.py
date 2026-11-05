@@ -304,6 +304,9 @@ def attachment_context_text(attachment: Any) -> str:
     mime_type = _attachment_mime_type(attachment) or "unknown"
     extracted_text = extract_attachment_text(attachment)
     lines = [f"[Attachment: {filename} | {mime_type}]"]
+    file_path = (getattr(attachment, "file_path", None) or "").strip()
+    if file_path:
+        lines.append(f"[Local path] {file_path}")
     if extracted_text:
         lines.append("[Content]")
         lines.append(extracted_text)

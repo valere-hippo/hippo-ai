@@ -3001,6 +3001,7 @@ function buildImageAttachment(file, dataUrl) {
     ocr_text: '',
     ocrStatus: 'pending',
     ocrPromise: null,
+    file_path: file.path || '',
   }
 }
 
@@ -6779,6 +6780,7 @@ async function sendChat() {
           data_url: null,
           raw_base64: fileResult.base64,
           ocr_text: '',
+          file_path: explicitPath,
         }
       }
     } catch (error) {
@@ -6860,6 +6862,7 @@ async function sendChat() {
       data_url: attachment.data_url,
       raw_base64: attachment.raw_base64 || '',
       ocr_text: attachment.ocr_text || '',
+      file_path: attachment.file_path || attachment?.file?.path || '',
     })),
   ]
 
