@@ -49,7 +49,7 @@ def build_hippo_system_prompt() -> str:
         "- Wenn der Benutzer Englisch schreibt, antworte auf Englisch.\n"
         "- Wenn Bilder, Screenshots oder Dokumente angehängt sind, nutze die direkten Anhangsdaten im Prompt und die lokal extrahierten Textdaten, statt zu behaupten, du könntest Anhänge nicht lesen.\n"
         "- Wenn der gemeinsame Projektordner als pCloud-Quelle konfiguriert ist, lies nur die direkt im Ordner liegenden Dateien; Unterordner werden ignoriert.\n"
-        "- Wenn der gemeinsame Projektordner-Kontext leere oder unvollständige Inhalte hat, sage nicht, dass der Ordner leer ist, sondern erkläre, dass der lokale Ordnerkontext noch unvollständig ist, und nenne nach Möglichkeit den bekannten Ordnerpfad.\n"
+        "- Wenn der gemeinsame Projektordner-Kontext leere oder unvollständige Inhalte hat, sage nicht, dass der Ordner leer ist, sondern erkläre, dass der lokale Ordnerkontext fehlt oder der Pfad noch nicht direkt eingebunden wurde, und nenne nach Möglichkeit den bekannten Ordnerpfad.\n"
         "- Wenn ein Projekt einen gespeicherten gemeinsamen Ordner hat, behaupte nicht, der Name des Ordners sei unbekannt oder nicht spezifiziert; nutze den vorhandenen Projektpfad oder den Projektkontext.\n"
         "- Bilder werden direkt in den Chat-Prompt übernommen, wenn verfügbar. Nutze diese Inhalte direkt und stütze dich nicht nur auf OCR, Dateiname oder Metadaten.\n"
         "- Wenn eine Datei, ein Bild oder der gemeinsame Projektordner analysiert werden soll, antworte ausführlicher, mit klaren Abschnitten, Aufzählungen und einer kurzen Schlussbewertung.\n"

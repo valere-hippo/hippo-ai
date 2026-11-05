@@ -851,6 +851,21 @@ function looksLikeProjectFolderInquiry(message) {
   return /(?:welche\s+dateien|zeige\s+mir\s+.*dateien|welche\s+ordner|liste\s+.*dateien|liste\s+.*ordner|inhalt\s+des\s+ordners|projektordner|ordnersatz|gemeinsamer\s+ordner|files?|folders?)/i.test(text)
 }
 
+function extractWindowsPathCandidates(text) {
+  const source = String(text || '')
+  const matches = source.match(/[A-Za-z]:\\(?:[^<>:"|?*\r\n]+\\)*[^<>:"|?*\r\n]+/g) || []
+  return matches
+    .map((candidate) => String(candidate || '').trim().replace(/[.,;:]+$/, ''))
+    .filter(Boolean)
+}
+
+function isLikelyFilePath(candidate) {
+  const normalized = String(candidate || '').trim()
+  if (!normalized) return false
+  const lastSegment = normalized.split('\\').pop() || normalized
+  return /\.[A-Za-z0-9]{1,10}$/.test(lastSegment)
+}
+
 function looksLikeFileGenerationRequest(message) {
   const text = String(message || '').toLowerCase()
   return /(?:datei|bericht|report|pdf|docx|word|export|speichere|als\s+datei|als\s+bericht|als\s+pdf|als\s+word)/i.test(text)
@@ -6533,21 +6548,58 @@ async function sendChat() {
   const deliveryFolder = project?.delivery_folder || null
   let projectSourcePrefixes = null
   let projectFolderContext = ''
+  let explicitLocalAttachment = null
 
   if (!state.desktopAgentMode) {
     setDesktopAgentMode(true)
   }
 
+  const explicitPathCandidates = extractWindowsPathCandidates(message)
+  const explicitPath = explicitPathCandidates[0] || ''
+
+  if (explicitPath && window.electron?.readLocalFile && isLikelyFilePath(explicitPath)) {
+    try {
+      const fileResult = await window.electron.readLocalFile({ path: explicitPath })
+      if (fileResult?.ok && fileResult.base64) {
+        explicitLocalAttachment = {
+          filename: explicitPath.split('\\').pop() || explicitPath,
+          mime_type: fileResult.contentType || 'application/octet-stream',
+          data_url: null,
+          raw_base64: fileResult.base64,
+          ocr_text: '',
+        }
+      }
+    } catch (error) {
+      console.warn('Direct local file read failed:', error)
+    }
+  }
+
+  if (explicitPath && window.electron?.inspectProjectFolder && !isLikelyFilePath(explicitPath)) {
+    try {
+      const folderInfo = await window.electron.inspectProjectFolder({
+        folder: explicitPath,
+        maxDepth: 2,
+        maxEntries: 120,
+        maxTextChars: 4000,
+        timeoutMs: 5000,
+      })
+      if (folderInfo?.context) {
+        projectFolderContext = String(folderInfo.context)
+      }
+    } catch (error) {
+      console.warn('Direct local folder read failed:', error)
+    }
+  }
   if (project) {
     const scope = loadProjectSourceScope(project)
     const accessGranted = Boolean(scope?.sourceFolders?.length && scope.consented)
-    if (accessGranted) {
+    if (accessGranted && !explicitPath) {
       projectSourcePrefixes = scope.sourceFolders
     }
     if (!state.desktopAgentMode && (looksLikeQgisRequest(message) || looksLikeFileGenerationRequest(message) || state.draftAttachments.length > 0)) {
       setDesktopAgentMode(true)
     }
-    if (project && (!projectFolderContext || looksLikeProjectFolderInquiry(message) || looksLikeFileGenerationRequest(message))) {
+    if (project && !explicitPath && (!projectFolderContext || looksLikeProjectFolderInquiry(message) || looksLikeFileGenerationRequest(message))) {
       projectFolderContext = await queueProjectFolderRefresh(project, { force: true })
     }
     if (accessGranted && !projectFolderContext) {
@@ -6560,13 +6612,16 @@ async function sendChat() {
     }
   }
 
-  const attachments = state.draftAttachments.map((attachment) => ({
-    filename: attachment.filename,
-    mime_type: attachment.mime_type,
-    data_url: attachment.data_url,
-    raw_base64: attachment.raw_base64 || '',
-    ocr_text: attachment.ocr_text || '',
-  }))
+  const attachments = [
+    ...(explicitLocalAttachment ? [explicitLocalAttachment] : []),
+    ...state.draftAttachments.map((attachment) => ({
+      filename: attachment.filename,
+      mime_type: attachment.mime_type,
+      data_url: attachment.data_url,
+      raw_base64: attachment.raw_base64 || '',
+      ocr_text: attachment.ocr_text || '',
+    })),
+  ]
 
   if (project && state.draftAttachments.length) {
     await Promise.all(state.draftAttachments.map((attachment) => persistAttachment(project.id, attachment)))

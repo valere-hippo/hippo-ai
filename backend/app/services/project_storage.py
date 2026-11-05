@@ -1459,7 +1459,7 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                 return (
                     "Im ausgewählten Ordnersatz konnten aktuell noch keine Dateien zuverlässig ausgelesen werden.\n"
                     f"Ordnerpfad: {folder or 'unbekannt'}\n"
-                    "Wenn der Benutzer Dateien erwartet, erkläre, dass der lokale Ordnerkontext noch unvollständig ist, und bitte nur um die direkte Pfadangabe statt um einen Scan."
+                    "Wenn der Benutzer Dateien erwartet, erkläre, dass der lokale Ordnerkontext fehlt oder der Pfad noch nicht direkt eingebunden wurde, und bitte nur um die direkte Pfadangabe."
                 )
             lines = [f"Im ausgewählten Ordnersatz des Projekts sind {len(files)} sichtbare Dateien vorhanden:"]
             if not _project_uses_pcloud(project):
@@ -1542,7 +1542,7 @@ async def build_project_files_context(project: Any, max_files: int | None = None
         return (
             "Im lokalen Projektordner konnten aktuell noch keine Dateien zuverlässig ausgelesen werden.\n"
             f"Ordnerpfad: {folder or 'unbekannt'}\n"
-            "Wenn der Benutzer Dateien erwartet, erkläre, dass der lokale Ordnerkontext noch unvollständig ist, und bitte nur um die direkte Pfadangabe statt um einen Scan."
+            "Wenn der Benutzer Dateien erwartet, erkläre, dass der lokale Ordnerkontext fehlt oder der Pfad noch nicht direkt eingebunden wurde, und bitte nur um die direkte Pfadangabe."
         )
 
     files_by_name = {item.filename: item for item in files}
