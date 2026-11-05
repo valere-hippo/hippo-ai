@@ -735,7 +735,8 @@ function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) 
 async function refreshProjectFolderContext(project, { force = false, requireConsent = false } = {}) {
   if (!project?.id) return ''
   const cached = state.projectFolderContextCache.get(project.id)
-  if (cached && !force) return cached
+  const cachedState = state.projectFolderScanState.get(project.id)
+  if (cached && !force && cachedState === 'ready' && !/unvollständig|nicht gelesen|nicht erreichbar|fehlgeschlagen|leer/i.test(String(cached))) return cached
   const folders = normalizeProjectFolderInput(project.watched_folder)
   if (!folders.length || !window.electron?.inspectProjectFolder) {
     state.projectFolderContextCache.set(project.id, '')
@@ -780,10 +781,10 @@ async function refreshProjectFolderContext(project, { force = false, requireCons
   }
 }
 
-function queueProjectFolderRefresh(project) {
+function queueProjectFolderRefresh(project, { force = false } = {}) {
   if (!project?.id || !project.watched_folder) return Promise.resolve('')
-  if (state.projectFolderScanState.get(project.id) === 'loading') return Promise.resolve(state.projectFolderContextCache.get(project.id) || '')
-  return refreshProjectFolderContext(project, { force: false, requireConsent: false }).then(() => {
+  if (!force && state.projectFolderScanState.get(project.id) === 'loading') return Promise.resolve(state.projectFolderContextCache.get(project.id) || '')
+  return refreshProjectFolderContext(project, { force, requireConsent: false }).then(() => {
     if (state.selectedProjectId === project.id) {
       renderContext()
     }
@@ -2749,7 +2750,7 @@ async function selectProject(projectId) {
     if (hasLocalSources) {
       setDesktopAgentMode(true)
     }
-    void queueProjectFolderRefresh(project)
+    void queueProjectFolderRefresh(project, { force: true })
   }
   renderProjects()
   renderConversations()
@@ -6547,7 +6548,7 @@ async function sendChat() {
       setDesktopAgentMode(true)
     }
     if (project && (!projectFolderContext || looksLikeProjectFolderInquiry(message) || looksLikeFileGenerationRequest(message))) {
-      projectFolderContext = await queueProjectFolderRefresh(project)
+      projectFolderContext = await queueProjectFolderRefresh(project, { force: true })
     }
     if (accessGranted && !projectFolderContext) {
       const authorizedContext = `Lokale Projektordner autorisiert: ${scope.sourceFolders.join(' | ')}`
