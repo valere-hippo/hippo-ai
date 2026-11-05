@@ -785,7 +785,7 @@ async function warmProjectFolderContext(project, folders, fingerprint = '') {
     folder: folders.join('\n'),
     maxDepth: 2,
     maxEntries: 120,
-    maxTextChars: 4000,
+    maxTextChars: 50000,
     timeoutMs: 2500,
   })
     .then((folderInfo) => {
@@ -6721,7 +6721,7 @@ async function sendChat() {
                 folder: explicitPath,
                 maxDepth: 4,
                 maxEntries: 200,
-                maxTextChars: 4000,
+                maxTextChars: 50000,
                 timeoutMs: 2500,
               })
               if (folderInfo?.context) {
@@ -6737,7 +6737,7 @@ async function sendChat() {
           folder: explicitPath,
           maxDepth: 2,
           maxEntries: 120,
-          maxTextChars: 4000,
+          maxTextChars: 50000,
           timeoutMs: 2500,
         })
         if (folderInfo?.context) {

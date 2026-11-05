@@ -1,25 +1,33 @@
 const fs = require('fs')
 const path = require('path')
 
+const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.markdown', '.csv', '.json', '.yml', '.yaml', '.xml', '.rtf', '.log', '.ini', '.py', '.js', '.ts', '.html', '.htm', '.css'])
+
 function isProbablyTextFile(filename) {
   const ext = path.extname(String(filename || '')).toLowerCase()
-  return new Set(['.txt', '.md', '.markdown', '.csv', '.json', '.yml', '.yaml', '.xml', '.rtf', '.log', '.ini', '.py', '.js', '.ts', '.html', '.htm', '.css']).has(ext)
+  return TEXT_EXTENSIONS.has(ext)
 }
 
-function readPreview(filePath, maxTextChars) {
-  try {
-    const rawContent = fs.readFileSync(filePath, 'utf8')
-    const preview = rawContent.replace(/\s+/g, ' ').trim().slice(0, maxTextChars)
-    return preview
-  } catch (error) {
-    return ''
+function readTextContent(filePath, maxTextChars) {
+  const encodings = ['utf8', 'utf16le', 'latin1']
+  for (const encoding of encodings) {
+    try {
+      const rawContent = fs.readFileSync(filePath, encoding)
+      const normalized = String(rawContent || '').replace(/\u0000/g, '')
+      if (!normalized.trim()) continue
+      if (normalized.length <= maxTextChars) return normalized
+      return `${normalized.slice(0, maxTextChars)}\n… [gekürzt]`
+    } catch (error) {
+      // try next encoding
+    }
   }
+  return ''
 }
 
 function summarizeLocalFolder(folderPath, options = {}) {
   const maxDepth = Number.isFinite(options.maxDepth) ? options.maxDepth : 3
   const maxEntries = Number.isFinite(options.maxEntries) ? options.maxEntries : 120
-  const maxTextChars = Number.isFinite(options.maxTextChars) ? options.maxTextChars : 12000
+  const maxTextChars = Number.isFinite(options.maxTextChars) ? options.maxTextChars : 50000
   const raw = String(folderPath || '').trim()
   if (!raw) return { ok: false, context: 'Kein Ordnerpfad angegeben.' }
   const roots = raw
@@ -32,6 +40,12 @@ function summarizeLocalFolder(folderPath, options = {}) {
   let chars = 0
   let entries = 0
 
+  const pushContent = (content) => {
+    if (!content) return ''
+    chars += content.length
+    return content
+  }
+
   const recordFile = (filePath, depth, labelPrefix = '') => {
     if (entries >= maxEntries) return
     const indent = '  '.repeat(depth)
@@ -41,10 +55,12 @@ function summarizeLocalFolder(folderPath, options = {}) {
       const stat = fs.statSync(filePath)
       line += ` (${stat.size} bytes)`
       if (isProbablyTextFile(baseName)) {
-        const preview = readPreview(filePath, maxTextChars)
-        if (preview) {
-          line += ` | Inhalt: ${preview}`
-          chars += preview.length
+        const content = readTextContent(filePath, maxTextChars)
+        if (content) {
+          line += `\n${indent}  [Inhalt]\n${content.split('\n').map((part) => `${indent}  ${part}`).join('\n')}`
+          pushContent(content)
+        } else {
+          line += `\n${indent}  [Inhalt] leer oder nicht lesbar`
         }
       }
     } catch (error) {
