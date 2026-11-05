@@ -3016,7 +3016,74 @@ function buildFileAttachment(file, rawBase64) {
     ocr_text: '',
     readStatus: 'ready',
     ocrPromise: Promise.resolve(''),
+    file_path: file.path || '',
   }
+}
+
+function getFilePathName(filePath) {
+  const raw = String(filePath || '')
+  const slash = Math.max(raw.lastIndexOf('/'), raw.lastIndexOf('\\'))
+  return slash >= 0 ? raw.slice(slash + 1) : raw
+}
+
+function getFilePathDir(filePath) {
+  const raw = String(filePath || '')
+  const slash = Math.max(raw.lastIndexOf('/'), raw.lastIndexOf('\\'))
+  return slash >= 0 ? raw.slice(0, slash) : ''
+}
+
+function getFileStem(filename) {
+  const base = getFilePathName(filename)
+  return base.replace(/\.[^.]+$/, '')
+}
+
+function getFileExt(filename) {
+  const base = getFilePathName(filename)
+  const match = base.match(/(\.[^.]+)$/)
+  return match ? match[1].toLowerCase() : ''
+}
+
+async function buildAttachmentFromLocalPath(filePath, filename, mimeType) {
+  if (!window.electron?.readLocalFile) return null
+  const result = await window.electron.readLocalFile({ path: filePath })
+  if (!result?.ok || !result.base64) return null
+  return {
+    kind: 'file',
+    filename,
+    mime_type: result.contentType || mimeType || 'application/octet-stream',
+    raw_base64: result.base64,
+    data_url: null,
+    previewUrl: null,
+    ocr_text: '',
+    readStatus: 'ready',
+    ocrPromise: Promise.resolve(''),
+    file_path: filePath,
+  }
+}
+
+async function attachGeoCompanionFiles(file) {
+  const sourcePath = String(file?.path || '').trim()
+  if (!sourcePath || !window.electron?.readLocalFile) return []
+  const sourceName = String(file?.name || file?.filename || '').trim()
+  if (!sourceName) return []
+  const ext = getFileExt(sourceName)
+  if (ext !== '.shp') return []
+  const stem = getFileStem(sourceName)
+  const dir = getFilePathDir(sourcePath)
+  if (!dir) return []
+  const separator = sourcePath.includes('\\') ? '\\' : '/'
+  const companionExts = ['.shx', '.dbf', '.prj', '.cpg']
+  const attachments = []
+  for (const companionExt of companionExts) {
+    const companionPath = `${dir}${separator}${stem}${companionExt}`
+    if (companionPath === sourcePath) continue
+    // eslint-disable-next-line no-await-in-loop
+    const companion = await buildAttachmentFromLocalPath(companionPath, `${stem}${companionExt}`, 'application/octet-stream')
+    if (companion) {
+      attachments.push(companion)
+    }
+  }
+  return attachments
 }
 
 function readFileAsDataUrl(file) {
@@ -3087,6 +3154,15 @@ async function attachFiles(files) {
     return
   }
 
+  const seenNames = new Set(state.draftAttachments.map((attachment) => String(attachment?.filename || '').toLowerCase()))
+  const pushAttachment = (attachment) => {
+    if (!attachment?.filename) return
+    const key = String(attachment.filename || '').toLowerCase()
+    if (seenNames.has(key)) return
+    seenNames.add(key)
+    state.draftAttachments.push(attachment)
+  }
+
   for (const file of selectedFiles) {
     if (file.type && file.type.startsWith('image/')) {
       // Keep image handling on the OCR path so screenshots still get text locally.
@@ -3099,7 +3175,13 @@ async function attachFiles(files) {
     // eslint-disable-next-line no-await-in-loop
     const buffer = await readFileAsArrayBuffer(file)
     const attachment = buildFileAttachment(file, arrayBufferToBase64(buffer))
-    state.draftAttachments.push(attachment)
+    pushAttachment(attachment)
+
+    if (getFileExt(file?.name || '') === '.shp' && file.path) {
+      // eslint-disable-next-line no-await-in-loop
+      const companions = await attachGeoCompanionFiles(file)
+      companions.forEach(pushAttachment)
+    }
   }
 
   renderAttachmentPreview()

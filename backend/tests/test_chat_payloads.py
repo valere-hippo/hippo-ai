@@ -1,4 +1,7 @@
 from types import SimpleNamespace
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import base64
 
 from app.services.chat_payloads import (
     attachments_contain_images,
@@ -40,6 +43,41 @@ def test_build_message_content_uses_image_parts_only_when_enabled():
     assert isinstance(content_without_images, str)
     assert "image_url" not in content_without_images
     assert "Affiche de conférence" in content_without_images
+
+
+def test_build_message_content_uses_geo_bundle_context_for_shapefile_attachments():
+    try:
+        import shapefile  # type: ignore
+    except Exception:
+        return
+
+    with TemporaryDirectory() as tmpdir:
+        base = Path(tmpdir) / 'Biotopkartierung'
+        writer = shapefile.Writer(str(base))
+        writer.field('NAME', 'C')
+        writer.field('TYPE', 'C')
+        writer.record('Parcelle A', 'Habitat')
+        writer.point(7.1, 49.6)
+        writer.close()
+
+        attachments = []
+        for suffix in ('.shp', '.shx', '.dbf'):
+            payload = (base.with_suffix(suffix)).read_bytes()
+            attachments.append(
+                SimpleNamespace(
+                    filename=f'Biotopkartierung{suffix}',
+                    mime_type='application/octet-stream',
+                    data_url=None,
+                    raw_base64=base64.b64encode(payload).decode('ascii'),
+                    ocr_text=None,
+                )
+            )
+
+        content = build_message_content('Analysiere die Dateien', attachments, include_images=False)
+        assert isinstance(content, str)
+        assert 'Geodatenpaket für' in content
+        assert 'Biotopkartierung' in content
+        assert 'Datensätze' in content or 'Geometrien' in content
 
 
 def test_looks_like_image_generation_request_requires_explicit_creation_language():

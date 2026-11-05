@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.attachment_processing import attachment_context_text
+from app.services.attachment_processing import attachment_context_text, _extract_geo_bundle_context
 import re
 
 
@@ -53,12 +53,16 @@ def build_message_content(
     image_parts: list[dict[str, Any]] = []
     text_parts: list[str] = []
     has_images = include_images and attachments_contain_images(attachments)
+    processed_geo_files: set[str] = set()
 
     base_text = message.strip() if message else ""
     if base_text:
         text_parts.append(base_text)
 
     for attachment in attachments:
+        filename = (getattr(attachment, "filename", None) or "").strip()
+        filename_lower = filename.lower()
+        stem = re.sub(r"\.[^.\\/]+$", "", filename_lower)
         mime_type = (getattr(attachment, "mime_type", None) or "").lower()
         data_url = getattr(attachment, "data_url", None)
         if has_images and data_url and mime_type.startswith("image/"):
@@ -71,8 +75,20 @@ def build_message_content(
                     },
                 }
             )
-        else:
-            text_parts.append(_attachment_text(attachment))
+            continue
+
+        if filename_lower.endswith((".shp", ".shx", ".dbf", ".prj", ".cpg")) and stem not in processed_geo_files:
+            bundle_text = _extract_geo_bundle_context(attachments, filename)
+            if bundle_text:
+                text_parts.append(bundle_text)
+                for ext in (".shp", ".shx", ".dbf", ".prj", ".cpg"):
+                    processed_geo_files.add(f"{stem}{ext}")
+                continue
+
+        if filename_lower in processed_geo_files:
+            continue
+
+        text_parts.append(_attachment_text(attachment))
 
     if not text_parts and not image_parts:
         return ""
