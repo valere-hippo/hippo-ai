@@ -166,49 +166,49 @@ function inspectProjectFolderAsync(folder, options = {}) {
 }
 
 function scanProjectFolderFilesAsync(folder, options = {}) {
-  const raw = String(folder || '').trim()
-  const roots = raw.split(/[\n;]+/).map((value) => value.trim()).filter(Boolean)
-  const maxDepth = Number.isFinite(options.maxDepth) ? options.maxDepth : Infinity
-  const maxFiles = Number.isFinite(options.maxFiles) ? options.maxFiles : Infinity
-  const files = []
-
-  const walk = (root, dir, depth = 0) => {
-    if (files.length >= maxFiles || depth > maxDepth) return
-    let entries = []
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true })
-    } catch (error) {
-      return
+  return new Promise((resolve) => {
+    const scriptPath = path.join(__dirname, 'scripts', 'scan-project-folder-files.js')
+    const child = spawn(process.execPath, [scriptPath, String(folder || ''), JSON.stringify(options || {})], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+    })
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    const finish = (payload) => {
+      if (settled) return
+      settled = true
+      resolve(payload)
     }
-    for (const entry of entries) {
-      const absPath = path.join(dir, entry.name)
-      if (entry.isDirectory()) {
-        walk(root, absPath, depth + 1)
-      } else if (entry.isFile()) {
-        try {
-          const stat = fs.statSync(absPath)
-          files.push({
-            root,
-            path: absPath,
-            relative_path: path.relative(root, absPath).split(path.sep).join('/'),
-            size: stat.size,
-            modified_at: stat.mtime.toISOString(),
-          })
-        } catch (error) {
-          // ignore unreadable entries
-        }
+    const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 12000
+    const timer = setTimeout(() => {
+      try {
+        child.kill('SIGKILL')
+      } catch (error) {
+        // ignore
       }
-      if (files.length >= maxFiles) return
-    }
-  }
-
-  for (const root of roots) {
-    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) continue
-    walk(root, root, 0)
-    if (files.length >= maxFiles) break
-  }
-
-  return { ok: true, files }
+      finish({ ok: false, error: `Der Projektordner-Scan hat das Zeitlimit von ${Math.round(timeoutMs / 1000)} Sekunden überschritten.` })
+    }, timeoutMs)
+    child.stdout.on('data', (chunk) => { stdout += String(chunk || '') })
+    child.stderr.on('data', (chunk) => { stderr += String(chunk || '') })
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      finish({ ok: false, error: `Fehler beim Lesen des Ordners: ${error.message}` })
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (settled) return
+      if (code !== 0) {
+        finish({ ok: false, error: stderr.trim() || `child exited with code ${code}` })
+        return
+      }
+      try {
+        finish(JSON.parse(stdout || '{}'))
+      } catch (error) {
+        finish({ ok: false, error: `Fehler beim Lesen des Ordners: ${error.message}` })
+      }
+    })
+  })
 }
 
 function readLocalFileBase64(filePath) {
