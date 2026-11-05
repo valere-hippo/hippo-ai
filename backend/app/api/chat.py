@@ -282,9 +282,11 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
 
         project_context_parts: list[str] = []
         try:
+            direct_context_provided = False
             if payload.project_folder_context and payload.project_folder_context.strip():
                 project_context_parts.append(payload.project_folder_context.strip())
-            if conv_project is not None:
+                direct_context_provided = True
+            if conv_project is not None and not direct_context_provided:
                 backend_project_context = await build_project_files_context(
                     conv_project,
                     include_previews=True,
