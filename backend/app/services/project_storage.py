@@ -19,6 +19,8 @@ from zipfile import BadZipFile, ZipFile
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape as xml_escape
 
+import httpx
+
 try:
     import boto3  # type: ignore
     from botocore.exceptions import ClientError  # type: ignore
@@ -1393,6 +1395,145 @@ def extract_project_file_preview(filename: str, data: bytes, content_type: str |
 IMAGE_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 
 
+def _normalize_chat_completion_url(value: str | None) -> str | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    if not raw.startswith(("http://", "https://")):
+        raw = f"https://{raw}"
+    raw = raw.rstrip("/")
+    if raw.endswith("/v1/chat/completions"):
+        return raw
+    if raw.endswith("/v1"):
+        return f"{raw}/chat/completions"
+    return f"{raw}/v1/chat/completions"
+
+
+def _extract_chat_response_text(payload: Any) -> str:
+    if isinstance(payload, dict) and payload.get("choices"):
+        try:
+            return str(payload["choices"][0]["message"].get("content") or "").strip()
+        except Exception:
+            return str(payload)
+    return str(payload or "").strip()
+
+
+def _split_text_for_model_batches(text: str, max_chars: int = 9000) -> list[str]:
+    source = (text or "").strip()
+    if not source:
+        return []
+    paragraphs = source.split("\n")
+    chunks: list[str] = []
+    current = ""
+    for paragraph in paragraphs:
+        candidate = paragraph if not current else f"{current}\n{paragraph}"
+        if current and len(candidate) > max_chars:
+            chunks.append(current)
+            current = paragraph
+            continue
+        current = candidate
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+async def _call_chat_completion(prompt_messages: list[dict[str, str]], *, temperature: float = 0.1, max_tokens: int = 512, timeout_seconds: float = 60.0) -> str:
+    base_url = _normalize_chat_completion_url(settings.hippo_api_url)
+    if not base_url:
+        return ""
+    payload = {
+        "model": settings.hippo_model,
+        "messages": prompt_messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    headers = {"Content-Type": "application/json"}
+    if settings.hippo_api_key:
+        headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_seconds, connect=10.0)) as client:
+            response = await client.post(base_url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+        return _extract_chat_response_text(data)
+    except Exception:
+        return ""
+
+
+async def _summarize_project_context_batches(raw_context: str, question: str | None = None) -> str:
+    chunks = _split_text_for_model_batches(raw_context, max_chars=1200)
+    if not chunks:
+        return ""
+    if len(chunks) == 1:
+        return raw_context
+
+    total = len(chunks)
+    batch_tasks = []
+    for index, chunk in enumerate(chunks, start=1):
+        prompt_messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Du fasst Projektordner-Kontexte für einen späteren Analyse-Chat zusammen. "
+                    "Bleibe strikt bei den gelieferten Fakten, erfinde nichts und verliere keine Dateinamen, Pfade oder wichtigen Inhalte. "
+                    "Antworte nur mit kompaktem Klartext."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Frage des Benutzers: {question or 'unbekannt'}\n"
+                    f"Dies ist Ausschnitt {index}/{total} aus dem Projektordnerkontext.\n"
+                    "Fasse diesen Ausschnitt so zusammen, dass spätere Modellaufrufe die Dateien, Inhalte und wichtigsten Fakten möglichst vollständig nachverfolgen können. "
+                    "Nutze Stichpunkte mit Dateinamen, Inhaltstypen, Schlüsseldetails und erkennbaren Lücken.\n\n"
+                    f"{chunk}"
+                ),
+            },
+        ]
+        batch_tasks.append(_call_chat_completion(prompt_messages, temperature=0.05, max_tokens=420, timeout_seconds=60.0))
+
+    batch_summaries = [summary.strip() for summary in await asyncio.gather(*batch_tasks) if summary and summary.strip()]
+    if not batch_summaries:
+        return raw_context
+    if len(batch_summaries) == 1:
+        return batch_summaries[0]
+
+    synthesis_messages = [
+        {
+            "role": "system",
+            "content": (
+                "Du konsolidierst mehrere Zusammenfassungen eines Projektordners in einen einzigen, dichten Kontext für ein Folge-Modell. "
+                "Erhalte Dateien, Pfade, wichtige Inhalte und konkrete Beobachtungen. "
+                "Erfinde nichts, kürze nur Wiederholungen und gib keine Meta-Erklärung aus."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Frage des Benutzers: {question or 'unbekannt'}\n"
+                "Hier sind die zusammengefassten Batches des Projektordners. Führe sie zu einem einzigen, gut strukturierten Kontext zusammen. "
+                "Das Ergebnis soll möglichst vollständig bleiben, aber deutlich kürzer als die Summe der Einzelteile.\n\n"
+                + "\n\n".join(f"[Batch {index + 1}]\n{summary}" for index, summary in enumerate(batch_summaries))
+            ),
+        },
+    ]
+    synthesized = await _call_chat_completion(synthesis_messages, temperature=0.05, max_tokens=700, timeout_seconds=90.0)
+    return synthesized.strip() if synthesized.strip() else "\n\n".join(batch_summaries)
+
+
+async def _maybe_summarize_project_context(context: str, question: str | None = None, max_chars: int = 7000) -> str:
+    text = (context or "").strip()
+    if not text:
+        return context
+    if len(text) <= max_chars:
+        return text
+    summarized = await _summarize_project_context_batches(text, question)
+    summarized = summarized.strip()
+    return summarized if summarized else text
+
+
+
+
 async def build_project_files_context(project: Any, max_files: int | None = None, include_previews: bool = True, question: str | None = None, source_prefixes: list[str] | None = None) -> str:
     detailed_report = looks_like_project_detailed_report_request(question or "")
     try:
@@ -1448,7 +1589,11 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                 if sum(len(part) + 1 for part in pcloud_lines) > 12000:
                     pcloud_lines[-1] = "- … Kontext wegen Länge gekürzt."
                     break
-            return "\n".join(pcloud_lines)
+            return await _maybe_summarize_project_context(
+                "\n".join(pcloud_lines),
+                question,
+                max_chars=1000 if len(files) >= 6 else 7000,
+            )
 
         if source_prefixes is not None:
             files = list_project_files(project, source_prefixes=source_prefixes)
@@ -1492,7 +1637,11 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                 if sum(len(part) + 1 for part in lines) > 12000:
                     lines[-1] = "- … Kontext wegen Länge gekürzt."
                     break
-            return "\n".join(lines)
+            return await _maybe_summarize_project_context(
+                "\n".join(lines),
+                question,
+                max_chars=1000 if len(files) >= 6 else 7000,
+            )
 
         files = list_project_files(project)
     except FileNotFoundError as exc:
@@ -1534,15 +1683,17 @@ async def build_project_files_context(project: Any, max_files: int | None = None
         except Exception:
             tree_context = ""
         if tree_context:
-            return (
+            return await _maybe_summarize_project_context(
                 "Im lokalen Projektordner sind aktuell keine Dateien sichtbar, aber die Verzeichnisstruktur ist verfügbar.\n"
                 f"Ordnerpfad: {folder or 'unbekannt'}\n\n"
-                f"{tree_context}"
+                f"{tree_context}",
+                question,
             )
-        return (
+        return await _maybe_summarize_project_context(
             "Im lokalen Projektordner konnten aktuell noch keine Dateien zuverlässig ausgelesen werden.\n"
             f"Ordnerpfad: {folder or 'unbekannt'}\n"
-            "Wenn der Benutzer Dateien erwartet, erkläre, dass der lokale Ordnerkontext fehlt oder der Pfad noch nicht direkt eingebunden wurde, und bitte nur um die direkte Pfadangabe."
+            "Wenn der Benutzer Dateien erwartet, erkläre, dass der lokale Ordnerkontext fehlt oder der Pfad noch nicht direkt eingebunden wurde, und bitte nur um die direkte Pfadangabe.",
+            question,
         )
 
     files_by_name = {item.filename: item for item in files}
@@ -1643,4 +1794,8 @@ async def build_project_files_context(project: Any, max_files: int | None = None
         elif lower_name.endswith((".shx", ".dbf", ".prj", ".cpg")):
             lines.append("  Inhalt: Begleitdatei für Geodaten.")
         processed.add(item.filename)
-    return "\n".join(lines)
+    return await _maybe_summarize_project_context(
+        "\n".join(lines),
+        question,
+        max_chars=1000 if len(files) >= 6 else 7000,
+    )
