@@ -760,10 +760,10 @@ async function refreshProjectFolderContext(project, { force = false, requireCons
 
     const folderInfo = await window.electron.inspectProjectFolder({
       folder: folders.join('\n'),
-      maxDepth: 0,
-      maxEntries: 40,
-      maxTextChars: 2000,
-      timeoutMs: 2500,
+      maxDepth: 2,
+      maxEntries: 80,
+      maxTextChars: 4000,
+      timeoutMs: 5000,
     })
     const context = String(folderInfo?.context || '')
     state.projectFolderContextCache.set(project.id, context)
@@ -843,6 +843,11 @@ async function quickProjectFolderFingerprint(project, folders) {
 function looksLikeImageGenerationRequest(message) {
   const text = String(message || '').toLowerCase()
   return /(?:erstell|generier|male|zeichne|render|bild|png|jpg|jpeg|photo|foto|illustration|grafik|logo|icon|karte|map)/i.test(text)
+}
+
+function looksLikeProjectFolderInquiry(message) {
+  const text = String(message || '').toLowerCase()
+  return /(?:welche\s+dateien|zeige\s+mir\s+.*dateien|welche\s+ordner|liste\s+.*dateien|liste\s+.*ordner|inhalt\s+des\s+ordners|projektordner|ordnersatz|gemeinsamer\s+ordner|files?|folders?)/i.test(text)
 }
 
 function looksLikeFileGenerationRequest(message) {
@@ -2744,6 +2749,7 @@ async function selectProject(projectId) {
     if (hasLocalSources) {
       setDesktopAgentMode(true)
     }
+    void queueProjectFolderRefresh(project)
   }
   renderProjects()
   renderConversations()
@@ -6540,12 +6546,12 @@ async function sendChat() {
     if (!state.desktopAgentMode && (looksLikeQgisRequest(message) || looksLikeFileGenerationRequest(message) || state.draftAttachments.length > 0)) {
       setDesktopAgentMode(true)
     }
-    projectFolderContext = state.projectFolderContextCache.get(project.id) || ''
-    if (accessGranted) {
+    if (project && (!projectFolderContext || looksLikeProjectFolderInquiry(message) || looksLikeFileGenerationRequest(message))) {
+      projectFolderContext = await queueProjectFolderRefresh(project)
+    }
+    if (accessGranted && !projectFolderContext) {
       const authorizedContext = `Lokale Projektordner autorisiert: ${scope.sourceFolders.join(' | ')}`
-      if (!projectFolderContext || /Der lokale Ordner konnte nicht gelesen werden|Ordneranalyse fehlgeschlagen/i.test(projectFolderContext)) {
-        projectFolderContext = projectFolderContext ? `${authorizedContext}\n${projectFolderContext}` : authorizedContext
-      }
+      projectFolderContext = authorizedContext
     }
     if (scope?.refresh && !state.desktopAgentMode) {
       scheduleProjectSourceSync(project, projectSourcePrefixes, { silent: true })

@@ -7,6 +7,8 @@ function isProbablyTextFile(filename) {
 }
 
 function summarizeLocalFolder(folderPath, options = {}) {
+  const maxDepth = Number.isFinite(options.maxDepth) ? options.maxDepth : 2
+  const maxEntries = Number.isFinite(options.maxEntries) ? options.maxEntries : 60
   const maxTextChars = Number.isFinite(options.maxTextChars) ? options.maxTextChars : 12000
   const raw = String(folderPath || '').trim()
   if (!raw) return { ok: false, context: 'Kein Ordnerpfad angegeben.' }
@@ -18,33 +20,34 @@ function summarizeLocalFolder(folderPath, options = {}) {
 
   const lines = [`Lokale Projektordner (vom Desktop gelesen): ${roots.join(' | ')}`]
   let chars = 0
+  let entries = 0
 
-  for (const root of roots) {
-    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
-      lines.push(`- Der Ordner ist nicht erreichbar: ${root}`)
-      continue
-    }
-
-    lines.push(`[Ordner] ${path.basename(root)}`)
-    let entries = []
+  const walk = (dir, depth = 0) => {
+    if (entries >= maxEntries || depth > maxDepth) return
+    let dirEntries = []
     try {
-      entries = fs.readdirSync(root, { withFileTypes: true })
+      dirEntries = fs.readdirSync(dir, { withFileTypes: true })
     } catch (error) {
-      lines.push(`- [Fehler beim Lesen] ${root}: ${error.message}`)
-      continue
+      lines.push(`${'  '.repeat(depth)}- [Fehler beim Lesen] ${dir}: ${error.message}`)
+      return
     }
 
-    const sorted = entries.slice().sort((a, b) => a.name.localeCompare(b.name, 'de'))
+    const sorted = dirEntries.slice().sort((a, b) => a.name.localeCompare(b.name, 'de'))
+    const relDir = path.relative(roots[0], dir) || '.'
+    lines.push(`${'  '.repeat(depth)}[Ordner] ${relDir}`)
+
     for (const entry of sorted) {
-      const absPath = path.join(root, entry.name)
-      if (!entry.isFile()) {
-        if (entry.isDirectory()) {
-          lines.push(`  - [Ordner] ${entry.name}`)
-        }
+      if (entries >= maxEntries) break
+      const absPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        lines.push(`${'  '.repeat(depth + 1)}[Ordner] ${entry.name}`)
+        entries += 1
+        walk(absPath, depth + 1)
         continue
       }
+      if (!entry.isFile()) continue
 
-      let line = `  - ${entry.name}`
+      let line = `${'  '.repeat(depth + 1)}- ${entry.name}`
       try {
         const stat = fs.statSync(absPath)
         line += ` (${stat.size} bytes)`
@@ -60,10 +63,22 @@ function summarizeLocalFolder(folderPath, options = {}) {
         line += ` | nicht lesbar: ${error.message}`
       }
       lines.push(line)
+      entries += 1
     }
   }
+
+  for (const root of roots) {
+    if (entries >= maxEntries) break
+    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+      lines.push(`- Der Ordner ist nicht erreichbar: ${root}`)
+      continue
+    }
+    walk(root, 0)
+  }
+
   if (lines.length === 1) lines.push('Keine Dateien gefunden.')
   if (chars === 0) lines.push('Hinweis: Es wurden keine direkt lesbaren Textinhalte gefunden, aber die Dateistruktur wurde vollständig erfasst.')
+  if (entries >= maxEntries) lines.push('Hinweis: Die Auflistung wurde zur Laufzeitbegrenzung gekürzt.')
   return { ok: true, context: lines.join(String.fromCharCode(10)) }
 }
 
