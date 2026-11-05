@@ -886,6 +886,23 @@ function queueProjectFolderRefresh(project, { force = false } = {}) {
   })
 }
 
+function prewarmProjectFolderContexts(projects = [], { preferredProjectId = null, limit = 3 } = {}) {
+  const candidates = (Array.isArray(projects) ? projects : [])
+    .filter((project) => project?.id && project.watched_folder)
+    .sort((a, b) => {
+      if (preferredProjectId && a.id === preferredProjectId) return -1
+      if (preferredProjectId && b.id === preferredProjectId) return 1
+      const aReady = state.projectFolderScanState.get(a.id) === 'ready'
+      const bReady = state.projectFolderScanState.get(b.id) === 'ready'
+      if (aReady !== bReady) return aReady ? 1 : -1
+      return String(a.name || '').localeCompare(String(b.name || ''), 'de')
+    })
+    .slice(0, Math.max(1, limit))
+
+  if (!candidates.length) return Promise.resolve([])
+  return Promise.allSettled(candidates.map((project, index) => queueProjectFolderRefresh(project, { force: index === 0 })))
+}
+
 function getConversationTitle(conversation) {
   if (!conversation) return 'Neuer Chat'
   return conversation.title || conversation.preview_title || conversation.first_message || `Chat #${conversation.id}`
@@ -2681,6 +2698,7 @@ async function loadProjects() {
   normalizeActiveConversationState()
   renderProjects()
   renderContext()
+  void prewarmProjectFolderContexts(state.projects, { preferredProjectId: state.selectedProjectId, limit: 4 })
 }
 
 async function loadConversations() {
