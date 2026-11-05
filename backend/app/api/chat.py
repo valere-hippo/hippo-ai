@@ -19,11 +19,14 @@ from app.services.chat_payloads import (
     build_message_content,
     derive_conversation_title,
     storage_text,
+    looks_like_project_detailed_report_request,
+    looks_like_file_generation_request,
 )
 from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory, save_conversation_memory
 from app.services.project_storage import build_project_files_context
+from app.services.project_report_fallback import build_project_report_generated_file
 from app.services.project_skills import build_project_skills_context
 from app.services.project_tools import build_tools_context
 from app.services.model_registry import resolve_chat_max_tokens
@@ -282,6 +285,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             pass
 
         project_context_parts: list[str] = []
+        project_files_context = ''
         try:
             direct_context_provided = False
             if payload.project_folder_context and payload.project_folder_context.strip():
@@ -398,6 +402,33 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                 "data_base64": base64.b64encode(data).decode("ascii"),
             }
         )
+
+    if conv_project is not None and not serialized_files:
+        try:
+            report_intent = (
+                looks_like_project_detailed_report_request(payload.message)
+                or looks_like_file_generation_request(payload.message, payload.attachments)
+                or any(word in (payload.message or '').lower() for word in ('analyse', 'analysiere', 'analyze', 'bericht', 'report', 'gutachten', 'auswert'))
+            )
+            if report_intent:
+                report_context = (project_files_context or payload.project_folder_context or reply_text or '').strip()
+                data, mime_type, filename = build_project_report_generated_file(
+                    payload.message,
+                    report_context,
+                    project_name=conv_project.name if conv_project else None,
+                    filename_hint='project_report',
+                )
+                serialized_files.append(
+                    {
+                        'filename': filename,
+                        'mime_type': mime_type,
+                        'data_base64': base64.b64encode(data).decode('ascii'),
+                    }
+                )
+                if not reply_text.strip():
+                    reply_text = 'Analyse abgeschlossen. Der Word-Bericht wurde erstellt.'
+        except Exception:
+            logger.warning('Auto report generation failed for conversation %s', conv_id)
 
     # store assistant message
     await db.execute(

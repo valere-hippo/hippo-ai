@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from app.services.generated_files import build_generated_file_bytes_with_fallback
+
 
 def _normalize_lines(text: str) -> list[str]:
     lines: list[str] = []
@@ -91,3 +93,14 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         "Der Bericht nutzt automatisch alle verfügbaren Ordner und Dateien des Projekts; es werden keine zusätzlichen Rückfragen zu Dateiauswahl oder Unterordnern gestellt.",
     ])
     return "\n".join(report)
+
+
+def build_project_report_generated_file(
+    question: str,
+    project_files_context: str,
+    project_name: str | None = None,
+    filename_hint: str = "project_report",
+) -> tuple[bytes, str, str]:
+    report_body = build_project_report_fallback(question, project_files_context, project_name=project_name)
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", (project_name or filename_hint).strip()).strip("_") or filename_hint
+    return build_generated_file_bytes_with_fallback(f"{safe_name}.docx", report_body)

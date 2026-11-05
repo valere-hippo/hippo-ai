@@ -7,6 +7,8 @@ function normalizeApiBaseUrl(value) {
   return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`
 }
 
+const { shouldBlockFirstProjectMessage } = require('./project-folder-readiness')
+
 const API = normalizeApiBaseUrl(
   window.electron?.runtimeConfig?.apiUrl
     || window.electron?.runtimeConfig?.apiBaseUrl
@@ -34,6 +36,7 @@ const state = {
   projectFolderFingerprintCache: new Map(),
   projectFolderScanState: new Map(),
   projectFolderWarmJobs: new Map(),
+  projectFolderDeepWarmState: new Map(),
   projectRefreshJobs: new Map(),
   projectMenuCleanup: null,
   projectQuery: '',
@@ -643,6 +646,7 @@ async function saveProjectSourceScope(project, sourceFolders, { consented = true
   const effectiveScope = backendScope || scope
   localStorage.setItem(getProjectSourceScopeStorageKey(project), JSON.stringify(effectiveScope))
   project.source_scope = JSON.stringify(effectiveScope)
+  state.projectFolderDeepWarmState.set(project.id, 'idle')
   state.projects = state.projects.map((item) => (
     item.id === project.id
       ? { ...item, source_scope: JSON.stringify(effectiveScope) }
@@ -655,6 +659,7 @@ async function clearProjectSourceScope(project) {
   if (!project?.id) return
   localStorage.removeItem(getProjectSourceScopeStorageKey(project))
   project.source_scope = JSON.stringify({ source_folders: [], consented: false })
+  state.projectFolderDeepWarmState.set(project.id, 'idle')
   state.projects = state.projects.map((item) => (
     item.id === project.id
       ? { ...item, source_scope: JSON.stringify({ source_folders: [], consented: false }) }
@@ -683,6 +688,7 @@ async function authorizeProjectLocalFolders(project) {
   updateProjectAccessSummary(project)
   await loadProjects()
   renderContext()
+  void warmProjectFolderContext(project, folders, '', { deep: true })
   if (state.selectedProjectId === project.id && !state.desktopAgentMode) {
     scheduleProjectSourceSync(project, persisted?.sourceFolders || folders, { silent: true })
   }
@@ -775,27 +781,40 @@ function scheduleProjectSourceSync(project, sourceFolders = null, options = {}) 
   return promise
 }
 
-async function warmProjectFolderContext(project, folders, fingerprint = '') {
+async function warmProjectFolderContext(project, folders, fingerprint = '', { deep = false } = {}) {
   if (!project?.id || !window.electron?.inspectProjectFolder) return ''
-  const existingJob = state.projectFolderWarmJobs.get(project.id)
+  const jobKey = `${project.id}:${deep ? 'deep' : 'shallow'}`
+  const existingJob = state.projectFolderWarmJobs.get(jobKey)
   if (existingJob?.promise) return existingJob.promise
+  if (deep && state.projectFolderDeepWarmState.get(project.id) === 'ready') {
+    return state.projectFolderContextCache.get(project.id) || ''
+  }
+  if (!deep && state.projectFolderScanState.get(project.id) === 'ready' && state.projectFolderContextCache.get(project.id)) {
+    return state.projectFolderContextCache.get(project.id)
+  }
 
   const job = { promise: null, startedAt: new Date().toISOString() }
+  if (deep) {
+    state.projectFolderDeepWarmState.set(project.id, 'loading')
+  }
   const promise = window.electron.inspectProjectFolder({
     folder: folders.join('\n'),
-    maxDepth: 2,
-    maxEntries: 120,
+    maxDepth: deep ? 99 : 2,
+    maxEntries: deep ? 50000 : 120,
     maxTextChars: 50000,
-    timeoutMs: 2500,
+    timeoutMs: deep ? 30000 : 2500,
   })
     .then((folderInfo) => {
       const context = String(folderInfo?.context || '')
+      state.projectFolderScanState.set(project.id, folderInfo?.ok ? 'ready' : 'error')
+      if (deep) {
+        state.projectFolderDeepWarmState.set(project.id, folderInfo?.ok ? 'ready' : 'error')
+      }
       if (context) {
         state.projectFolderContextCache.set(project.id, context)
         if (fingerprint) {
           state.projectFolderFingerprintCache.set(project.id, fingerprint)
         }
-        state.projectFolderScanState.set(project.id, folderInfo?.ok ? 'ready' : 'error')
         saveProjectFolderContextSnapshot()
         if (state.selectedProjectId === project.id) {
           renderContext()
@@ -807,18 +826,21 @@ async function warmProjectFolderContext(project, folders, fingerprint = '') {
       const fallback = state.projectFolderContextCache.get(project.id) || `Der lokale Ordner konnte nicht gelesen werden: ${error.message}`
       state.projectFolderContextCache.set(project.id, fallback)
       state.projectFolderScanState.set(project.id, 'error')
+      if (deep) {
+        state.projectFolderDeepWarmState.set(project.id, 'error')
+      }
       saveProjectFolderContextSnapshot()
       return fallback
     })
     .finally(() => {
-      state.projectFolderWarmJobs.delete(project.id)
+      state.projectFolderWarmJobs.delete(jobKey)
       if (state.selectedProjectId === project.id) {
         renderContext()
       }
     })
 
   job.promise = promise
-  state.projectFolderWarmJobs.set(project.id, job)
+  state.projectFolderWarmJobs.set(jobKey, job)
   return promise
 }
 
@@ -2889,13 +2911,29 @@ async function selectProject(projectId) {
   const project = getContextProject()
   const storedProfile = Number(localStorage.getItem(getProfileStorageKey(projectId)) || '0') || null
   state.selectedProfileId = storedProfile || project?.default_profile_id || null
+  const folders = project ? normalizeProjectFolderInput(project.watched_folder) : []
   if (project) {
     const scope = loadProjectSourceScope(project)
-    const hasLocalSources = Boolean((scope?.sourceFolders?.length && scope.consented) || normalizeProjectFolderInput(project.watched_folder).length)
+    const hasLocalSources = Boolean((scope?.sourceFolders?.length && scope.consented) || folders.length)
     if (hasLocalSources) {
       setDesktopAgentMode(true)
     }
-    void queueProjectFolderRefresh(project, { force: true })
+    if (shouldDelayProjectOpen({
+      projectId: project.id,
+      currentConversationId: state.currentConversationId,
+      projectFolderContext: state.projectFolderContextCache.get(project.id),
+      deepWarmState: state.projectFolderDeepWarmState.get(project.id),
+      cachedContext: state.projectFolderContextCache.get(project.id),
+    })) {
+      showLoader('Projektordner wird vollständig geladen...')
+      try {
+        await warmProjectFolderContext(project, folders, '', { deep: true })
+      } finally {
+        hideLoader()
+      }
+    } else if (folders.length) {
+      void warmProjectFolderContext(project, folders, '', { deep: true })
+    }
   }
   renderProjects()
   renderConversations()
@@ -2942,8 +2980,25 @@ async function openConversation(conversation) {
     state.projectConversationMemory.set(getProjectConversationMemoryKey(conversation.project_id, conversation.profile_id), conversation.id)
     const project = getContextProject()
     if (project) {
+      const folders = normalizeProjectFolderInput(project.watched_folder)
+      if (shouldDelayProjectOpen({
+        projectId: project.id,
+        currentConversationId: state.currentConversationId,
+        projectFolderContext: state.projectFolderContextCache.get(project.id),
+        deepWarmState: state.projectFolderDeepWarmState.get(project.id),
+        cachedContext: state.projectFolderContextCache.get(project.id),
+      })) {
+        showLoader('Projektordner wird vollständig geladen...')
+        try {
+          await warmProjectFolderContext(project, folders, '', { deep: true })
+        } finally {
+          hideLoader()
+        }
+      } else if (folders.length) {
+        void warmProjectFolderContext(project, folders, '', { deep: true })
+      }
       const scope = loadProjectSourceScope(project)
-      const hasLocalSources = Boolean((scope?.sourceFolders?.length && scope.consented) || normalizeProjectFolderInput(project.watched_folder).length)
+      const hasLocalSources = Boolean((scope?.sourceFolders?.length && scope.consented) || folders.length)
       if (hasLocalSources) {
         setDesktopAgentMode(true)
       }
@@ -3327,6 +3382,7 @@ async function openCreateProjectModal() {
       renderProjects()
       renderConversations()
       renderContext()
+      void warmProjectFolderContext(refreshedCreatedProject, normalizeProjectFolderInput(refreshedCreatedProject.watched_folder), '', { deep: true })
       if (!state.desktopAgentMode) {
         scheduleProjectSourceSync(refreshedCreatedProject, normalizeProjectFolderInput(refreshedCreatedProject.watched_folder), { silent: true })
       }
@@ -6832,6 +6888,26 @@ async function sendChat() {
       console.warn('Direct local folder read failed:', error)
     }
   }
+
+  if (project && shouldBlockFirstProjectMessage({
+    projectId: project.id,
+    explicitPath,
+    projectFolderContext,
+    cachedState: state.projectFolderScanState.get(project.id),
+    cachedContext: state.projectFolderContextCache.get(project.id),
+    deepWarmState: state.projectFolderDeepWarmState.get(project.id),
+  })) {
+    const folders = normalizeProjectFolderInput(project.watched_folder)
+    if (folders.length) {
+      showLoader('Projektordner wird vollständig geladen...')
+      try {
+        projectFolderContext = await warmProjectFolderContext(project, folders, '', { deep: true }) || state.projectFolderContextCache.get(project.id) || ''
+      } finally {
+        hideLoader()
+      }
+    }
+  }
+
   if (project) {
     const scope = loadProjectSourceScope(project)
     const accessGranted = Boolean(scope?.sourceFolders?.length && scope.consented)
