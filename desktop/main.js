@@ -273,7 +273,8 @@ ipcMain.handle('select-folder', async () => {
 
 ipcMain.handle('scan-project-folder-files', async (event, { folder, maxDepth = 999, maxFiles = 50000 } = {}) => {
   try {
-    return scanProjectFolderFilesAsync(folder, { maxDepth, maxFiles })
+    const cacheDir = path.join(app.getPath('userData'), 'project-folder-cache')
+    return scanProjectFolderFilesAsync(folder, { maxDepth, maxFiles, cacheDir, ttlMs: 5 * 60 * 1000 })
   } catch (error) {
     return { ok: false, error: error.message }
   }
