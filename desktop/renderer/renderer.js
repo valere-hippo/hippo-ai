@@ -828,6 +828,24 @@ function computeProjectFolderFingerprint(files) {
   return `fp:${(hash >>> 0).toString(16)}:${entries.length}`
 }
 
+function formatScannedFolderContext(files, rootPath) {
+  const entries = Array.isArray(files) ? files : []
+  const rootLabel = String(rootPath || '').trim() || 'Lokaler Ordner'
+  if (!entries.length) return `Lokaler Ordner (${rootLabel}): keine Dateien gefunden.`
+  const lines = [`Lokaler Ordner (${rootLabel}) – schnelle Dateiliste:`]
+  const sorted = entries
+    .slice()
+    .sort((a, b) => String(a?.relative_path || a?.path || '').localeCompare(String(b?.relative_path || b?.path || ''), 'de'))
+  for (const entry of sorted) {
+    const rel = String(entry?.relative_path || entry?.path || entry?.name || '').trim()
+    const size = Number.isFinite(Number(entry?.size)) ? Number(entry.size) : null
+    const modified = String(entry?.modified_at || '').trim()
+    const suffix = [size != null ? `${size} bytes` : '', modified ? `geändert ${modified}` : ''].filter(Boolean).join(', ')
+    lines.push(`- ${rel}${suffix ? ` (${suffix})` : ''}`)
+  }
+  return lines.join('\n')
+}
+
 async function quickProjectFolderFingerprint(project, folders) {
   if (!project?.id || !window.electron?.scanProjectFolderFiles) return ''
   const rawFolders = (Array.isArray(folders) ? folders : normalizeProjectFolderInput(project?.watched_folder)).filter(Boolean)
@@ -6574,17 +6592,45 @@ async function sendChat() {
     }
   }
 
-  if (explicitPath && window.electron?.inspectProjectFolder && !isLikelyFilePath(explicitPath)) {
+  if (explicitPath && !isLikelyFilePath(explicitPath)) {
     try {
-      const folderInfo = await window.electron.inspectProjectFolder({
-        folder: explicitPath,
-        maxDepth: 2,
-        maxEntries: 120,
-        maxTextChars: 4000,
-        timeoutMs: 5000,
-      })
-      if (folderInfo?.context) {
-        projectFolderContext = String(folderInfo.context)
+      if (window.electron?.scanProjectFolderFiles) {
+        const scan = await window.electron.scanProjectFolderFiles({
+          folder: explicitPath,
+          maxDepth: 0,
+          maxFiles: 2000,
+        })
+        if (scan?.ok) {
+          const files = Array.isArray(scan.files) ? scan.files : []
+          projectFolderContext = formatScannedFolderContext(files, explicitPath)
+          if (files.length > 0 && files.length <= 80 && window.electron?.inspectProjectFolder) {
+            try {
+              const folderInfo = await window.electron.inspectProjectFolder({
+                folder: explicitPath,
+                maxDepth: 4,
+                maxEntries: 200,
+                maxTextChars: 4000,
+                timeoutMs: 2500,
+              })
+              if (folderInfo?.context) {
+                projectFolderContext = String(folderInfo.context)
+              }
+            } catch (inspectError) {
+              console.warn('Direct local folder preview failed:', inspectError)
+            }
+          }
+        }
+      } else if (window.electron?.inspectProjectFolder) {
+        const folderInfo = await window.electron.inspectProjectFolder({
+          folder: explicitPath,
+          maxDepth: 2,
+          maxEntries: 120,
+          maxTextChars: 4000,
+          timeoutMs: 2500,
+        })
+        if (folderInfo?.context) {
+          projectFolderContext = String(folderInfo.context)
+        }
       }
     } catch (error) {
       console.warn('Direct local folder read failed:', error)
