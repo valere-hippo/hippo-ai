@@ -24,6 +24,8 @@ from app.services.generated_files import build_generated_file_bytes_with_fallbac
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory, save_conversation_memory
 from app.services.project_storage import build_project_files_context
+from app.services.project_skills import build_project_skills_context
+from app.services.project_tools import build_tools_context
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.hippo_identity import build_hippo_system_prompt
 import base64
@@ -228,7 +230,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "<<<FILE:filename.ext>>>\n"
             "<file content here>\n"
             "<<<END_FILE>>>\n"
-            "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
+            "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), return one exact image file block with the final visual scene or prompt content and do not add explanatory prose after it.\n"
             "If the user explicitly requests an image or PNG, return a real file block with an image filename instead of prose instructions. If the user only wants analysis or a textual answer, respond in text and do not create an image file.\n"
             "If the user asks to analyze documents from the project folders, use the project context and answer in the user's language.\n"
             "If project_folder_context is present, treat it as the source of truth for the project folder contents and do not claim you lack local filesystem access.\n"
@@ -256,6 +258,26 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                 "role": "system",
                 "content": "\n".join(project_memory_context),
             })
+
+        tool_skill_context_parts: list[str] = []
+        try:
+            tools_context = await build_tools_context(db, query=payload.message, limit=6, user_id=current_user_id, project_id=conv_project.id)
+            if tools_context.strip():
+                tool_skill_context_parts.append("Aktive Projekt-Tools:\n" + tools_context.strip())
+            skills_context = await build_project_skills_context(db, conv_project.id, user_id=current_user_id, query=payload.message, limit=6)
+            if skills_context.strip():
+                tool_skill_context_parts.append("Aktive Projekt-Skills:\n" + skills_context.strip())
+            if tool_skill_context_parts:
+                hippo_messages.append({
+                    "role": "system",
+                    "content": (
+                        "Aktivierte Werkzeuge und Skills für diese Unterhaltung:\n"
+                        + "\n\n".join(tool_skill_context_parts)
+                        + "\n\nNutze diese Tools und Skills als Arbeitsanweisung, nicht als Ersatz für die echten Datei- und Ordnerinhalte."
+                    ),
+                })
+        except Exception:
+            pass
 
         project_context_parts: list[str] = []
         try:

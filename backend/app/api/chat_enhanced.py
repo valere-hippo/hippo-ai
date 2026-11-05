@@ -23,6 +23,8 @@ from app.services.generated_files import build_generated_file_bytes_with_fallbac
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory
 from app.services.project_storage import build_project_files_context
+from app.services.project_skills import build_project_skills_context
+from app.services.project_tools import build_tools_context
 from app.services.desktop_workflows import infer_desktop_launch_actions
 from app.services.model_registry import resolve_chat_max_tokens
 from app.services.hippo_identity import build_hippo_system_prompt
@@ -406,7 +408,9 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "- Wenn der Benutzer einen QGIS-Workflow, eine Datei oder ein Projekt analysieren will, arbeite in dieser Reihenfolge: 1) passende App öffnen, 2) Datei/Projekt laden, 3) Analyse durchführen, 4) Ergebnis als Word-Report liefern.\n"
             "- Der Desktop-Agent hat Zugriff auf den Computer des Benutzers. Sage nicht, dass du keinen Zugriff auf lokale Dateien oder auf den Computer hast, wenn desktop_agent aktiv ist.\n"
             "- Wenn es um Projektdateien geht, verlange keinen Scan als Voraussetzung; nutze den vorhandenen Projektordner-Kontext oder frage den Desktop-Agenten nach einer direkten, kurzen Verzeichnisliste statt eines Tiefenscans.\n"
+            "- Wenn ein Report oder eine Datei auf Inhalte aus dem Projekt basiert, nimm die aktiven Projekt-Skills und Projekt-Tools als Arbeitsanweisung ernst und lies die Inhalte der Dateien direkt, statt nur aus Metadaten zu antworten.\n"
             "- Wenn der Benutzer ausdrücklich einen Word-Bericht möchte, erzeuge bevorzugt eine .docx-Datei und ergänze sie mit klarer Zusammenfassung statt nur Text in der Chat-Antwort.\n"
+            "- Wenn der Benutzer ein Bild verlangt, liefere einen einzigen Bild-Datei-Block und ändere die Bildbeschreibung nicht in zusätzlicher Prosa; der Client rendert die erzeugte Bilddatei unverändert.\n"
             "- Beim QGIS-Profil solltest du Geodaten immer artweise auswerten, Koordinaten und Kontakte prüfen, Cluster und mögliche Brutreviere erkennen und den Nutzer bei Bedarf nach weiteren Kennzahlen fragen.\n"
             "- Wenn der Benutzer eine QGIS-Datei, ein Shapefile, ein GeoPackage oder eine Projektdatei nennt, starte QGIS direkt mit dieser Datei und lade nicht zuerst einen generischen Viewer.\n"
             "- Halte reply kurz und sag, was du tust.\n"
@@ -451,6 +455,26 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 "role": "system",
                 "content": "\n".join(project_memory_context),
             })
+
+        tool_skill_context_parts: list[str] = []
+        try:
+            tools_context = await build_tools_context(db, query=payload.message, limit=6, user_id=current_user_id, project_id=conv_project.id)
+            if tools_context.strip():
+                tool_skill_context_parts.append("Aktive Projekt-Tools:\n" + tools_context.strip())
+            skills_context = await build_project_skills_context(db, conv_project.id, user_id=current_user_id, query=payload.message, limit=6)
+            if skills_context.strip():
+                tool_skill_context_parts.append("Aktive Projekt-Skills:\n" + skills_context.strip())
+            if tool_skill_context_parts:
+                hippo_messages.append({
+                    "role": "system",
+                    "content": (
+                        "Aktivierte Werkzeuge und Skills für diese Unterhaltung:\n"
+                        + "\n\n".join(tool_skill_context_parts)
+                        + "\n\nNutze diese Tools und Skills als Arbeitsanweisung, nicht als Ersatz für die echten Datei- und Ordnerinhalte."
+                    ),
+                })
+        except Exception:
+            pass
 
         project_context_parts: list[str] = []
         try:
