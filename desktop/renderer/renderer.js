@@ -6915,7 +6915,18 @@ async function sendChat() {
       setDesktopAgentMode(true)
     }
     if (project && !explicitPath && (!projectFolderContext || looksLikeProjectFolderInquiry(message) || looksLikeFileGenerationRequest(message))) {
-      projectFolderContext = await queueProjectFolderRefresh(project, { force: true })
+      const folders = normalizeProjectFolderInput(project.watched_folder)
+      if (folders.length) {
+        const needsDeepRead = looksLikeProjectFolderInquiry(message) || looksLikeFileGenerationRequest(message)
+        if (needsDeepRead) {
+          const deepContext = await warmProjectFolderContext(project, folders, '', { deep: true })
+          if (deepContext) {
+            projectFolderContext = deepContext
+          }
+        } else {
+          projectFolderContext = await queueProjectFolderRefresh(project, { force: true })
+        }
+      }
     }
     if (accessGranted && !projectFolderContext) {
       const authorizedContext = `Lokale Projektordner autorisiert: ${scope.sourceFolders.join(' | ')}`
