@@ -3,6 +3,7 @@ const { spawn, spawnSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 const mime = require('mime-types')
+const { summarizeLocalFolder, scanFolder } = require('./scripts/project-folder-reader')
 
 function loadRuntimeConfig() {
   const defaultApiUrl = process.env.HIPPO_API_URL || 'http://localhost:8000'
@@ -71,159 +72,24 @@ function configurePermissions() {
   }
 }
 
-function isProbablyTextFile(filename) {
-  const ext = path.extname(String(filename || '')).toLowerCase()
-  return new Set(['.txt', '.md', '.markdown', '.csv', '.json', '.yml', '.yaml', '.xml', '.rtf', '.log', '.ini', '.py', '.js', '.ts', '.html', '.htm', '.css']).has(ext)
-}
-
-function summarizeLocalFolder(folderPath, options = {}) {
-  const maxTextChars = Number.isFinite(options.maxTextChars) ? options.maxTextChars : 12000
-  const root = String(folderPath || '').trim()
-  if (!root) return { ok: false, context: 'Kein Ordnerpfad angegeben.' }
-  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
-    return { ok: false, context: `Der Ordner ist nicht erreichbar: ${root}` }
-  }
-
-  const lines = [`Lokaler gemeinsamer Ordner (vom Desktop gelesen): ${root}`]
-  let chars = 0
-
-  const walk = (dir, depth = 0) => {
-    let entries = []
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true })
-    } catch (error) {
-      lines.push(`${'  '.repeat(depth)}- [Fehler beim Lesen] ${dir}: ${error.message}`)
-      return
-    }
-
-    const sorted = entries.slice().sort((a, b) => a.name.localeCompare(b.name, 'de'))
-    const relDir = path.relative(root, dir) || '.'
-    lines.push(`${'  '.repeat(depth)}[Ordner] ${relDir}`)
-
-    for (const entry of sorted) {
-      const absPath = path.join(dir, entry.name)
-      const relPath = path.relative(root, absPath) || entry.name
-      if (entry.isDirectory()) {
-        walk(absPath, depth + 1)
-        continue
-      }
-      if (!entry.isFile()) continue
-
-      let line = `${'  '.repeat(depth + 1)}- ${relPath}`
-      try {
-        const stat = fs.statSync(absPath)
-        line += ` (${stat.size} bytes)`
-        if (isProbablyTextFile(entry.name)) {
-          const raw = fs.readFileSync(absPath, 'utf8')
-          const preview = raw.replace(/\s+/g, ' ').trim().slice(0, maxTextChars)
-          if (preview) {
-            line += ` | Inhalt: ${preview}`
-            chars += preview.length
-          }
-        }
-      } catch (error) {
-        line += ` | nicht lesbar: ${error.message}`
-      }
-      lines.push(line)
-    }
-  }
-
-  walk(root, 0)
-  if (lines.length === 1) lines.push('Keine Dateien gefunden.')
-  if (chars === 0) lines.push('Hinweis: Es wurden keine direkt lesbaren Textinhalte gefunden, aber die Dateistruktur wurde vollständig erfasst.')
-  return { ok: true, context: lines.join(String.fromCharCode(10)) }
-}
-
 function inspectProjectFolderAsync(folder, options = {}) {
-  return new Promise((resolve) => {
-    const scriptPath = path.join(__dirname, 'scripts', 'inspect-project-folder.js')
-    const child = spawn(process.execPath, [scriptPath, String(folder || ''), JSON.stringify(options || {})], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: false,
-    })
-    let stdout = ''
-    let stderr = ''
-    let settled = false
-    const finish = (payload) => {
-      if (settled) return
-      settled = true
-      resolve(payload)
-    }
-    const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 15000
-    const timer = setTimeout(() => {
-      try {
-        child.kill('SIGKILL')
-      } catch (error) {
-        // ignore
-      }
-      finish({ ok: false, context: `Der Projektordner-Scan hat das Zeitlimit von ${Math.round(timeoutMs / 1000)} Sekunden überschritten.` })
-    }, timeoutMs)
-    child.stdout.on('data', (chunk) => { stdout += String(chunk || '') })
-    child.stderr.on('data', (chunk) => { stderr += String(chunk || '') })
-    child.on('error', (error) => {
-      clearTimeout(timer)
-      finish({ ok: false, context: `Fehler beim Lesen des Ordners: ${error.message}` })
-    })
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      if (settled) return
-      if (code !== 0) {
-        finish({ ok: false, context: `Fehler beim Lesen des Ordners: ${stderr.trim() || `child exited with code ${code}`}` })
-        return
-      }
-      try {
-        finish(JSON.parse(stdout || '{}'))
-      } catch (error) {
-        finish({ ok: false, context: `Fehler beim Lesen des Ordners: ${error.message}` })
-      }
-    })
-  })
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 15000
+  return Promise.race([
+    Promise.resolve(summarizeLocalFolder(folder, options)),
+    new Promise((resolve) => {
+      setTimeout(() => resolve({ ok: false, context: `Der Projektordner-Scan hat das Zeitlimit von ${Math.round(timeoutMs / 1000)} Sekunden überschritten.` }), timeoutMs)
+    }),
+  ])
 }
 
 function scanProjectFolderFilesAsync(folder, options = {}) {
-  return new Promise((resolve) => {
-    const scriptPath = path.join(__dirname, 'scripts', 'scan-project-folder-files.js')
-    const child = spawn(process.execPath, [scriptPath, String(folder || ''), JSON.stringify(options || {})], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: false,
-    })
-    let stdout = ''
-    let stderr = ''
-    let settled = false
-    const finish = (payload) => {
-      if (settled) return
-      settled = true
-      resolve(payload)
-    }
-    const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 12000
-    const timer = setTimeout(() => {
-      try {
-        child.kill('SIGKILL')
-      } catch (error) {
-        // ignore
-      }
-      finish({ ok: false, error: `Der Projektordner-Scan hat das Zeitlimit von ${Math.round(timeoutMs / 1000)} Sekunden überschritten.` })
-    }, timeoutMs)
-    child.stdout.on('data', (chunk) => { stdout += String(chunk || '') })
-    child.stderr.on('data', (chunk) => { stderr += String(chunk || '') })
-    child.on('error', (error) => {
-      clearTimeout(timer)
-      finish({ ok: false, error: `Fehler beim Lesen des Ordners: ${error.message}` })
-    })
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      if (settled) return
-      if (code !== 0) {
-        finish({ ok: false, error: stderr.trim() || `child exited with code ${code}` })
-        return
-      }
-      try {
-        finish(JSON.parse(stdout || '{}'))
-      } catch (error) {
-        finish({ ok: false, error: `Fehler beim Lesen des Ordners: ${error.message}` })
-      }
-    })
-  })
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 12000
+  return Promise.race([
+    scanFolder(folder, options),
+    new Promise((resolve) => {
+      setTimeout(() => resolve({ ok: false, error: `Der Projektordner-Scan hat das Zeitlimit von ${Math.round(timeoutMs / 1000)} Sekunden überschritten.` }), timeoutMs)
+    }),
+  ])
 }
 
 function readLocalFileBase64(filePath) {
