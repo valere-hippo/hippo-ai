@@ -933,20 +933,47 @@ def _parse_shp_header(data: bytes) -> tuple[str | None, tuple[float, float, floa
 
 
 def _extract_shapefile_context(project: Any, stem: str, files_by_name: dict[str, ProjectFile]) -> str:
-    related_names = [f"{stem}{ext}" for ext in (".shp", ".shx", ".dbf", ".prj", ".cpg")]
-    related_files = [name for name in related_names if name in files_by_name]
+    base_name = Path(stem).name
+    exts = (".shp", ".shx", ".dbf", ".prj", ".cpg")
+    candidate_map: dict[str, list[str]] = {ext: [] for ext in exts}
+    for name in files_by_name:
+      file_base = Path(name).name
+      for ext in exts:
+        if file_base == f"{base_name}{ext}":
+          candidate_map[ext].append(name)
+    related_files: list[str] = []
+    seen_names: set[str] = set()
+    for ext in exts:
+        exact = f"{stem}{ext}"
+        chosen = None
+        if exact in files_by_name:
+            chosen = exact
+        elif candidate_map[ext]:
+            chosen = sorted(candidate_map[ext], key=lambda value: (str(Path(value).parent), value))[0]
+        if chosen and chosen not in seen_names:
+            seen_names.add(chosen)
+            related_files.append(chosen)
     if not related_files:
         return ""
 
     parts: list[str] = [f"Geodatenpaket für '{stem}':"]
     parts.append(f"- Enthaltene Dateien: {', '.join(related_files)}")
 
+    prefix_counts: dict[str, int] = {}
+    for name in related_files:
+        prefix = str(Path(name).parent).replace('\\', '/').strip('./')
+        prefix_counts[prefix] = prefix_counts.get(prefix, 0) + 1
+    preferred_prefix = ''
+    if prefix_counts:
+        preferred_prefix = max(prefix_counts.items(), key=lambda item: (item[1], len(item[0])))[0]
+
     try:
         with TemporaryDirectory() as tmpdir:
-            base = Path(tmpdir) / stem
+            base_root = Path(tmpdir) / preferred_prefix if preferred_prefix else Path(tmpdir)
+            base = base_root / base_name
             for name in related_files:
                 data, _, _ = read_project_file(project, name)
-                target = Path(tmpdir) / name
+                target = (base_root / Path(name).name) if preferred_prefix else (Path(tmpdir) / Path(name).name)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)
 
@@ -1263,17 +1290,36 @@ def build_geodata_map_file(project: Any, query: str | None = None) -> tuple[str,
             selected_stem = stem
             break
 
-    related_names = [f"{selected_stem}{ext}" for ext in (".shp", ".shx", ".dbf", ".prj", ".cpg")]
-    related_files = [name for name in related_names if any(item.filename == name for item in list_project_files(project))]
+    all_files = list_project_files(project)
+    files_by_name = {item.filename: item for item in all_files}
+    related_files = []
+    base_name = Path(selected_stem).name
+    exts = (".shp", ".shx", ".dbf", ".prj", ".cpg")
+    for ext in exts:
+        exact = f"{selected_stem}{ext}"
+        if exact in files_by_name:
+            related_files.append(exact)
+            continue
+        matches = [name for name in files_by_name if Path(name).name == f"{base_name}{ext}"]
+        if matches:
+            related_files.append(sorted(matches, key=lambda value: (str(Path(value).parent), value))[0])
     if not related_files:
         return None
 
     try:
         with TemporaryDirectory() as tmpdir:
-            base = Path(tmpdir) / selected_stem
+            prefix_counts: dict[str, int] = {}
+            for name in related_files:
+                prefix = str(Path(name).parent).replace('\\', '/').strip('./')
+                prefix_counts[prefix] = prefix_counts.get(prefix, 0) + 1
+            preferred_prefix = ''
+            if prefix_counts:
+                preferred_prefix = max(prefix_counts.items(), key=lambda item: (item[1], len(item[0])))[0]
+            base_root = Path(tmpdir) / preferred_prefix if preferred_prefix else Path(tmpdir)
+            base = base_root / base_name
             for name in related_files:
                 data, _, _ = read_project_file(project, name)
-                target = Path(tmpdir) / name
+                target = (base_root / Path(name).name) if preferred_prefix else (Path(tmpdir) / Path(name).name)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)
 
@@ -1589,8 +1635,11 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                 if sum(len(part) + 1 for part in pcloud_lines) > 12000:
                     pcloud_lines[-1] = "- … Kontext wegen Länge gekürzt."
                     break
+            pcloud_context = "\n".join(pcloud_lines)
+            if detailed_report:
+                return pcloud_context
             return await _maybe_summarize_project_context(
-                "\n".join(pcloud_lines),
+                pcloud_context,
                 question,
                 max_chars=1000 if len(files) >= 6 else 7000,
             )
@@ -1637,8 +1686,11 @@ async def build_project_files_context(project: Any, max_files: int | None = None
                 if sum(len(part) + 1 for part in lines) > 12000:
                     lines[-1] = "- … Kontext wegen Länge gekürzt."
                     break
+            local_context = "\n".join(lines)
+            if detailed_report:
+                return local_context
             return await _maybe_summarize_project_context(
-                "\n".join(lines),
+                local_context,
                 question,
                 max_chars=1000 if len(files) >= 6 else 7000,
             )
@@ -1794,8 +1846,11 @@ async def build_project_files_context(project: Any, max_files: int | None = None
         elif lower_name.endswith((".shx", ".dbf", ".prj", ".cpg")):
             lines.append("  Inhalt: Begleitdatei für Geodaten.")
         processed.add(item.filename)
+    local_context = "\n".join(lines)
+    if detailed_report:
+        return local_context
     return await _maybe_summarize_project_context(
-        "\n".join(lines),
+        local_context,
         question,
         max_chars=1000 if len(files) >= 6 else 7000,
     )
