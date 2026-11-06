@@ -1041,7 +1041,7 @@ function looksLikeFileGenerationRequest(message) {
 
 function looksLikeQgisRequest(message) {
   const text = String(message || '').toLowerCase()
-  return /(?:qgis|geodaten|geodata|shp|shx|dbf|prj|cpg|gpkg|geojson|kml|kmz|shapefile|karte|layer|gis)/i.test(text)
+  return /(?:\bqgis\b|qgis\s*(?:öffn|start|lad|analys)|(?:öffn|start|lad)[^\n]{0,20}\bqgis\b|qgis[^\n]{0,20}(?:öffn|start|lad|analys))/i.test(text)
 }
 
 function getThinkingIndicatorLabel(message, attachments = []) {
@@ -6911,7 +6911,7 @@ async function sendChat() {
     if (accessGranted && !explicitPath) {
       projectSourcePrefixes = scope.sourceFolders
     }
-    if (!state.desktopAgentMode && (looksLikeQgisRequest(message) || looksLikeFileGenerationRequest(message) || state.draftAttachments.length > 0)) {
+    if (!state.desktopAgentMode && looksLikeQgisRequest(message)) {
       setDesktopAgentMode(true)
     }
     if (project && !explicitPath && (!projectFolderContext || looksLikeProjectFolderInquiry(message) || looksLikeFileGenerationRequest(message))) {

@@ -197,32 +197,12 @@ def _looks_like_executable_path(value: str) -> bool:
 
 def _looks_qgis_related(text: str) -> bool:
     haystack = (text or '').lower()
-    qgis_keywords = (
-        'qgis',
-        'geo',
-        'geodaten',
-        'geodata',
-        'karte',
-        'kart',
-        'shp',
-        'shx',
-        'dbf',
-        'prj',
-        'cpg',
-        'gpkg',
-        'geojson',
-        'kml',
-        'kmz',
-        'qgz',
-        'qgs',
-        'layer',
-        'map',
-        'maps',
-        'shapefile',
-        'shape file',
-        'shape-file',
+    return bool(
+        re.search(
+            r'(?:\bqgis\b|qgis\s*(?:öffn|start|lad|analys)|(?:öffn|start|lad)[^\n]{0,20}\bqgis\b|qgis[^\n]{0,20}(?:öffn|start|lad|analys))',
+            haystack,
+        )
     )
-    return any(keyword in haystack for keyword in qgis_keywords)
 
 
 
@@ -408,14 +388,14 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "}\n"
             "Regeln:\n"
             "- Nutze desktop_actions nur für echte PC-Steuerung.\n"
-            "- Wenn der Benutzer einen QGIS-Workflow, eine Datei oder ein Projekt analysieren will, arbeite in dieser Reihenfolge: 1) passende App öffnen, 2) Datei/Projekt laden, 3) Analyse durchführen, 4) Ergebnis als Word-Report liefern.\n"
+            "- Öffne oder starte QGIS nur, wenn der Benutzer es ausdrücklich verlangt oder QGIS im Auftrag nennt. Wenn der Benutzer nur einen Bericht oder eine Analyse wünscht, lies die Inhalte direkt aus den Dateien und liefere den Bericht ohne QGIS.\n"
             "- Der Desktop-Agent hat Zugriff auf den Computer des Benutzers. Sage nicht, dass du keinen Zugriff auf lokale Dateien oder auf den Computer hast, wenn desktop_agent aktiv ist.\n"
             "- Wenn es um Projektdateien geht, verlange keinen Scan als Voraussetzung; nutze den vorhandenen Projektordner-Kontext oder frage den Desktop-Agenten nach einer direkten, kurzen Verzeichnisliste statt eines Tiefenscans.\n"
             "- Wenn ein Report oder eine Datei auf Inhalte aus dem Projekt basiert, nimm die aktiven Projekt-Skills und Projekt-Tools als Arbeitsanweisung ernst und lies die Inhalte der Dateien direkt, statt nur aus Metadaten zu antworten.\n"
             "- Wenn der Benutzer ausdrücklich einen Word-Bericht möchte, erzeuge bevorzugt eine .docx-Datei und ergänze sie mit klarer Zusammenfassung statt nur Text in der Chat-Antwort.\n"
             "- Wenn der Benutzer ein Bild verlangt, liefere einen einzigen Bild-Datei-Block und ändere die Bildbeschreibung nicht in zusätzlicher Prosa; der Client rendert die erzeugte Bilddatei unverändert.\n"
-            "- Beim QGIS-Profil solltest du Geodaten immer artweise auswerten, Koordinaten und Kontakte prüfen, Cluster und mögliche Brutreviere erkennen und den Nutzer bei Bedarf nach weiteren Kennzahlen fragen.\n"
-            "- Wenn der Benutzer eine QGIS-Datei, ein Shapefile, ein GeoPackage oder eine Projektdatei nennt, starte QGIS direkt mit dieser Datei und lade nicht zuerst einen generischen Viewer.\n"
+            "- Beim QGIS-Profil solltest du Geodaten nur dann in QGIS öffnen, wenn der Benutzer QGIS ausdrücklich nennt oder die Datei explizit in QGIS laden will; sonst analysiere den Dateiinhalt direkt und liefere den Bericht ohne App-Start.\n"
+            "- Wenn der Benutzer eine QGIS-Datei, ein Shapefile, ein GeoPackage oder eine Projektdatei nennt und QGIS ausdrücklich verlangt, starte QGIS direkt mit dieser Datei und lade nicht zuerst einen generischen Viewer.\n"
             "- Halte reply kurz und sag, was du tust.\n"
             "- Wenn du mehr Kontext brauchst, lege mit reply eine Rückfrage und desktop_actions leer.\n"
             "- Wenn ein Schritt riskant oder unklar ist, frage statt zu raten.\n"
@@ -485,9 +465,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         project_files_context = ''
         try:
             direct_context = (payload.project_folder_context or '').strip()
-            if payload.project_folder_context and payload.project_folder_context.strip():
-                project_context_parts.append(direct_context)
-            if conv_project is not None and not direct_context:
+            if conv_project is not None:
                 backend_project_context = await build_project_files_context(
                     conv_project,
                     include_previews=True,
@@ -496,6 +474,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 )
                 if backend_project_context.strip():
                     project_context_parts.append(backend_project_context.strip())
+            if direct_context and not project_context_parts:
+                project_context_parts.append(direct_context)
             if not project_context_parts:
                 project_context_parts.append(
                     "Der Desktop-Agent ist aktiv und kann den Computer bedienen. "
@@ -643,21 +623,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
     if conv_project is not None and not serialized_files:
         try:
-            qgis_related = _looks_qgis_related(' '.join([
-                payload.message or '',
-                reply_text or '',
-                payload.desktop_profile or '',
-                ' '.join(
-                    item
-                    for attachment in (payload.attachments or [])
-                    for item in (
-                        (getattr(attachment, 'filename', '') or '').strip(),
-                        (getattr(attachment, 'file_path', '') or '').strip(),
-                    )
-                    if item
-                ),
-            ])) or (payload.desktop_profile or '').strip().lower() == 'qgis'
-            report_intent = qgis_related and (
+            report_intent = (
                 looks_like_project_detailed_report_request(payload.message)
                 or looks_like_file_generation_request(payload.message, payload.attachments)
                 or any(word in (payload.message or '').lower() for word in ('analyse', 'analysiere', 'analyze', 'bericht', 'report', 'gutachten', 'auswert'))

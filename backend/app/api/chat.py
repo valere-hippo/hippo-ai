@@ -241,6 +241,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "If project_folder_context is present, treat it as the source of truth for the project folder contents and do not claim you lack local filesystem access. When it is structured as file-by-file blocks, read each file block completely, not just the filenames.\n"
             "If the project has a saved local folder, do not say you cannot access it; use the project context or ask for a refresh instead.\n"
             "For project-folder questions, prefer a short direct folder listing over any deep scan, and do not block the chat while waiting for recursive indexing.\n"
+            "Open or launch QGIS only when the user explicitly asks for QGIS or explicitly asks to load the files in QGIS. If the user only wants an analysis or a report, read the file contents directly and answer without starting QGIS.\n"
             "When the user asks for a report, analysis, or Word/PDF deliverable from the project folders, automatically use all accessible project folders and all files in them unless the user explicitly narrows the scope. Do not ask which folders or files to use.\n"
             "Write in a polished Claude-like report style: direct, structured, concise but thorough, no preamble, no self-referential commentary, no repetitive reassurance, and minimize transitional phrases.\n"
             "For project-folder questions, produce a detailed answer that is content-first: describe what the files contain, what the extracted text / geometry / OCR / transcript says, and what technical conclusions follow. Prefer paragraphs over bullet lists unless bullets add real clarity. Do not lead with file size or filename inventory unless it is genuinely relevant.\n"
@@ -288,9 +289,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         project_files_context = ''
         try:
             direct_context = (payload.project_folder_context or '').strip()
-            if payload.project_folder_context and payload.project_folder_context.strip():
-                project_context_parts.append(direct_context)
-            if conv_project is not None and not direct_context:
+            if conv_project is not None:
                 backend_project_context = await build_project_files_context(
                     conv_project,
                     include_previews=True,
@@ -299,6 +298,8 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                 )
                 if backend_project_context.strip():
                     project_context_parts.append(backend_project_context.strip())
+            if direct_context and not project_context_parts:
+                project_context_parts.append(direct_context)
             if not project_context_parts:
                 project_context_parts.append(
                     "Der Desktop-Agent ist aktiv und kann den Computer bedienen. "
