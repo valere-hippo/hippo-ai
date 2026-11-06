@@ -87,6 +87,10 @@ textarea {
   display: none;
 }
 
+.app-shell.logged-out .workspace-shell {
+  pointer-events: none;
+}
+
 .app-shell.logged-out {
   grid-template-columns: 1fr;
 }

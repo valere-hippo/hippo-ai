@@ -2924,6 +2924,11 @@ function logout() {
 }
 
 async function selectProject(projectId) {
+  if (!state.token) {
+    setScreen(false)
+    updatePresence()
+    return
+  }
   try {
     state.selectedProjectId = projectId
     const project = getContextProject()
@@ -2982,6 +2987,11 @@ async function startNewChat() {
 }
 
 async function openConversation(conversation) {
+  if (!state.token) {
+    setScreen(false)
+    updatePresence()
+    return
+  }
   try {
     state.currentConversationId = conversation.id
     if (conversation.project_id) {
@@ -6803,6 +6813,11 @@ async function saveGeneratedArtifacts(artifacts, deliveryFolder) {
 }
 
 async function sendChat() {
+  if (!state.token) {
+    setScreen(false)
+    updatePresence()
+    return
+  }
   const message = els.chatInput.value.trim()
   if (!message && state.draftAttachments.length === 0) return
 

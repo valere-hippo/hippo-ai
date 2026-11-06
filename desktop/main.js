@@ -242,6 +242,8 @@ function createWindow () {
       contextIsolation: true,
     }
   })
+  mainWindow = win
+  lastRenderProcessGone = false
 
   const logWindowEvent = (kind, detail) => {
     try {
@@ -253,6 +255,7 @@ function createWindow () {
     logWindowEvent('did-fail-load', `code=${errorCode} desc=${errorDescription} url=${validatedURL} main=${isMainFrame}`)
   })
   win.webContents.on('render-process-gone', (_event, details) => {
+    lastRenderProcessGone = true
     logWindowEvent('render-process-gone', JSON.stringify(details || {}))
   })
   win.webContents.on('unresponsive', () => {
@@ -261,7 +264,19 @@ function createWindow () {
   win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     logWindowEvent('console', `level=${level} ${sourceId}:${line} ${message}`)
   })
-  win.on('closed', () => logWindowEvent('closed', 'window closed'))
+  win.on('closed', () => {
+    logWindowEvent('closed', 'window closed')
+    mainWindow = null
+    if (lastRenderProcessGone && !appIsQuitting) {
+      lastRenderProcessGone = false
+      setTimeout(() => {
+        if (!mainWindow && !appIsQuitting) {
+          appendMainLog('[recover] recreating window after renderer crash')
+          createWindow()
+        }
+      }, 500)
+    }
+  })
 
   Menu.setApplicationMenu(null)
   win.removeMenu()
@@ -277,8 +292,15 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('window-all-closed', function () {
-  if (process.platform !== 'darwin') app.quit()
+app.on('window-all-closed', function (event) {
+  if (process.platform !== 'darwin') {
+    if (lastRenderProcessGone && !appIsQuitting) {
+      appendMainLog('[window-all-closed] prevented quit after renderer crash')
+      event.preventDefault()
+      return
+    }
+    app.quit()
+  }
 })
 
 ipcMain.on('get-runtime-config', (event) => {
@@ -1013,6 +1035,25 @@ $.CGEventPost($.kCGHIDEventTap, event);
 const logPath = path.join(__dirname, '.logs')
 try { fs.mkdirSync(logPath, { recursive: true }) } catch (e) {}
 const logFile = path.join(logPath, 'renderer.log')
+const mainLogFile = path.join(logPath, 'main.log')
+const appendMainLog = (line) => {
+  try { fs.appendFileSync(mainLogFile, `[${new Date().toISOString()}] ${line}\n`) } catch (e) {}
+}
+let mainWindow = null
+let appIsQuitting = false
+let lastRenderProcessGone = false
+appendMainLog('[startup] main process loaded')
+process.on('uncaughtException', (error) => {
+  appendMainLog(`[uncaughtException] ${error?.stack || error?.message || String(error)}`)
+})
+process.on('unhandledRejection', (reason) => {
+  appendMainLog(`[unhandledRejection] ${reason instanceof Error ? reason.stack || reason.message : String(reason)}`)
+})
+app.on('before-quit', () => {
+  appIsQuitting = true
+  appendMainLog('[before-quit] app is quitting')
+})
+app.on('quit', () => appendMainLog('[quit] app quit'))
 ipcMain.on('renderer-log', (event, msg) => {
   try { fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`) } catch (e) {}
 })
