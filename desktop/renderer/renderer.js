@@ -7,36 +7,6 @@ function normalizeApiBaseUrl(value) {
   return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`
 }
 
-function shouldBlockFirstProjectMessage({
-  projectId,
-  explicitPath,
-  projectFolderContext,
-  cachedState,
-  cachedContext,
-  deepWarmState,
-}) {
-  if (!projectId) return false
-  if (explicitPath) return false
-  if (String(projectFolderContext || '').trim()) return false
-  if (deepWarmState === 'ready') return false
-  if (cachedState === 'ready' && String(cachedContext || '').trim() && deepWarmState !== 'loading') return false
-  return true
-}
-
-function shouldDelayProjectOpen({
-  projectId,
-  currentConversationId,
-  projectFolderContext,
-  deepWarmState,
-  cachedContext,
-}) {
-  if (!projectId) return false
-  if (currentConversationId) return false
-  if (String(projectFolderContext || '').trim()) return false
-  if (deepWarmState === 'ready' && String(cachedContext || '').trim()) return false
-  return true
-}
-
 const API = normalizeApiBaseUrl(
   window.electron?.runtimeConfig?.apiUrl
     || window.electron?.runtimeConfig?.apiBaseUrl
@@ -2935,57 +2905,49 @@ function logout() {
 }
 
 async function selectProject(projectId) {
-  state.selectedProjectId = projectId
-  const project = getContextProject()
-  const storedProfile = Number(localStorage.getItem(getProfileStorageKey(projectId)) || '0') || null
-  state.selectedProfileId = storedProfile || project?.default_profile_id || null
-  const folders = project ? normalizeProjectFolderInput(project.watched_folder) : []
-  if (project) {
-    const scope = loadProjectSourceScope(project)
-    const hasLocalSources = Boolean((scope?.sourceFolders?.length && scope.consented) || folders.length)
-    if (hasLocalSources) {
-      setDesktopAgentMode(true)
-    }
-    if (shouldDelayProjectOpen({
-      projectId: project.id,
-      currentConversationId: state.currentConversationId,
-      projectFolderContext: state.projectFolderContextCache.get(project.id),
-      deepWarmState: state.projectFolderDeepWarmState.get(project.id),
-      cachedContext: state.projectFolderContextCache.get(project.id),
-    })) {
-      showLoader('Projektordner wird vollständig geladen...')
-      try {
-        await warmProjectFolderContext(project, folders, '', { deep: true })
-      } finally {
-        hideLoader()
+  try {
+    state.selectedProjectId = projectId
+    const project = getContextProject()
+    const storedProfile = Number(localStorage.getItem(getProfileStorageKey(projectId)) || '0') || null
+    state.selectedProfileId = storedProfile || project?.default_profile_id || null
+    const folders = project ? normalizeProjectFolderInput(project.watched_folder) : []
+    if (project) {
+      const scope = loadProjectSourceScope(project)
+      const hasLocalSources = Boolean((scope?.sourceFolders?.length && scope.consented) || folders.length)
+      if (hasLocalSources) {
+        setDesktopAgentMode(true)
       }
-    } else if (folders.length) {
-      void warmProjectFolderContext(project, folders, '', { deep: true })
+      if (folders.length) {
+        void warmProjectFolderContext(project, folders, '', { deep: true })
+      }
     }
-  }
-  renderProjects()
-  renderConversations()
-  renderContext()
-  closeSidebarDrawer()
+    renderProjects()
+    renderConversations()
+    renderContext()
+    closeSidebarDrawer()
 
-  await loadProfiles()
-  syncSelectedProjectConversation()
-  renderProjects()
-  renderConversations()
-  renderContext()
+    await loadProfiles()
+    syncSelectedProjectConversation()
+    renderProjects()
+    renderConversations()
+    renderContext()
 
-  if (project && !state.desktopAgentMode) {
-    const scope = loadProjectSourceScope(project)
-    const folders = scope?.sourceFolders?.length ? scope.sourceFolders : normalizeProjectFolderInput(project.watched_folder)
-    if (folders.length) {
-      scheduleProjectSourceSync(project, folders, { silent: true })
+    if (project && !state.desktopAgentMode) {
+      const scope = loadProjectSourceScope(project)
+      const folders = scope?.sourceFolders?.length ? scope.sourceFolders : normalizeProjectFolderInput(project.watched_folder)
+      if (folders.length) {
+        scheduleProjectSourceSync(project, folders, { silent: true })
+      }
     }
-  }
 
-  if (state.currentConversationId) {
-    await openConversationById(state.currentConversationId)
-  } else {
-    clearChatLog()
+    if (state.currentConversationId) {
+      await openConversationById(state.currentConversationId)
+    } else {
+      clearChatLog()
+    }
+  } catch (error) {
+    console.warn('Failed to select project:', error)
+    showToast(error.message || 'Projekt konnte nicht geladen werden', 'error')
   }
 }
 
@@ -3001,46 +2963,38 @@ async function startNewChat() {
 }
 
 async function openConversation(conversation) {
-  state.currentConversationId = conversation.id
-  if (conversation.project_id) {
-    state.selectedProjectId = conversation.project_id
-    state.selectedProfileId = Number(conversation.profile_id || 0) || state.selectedProfileId
-    state.projectConversationMemory.set(getProjectConversationMemoryKey(conversation.project_id, conversation.profile_id), conversation.id)
-    const project = getContextProject()
-    if (project) {
-      const folders = normalizeProjectFolderInput(project.watched_folder)
-      if (shouldDelayProjectOpen({
-        projectId: project.id,
-        currentConversationId: state.currentConversationId,
-        projectFolderContext: state.projectFolderContextCache.get(project.id),
-        deepWarmState: state.projectFolderDeepWarmState.get(project.id),
-        cachedContext: state.projectFolderContextCache.get(project.id),
-      })) {
-        showLoader('Projektordner wird vollständig geladen...')
-        try {
-          await warmProjectFolderContext(project, folders, '', { deep: true })
-        } finally {
-          hideLoader()
+  try {
+    state.currentConversationId = conversation.id
+    if (conversation.project_id) {
+      state.selectedProjectId = conversation.project_id
+      state.selectedProfileId = Number(conversation.profile_id || 0) || state.selectedProfileId
+      state.projectConversationMemory.set(getProjectConversationMemoryKey(conversation.project_id, conversation.profile_id), conversation.id)
+      const project = getContextProject()
+      if (project) {
+        const folders = normalizeProjectFolderInput(project.watched_folder)
+        if (folders.length) {
+          void warmProjectFolderContext(project, folders, '', { deep: true })
         }
-      } else if (folders.length) {
-        void warmProjectFolderContext(project, folders, '', { deep: true })
-      }
-      const scope = loadProjectSourceScope(project)
-      const hasLocalSources = Boolean((scope?.sourceFolders?.length && scope.consented) || folders.length)
-      if (hasLocalSources) {
-        setDesktopAgentMode(true)
+        const scope = loadProjectSourceScope(project)
+        const hasLocalSources = Boolean((scope?.sourceFolders?.length && scope.consented) || folders.length)
+        if (hasLocalSources) {
+          setDesktopAgentMode(true)
+        }
       }
     }
-  }
-  renderProjects()
-  renderConversations()
-  renderContext()
-  closeSidebarDrawer()
-  const project = getContextProject()
-  if (project) {
+    renderProjects()
+    renderConversations()
     renderContext()
+    closeSidebarDrawer()
+    const project = getContextProject()
+    if (project) {
+      renderContext()
+    }
+    await openConversationById(conversation.id)
+  } catch (error) {
+    console.warn('Failed to open conversation:', error)
+    showToast(error.message || 'Unterhaltung konnte nicht geladen werden', 'error')
   }
-  await openConversationById(conversation.id)
 }
 
 async function openConversationById(conversationId) {
@@ -6917,25 +6871,6 @@ async function sendChat() {
     }
   }
 
-  if (project && shouldBlockFirstProjectMessage({
-    projectId: project.id,
-    explicitPath,
-    projectFolderContext,
-    cachedState: state.projectFolderScanState.get(project.id),
-    cachedContext: state.projectFolderContextCache.get(project.id),
-    deepWarmState: state.projectFolderDeepWarmState.get(project.id),
-  })) {
-    const folders = normalizeProjectFolderInput(project.watched_folder)
-    if (folders.length) {
-      showLoader('Projektordner wird vollständig geladen...')
-      try {
-        projectFolderContext = await warmProjectFolderContext(project, folders, '', { deep: true }) || state.projectFolderContextCache.get(project.id) || ''
-      } finally {
-        hideLoader()
-      }
-    }
-  }
-
   if (project) {
     const scope = loadProjectSourceScope(project)
     const accessGranted = Boolean(scope?.sourceFolders?.length && scope.consented)
@@ -7359,7 +7294,15 @@ async function bootstrap() {
     }
   } catch (error) {
     console.warn(error)
-    logout()
+    if (state.token) {
+      setScreen(true)
+      updatePresence()
+      renderContext()
+      return
+    }
+    setScreen(false)
+    updatePresence()
+    renderContext()
   }
 }
 
