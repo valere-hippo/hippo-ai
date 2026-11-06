@@ -3,7 +3,6 @@ const { spawn, spawnSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 const mime = require('mime-types')
-const Tesseract = require('tesseract.js')
 
 function loadRuntimeConfig() {
   const defaultApiUrl = process.env.HIPPO_API_URL || 'http://localhost:8000'
@@ -30,6 +29,22 @@ function loadRuntimeConfig() {
 }
 
 const runtimeConfig = loadRuntimeConfig()
+
+const singleInstanceLock = app.requestSingleInstanceLock()
+if (!singleInstanceLock) {
+  app.quit()
+  process.exit(0)
+}
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  } else {
+    createWindow()
+  }
+})
 
 function configurePermissions() {
   try {
@@ -254,6 +269,14 @@ function createWindow () {
   win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     logWindowEvent('did-fail-load', `code=${errorCode} desc=${errorDescription} url=${validatedURL} main=${isMainFrame}`)
   })
+  win.webContents.on('will-navigate', (event, url) => {
+    logWindowEvent('will-navigate', url)
+    event.preventDefault()
+  })
+  win.webContents.setWindowOpenHandler((details) => {
+    logWindowEvent('window-open-blocked', details?.url || '')
+    return { action: 'deny' }
+  })
   win.webContents.on('render-process-gone', (_event, details) => {
     lastRenderProcessGone = true
     logWindowEvent('render-process-gone', JSON.stringify(details || {}))
@@ -267,15 +290,6 @@ function createWindow () {
   win.on('closed', () => {
     logWindowEvent('closed', 'window closed')
     mainWindow = null
-    if (lastRenderProcessGone && !appIsQuitting) {
-      lastRenderProcessGone = false
-      setTimeout(() => {
-        if (!mainWindow && !appIsQuitting) {
-          appendMainLog('[recover] recreating window after renderer crash')
-          createWindow()
-        }
-      }, 500)
-    }
   })
 
   Menu.setApplicationMenu(null)
@@ -294,11 +308,6 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', function (event) {
   if (process.platform !== 'darwin') {
-    if (lastRenderProcessGone && !appIsQuitting) {
-      appendMainLog('[window-all-closed] prevented quit after renderer crash')
-      event.preventDefault()
-      return
-    }
     app.quit()
   }
 })
@@ -367,6 +376,7 @@ ipcMain.handle('inspect-project-folder', async (event, { folder, maxDepth = 2, m
 ipcMain.handle('ocr-image', async (event, { dataUrl }) => {
   try {
     if (!dataUrl) return { ok: false, error: 'No image data provided' }
+    const Tesseract = require('tesseract.js')
     const result = await Tesseract.recognize(dataUrl, 'deu+eng')
     const text = (result?.data?.text || '').trim()
     return { ok: true, text }
