@@ -289,7 +289,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         project_files_context = ''
         try:
             direct_context = (payload.project_folder_context or '').strip()
-            if conv_project is not None:
+            if conv_project is not None and not payload.attachments:
                 backend_project_context = await build_project_files_context(
                     conv_project,
                     include_previews=True,
@@ -314,6 +314,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                         "Kontext der lokalen Projektordner:\n"
                         f"{project_files_context}\n\n"
                         "Nutze diesen Kontext, wenn der Benutzer die Dateien oder den Ordner analysieren möchte, antworte ausführlich auf Deutsch und vermeide Tabellen oder übertriebenes Markdown.\n"
+                        "Wenn der Request bereits echte Dateianhänge enthält, behandle diese Anhänge als primäre Quelle und lies ihren Inhalt direkt statt bloß Ordnerlisten oder QGIS-Hinweise zu verwenden.\n"
                         "Wenn der Benutzer einen Bericht, ein Word-Dokument oder einen PDF-Export aus dem Projektordner möchte, verwende automatisch alle verfügbaren Ordner und Dateien des Projekts, ohne nach bestimmten Dateien oder Unterordnern zu fragen, sofern der Benutzer die Auswahl nicht explizit einschränkt."
                     ),
                 },

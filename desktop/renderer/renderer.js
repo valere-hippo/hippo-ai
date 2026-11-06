@@ -3153,6 +3153,66 @@ async function attachGeoCompanionFiles(file) {
   return attachments
 }
 
+function isAttachableProjectFile(filename) {
+  const ext = getFileExt(filename)
+  return new Set([
+    '.txt', '.md', '.markdown', '.csv', '.json', '.yml', '.yaml', '.xml', '.rtf', '.log', '.ini',
+    '.py', '.js', '.ts', '.html', '.htm', '.css', '.pdf', '.docx', '.png', '.jpg', '.jpeg', '.webp',
+    '.gif', '.bmp', '.tif', '.tiff', '.shp', '.shx', '.dbf', '.prj', '.cpg', '.gpkg', '.qgz', '.qgs',
+    '.geojson', '.kml', '.kmz', '.svg',
+  ]).has(ext)
+}
+
+async function buildProjectFileAttachments(project, { maxFiles = 48, maxDepth = 5 } = {}) {
+  if (!project?.watched_folder || !window.electron?.scanProjectFolderFiles || !window.electron?.readLocalFile) {
+    return []
+  }
+
+  const folders = normalizeProjectFolderInput(project.watched_folder)
+  if (!folders.length) return []
+
+  const scan = await window.electron.scanProjectFolderFiles({
+    folder: folders.join('\n'),
+    maxDepth,
+    maxFiles,
+  })
+  if (!scan?.ok) return []
+
+  const files = Array.isArray(scan.files) ? scan.files : []
+  const attachments = []
+  const seenPaths = new Set()
+
+  for (const file of files) {
+    if (attachments.length >= maxFiles) break
+    const sourcePath = String(file?.path || '').trim()
+    const filename = String(file?.relative_path || file?.filename || file?.name || sourcePath.split(/[/\\]/).pop() || '').trim()
+    if (!sourcePath || !filename) continue
+    if (seenPaths.has(sourcePath)) continue
+    if (!isAttachableProjectFile(filename)) continue
+
+    // eslint-disable-next-line no-await-in-loop
+    const attachment = await buildAttachmentFromLocalPath(sourcePath, filename, 'application/octet-stream')
+    if (!attachment) continue
+
+    attachments.push(attachment)
+    seenPaths.add(sourcePath)
+
+    if (getFileExt(filename) === '.shp') {
+      // eslint-disable-next-line no-await-in-loop
+      const companions = await attachGeoCompanionFiles({ path: sourcePath, name: filename })
+      for (const companion of companions) {
+        if (attachments.length >= maxFiles) break
+        const companionPath = String(companion?.file_path || '').trim()
+        if (companionPath && seenPaths.has(companionPath)) continue
+        attachments.push(companion)
+        if (companionPath) seenPaths.add(companionPath)
+      }
+    }
+  }
+
+  return attachments
+}
+
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -6834,6 +6894,7 @@ async function sendChat() {
   let projectSourcePrefixes = null
   let projectFolderContext = ''
   let explicitLocalAttachment = null
+  let projectBundleAttachments = []
 
   if (!state.desktopAgentMode) {
     setDesktopAgentMode(true)
@@ -6841,6 +6902,8 @@ async function sendChat() {
 
   const explicitPathCandidates = extractWindowsPathCandidates(message)
   const explicitPath = explicitPathCandidates[0] || ''
+  const qgisRequested = looksLikeQgisRequest(message)
+  const wantsProjectFileAnalysis = looksLikeProjectFolderInquiry(message) || looksLikeFileGenerationRequest(message)
 
   if (explicitPath && window.electron?.readLocalFile && isLikelyFilePath(explicitPath)) {
     try {
@@ -6911,13 +6974,28 @@ async function sendChat() {
     if (accessGranted && !explicitPath) {
       projectSourcePrefixes = scope.sourceFolders
     }
-    if (!state.desktopAgentMode && looksLikeQgisRequest(message)) {
+    if (!state.desktopAgentMode && qgisRequested) {
       setDesktopAgentMode(true)
     }
-    if (project && !explicitPath && (!projectFolderContext || looksLikeProjectFolderInquiry(message) || looksLikeFileGenerationRequest(message))) {
+    if (!explicitPath && !qgisRequested && wantsProjectFileAnalysis) {
+      try {
+        projectBundleAttachments = await buildProjectFileAttachments(project, { maxFiles: 48, maxDepth: 5 })
+        if (projectBundleAttachments.length) {
+          projectFolderContext = [
+            'RAW_PROJECT_FILES:',
+            'Die angehängten Projektdateien enthalten den Originalinhalt des Projekts.',
+            'Lies die Dateien direkt und schreibe den Bericht ausschließlich auf Basis der echten Datei-Inhalte.',
+            'Ignoriere bloße Dateilisten oder QGIS-Nachrichten, wenn sie dem Dateiinhalt widersprechen.',
+          ].join(' ')
+        }
+      } catch (error) {
+        console.warn('Project file attachment build failed:', error)
+      }
+    }
+    if (!projectFolderContext && project && !explicitPath && !qgisRequested && wantsProjectFileAnalysis) {
       const folders = normalizeProjectFolderInput(project.watched_folder)
       if (folders.length) {
-        const needsDeepRead = looksLikeProjectFolderInquiry(message) || looksLikeFileGenerationRequest(message)
+        const needsDeepRead = wantsProjectFileAnalysis
         if (needsDeepRead) {
           const deepContext = await warmProjectFolderContext(project, folders, '', { deep: true })
           if (deepContext) {
@@ -6940,6 +7018,7 @@ async function sendChat() {
 
   const attachments = [
     ...(explicitLocalAttachment ? [explicitLocalAttachment] : []),
+    ...projectBundleAttachments,
     ...state.draftAttachments.map((attachment) => ({
       filename: attachment.filename,
       mime_type: attachment.mime_type,
