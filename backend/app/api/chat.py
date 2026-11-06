@@ -288,16 +288,9 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         project_files_context = ''
         try:
             direct_context = (payload.project_folder_context or '').strip()
-            prioritize_backend_context = bool(
-                conv_project is not None
-                and (
-                    looks_like_project_detailed_report_request(payload.message)
-                    or looks_like_file_generation_request(payload.message, payload.attachments)
-                )
-            )
             if payload.project_folder_context and payload.project_folder_context.strip():
                 project_context_parts.append(direct_context)
-            if conv_project is not None:
+            if conv_project is not None and not direct_context:
                 backend_project_context = await build_project_files_context(
                     conv_project,
                     include_previews=True,
@@ -305,13 +298,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                     source_prefixes=payload.project_source_prefixes,
                 )
                 if backend_project_context.strip():
-                    backend_block = backend_project_context.strip()
-                    if prioritize_backend_context:
-                        project_context_parts.insert(0, backend_block)
-                    elif not project_context_parts:
-                        project_context_parts.append(backend_block)
-                    else:
-                        project_context_parts.append(backend_block)
+                    project_context_parts.append(backend_project_context.strip())
             if not project_context_parts:
                 project_context_parts.append(
                     "Der Desktop-Agent ist aktiv und kann den Computer bedienen. "
