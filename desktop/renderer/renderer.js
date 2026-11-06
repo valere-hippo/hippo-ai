@@ -15,6 +15,25 @@ const API = normalizeApiBaseUrl(
     || DEFAULT_API,
 )
 
+try {
+  window.addEventListener('error', (event) => {
+    try {
+      window.electron?.logError?.(`[window.error] ${event?.message || 'unknown error'} @ ${event?.filename || ''}:${event?.lineno || ''}:${event?.colno || ''}`)
+    } catch (error) {}
+  })
+  window.addEventListener('unhandledrejection', (event) => {
+    try {
+      const reason = event?.reason instanceof Error ? `${event.reason.name}: ${event.reason.message}\n${event.reason.stack || ''}` : String(event?.reason || 'unknown rejection')
+      window.electron?.logError?.(`[unhandledrejection] ${reason}`)
+    } catch (error) {}
+  })
+  window.addEventListener('beforeunload', () => {
+    try {
+      window.electron?.logError?.('[beforeunload] renderer unloading')
+    } catch (error) {}
+  })
+} catch (error) {}
+
 const state = {
   token: localStorage.getItem('hippo.token') || '',
   user: null,

@@ -243,6 +243,26 @@ function createWindow () {
     }
   })
 
+  const logWindowEvent = (kind, detail) => {
+    try {
+      fs.appendFileSync(logFile, `[${new Date().toISOString()}] [window:${kind}] ${detail}\n`)
+    } catch (error) {}
+  }
+
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    logWindowEvent('did-fail-load', `code=${errorCode} desc=${errorDescription} url=${validatedURL} main=${isMainFrame}`)
+  })
+  win.webContents.on('render-process-gone', (_event, details) => {
+    logWindowEvent('render-process-gone', JSON.stringify(details || {}))
+  })
+  win.webContents.on('unresponsive', () => {
+    logWindowEvent('unresponsive', 'renderer became unresponsive')
+  })
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    logWindowEvent('console', `level=${level} ${sourceId}:${line} ${message}`)
+  })
+  win.on('closed', () => logWindowEvent('closed', 'window closed'))
+
   Menu.setApplicationMenu(null)
   win.removeMenu()
   win.setMenuBarVisibility(false)
