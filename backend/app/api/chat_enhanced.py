@@ -25,7 +25,7 @@ from app.services.generated_files import build_generated_file_bytes_with_fallbac
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory
 from app.services.project_storage import build_project_files_context
-from app.services.project_report_fallback import build_project_report_generated_file
+from app.services.project_report_fallback import build_project_report_generated_file, _is_valid_report_text
 from app.services.project_skills import build_project_skills_context
 from app.services.project_tools import build_tools_context
 from app.services.desktop_workflows import infer_desktop_launch_actions
@@ -631,23 +631,24 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             )
             if report_intent:
                 report_text = (reply_text or '').strip()
-                if not report_text:
-                    report_text = (payload.project_folder_context or '').strip()
-                data, mime_type, filename = build_project_report_generated_file(
-                    payload.message,
-                    report_text,
-                    project_name=conv_project.name if conv_project else None,
-                    filename_hint='project_report',
-                )
-                serialized_files.append(
-                    {
-                        'filename': filename,
-                        'mime_type': mime_type,
-                        'data_base64': base64.b64encode(data).decode('ascii'),
-                    }
-                )
-                if not reply_text.strip():
-                    reply_text = 'Analyse abgeschlossen. Der Word-Bericht wurde erstellt.'
+                if not _is_valid_report_text(report_text):
+                    logger.warning('Refusing to render weak report response for conversation %s', conv_id)
+                else:
+                    data, mime_type, filename = build_project_report_generated_file(
+                        payload.message,
+                        report_text,
+                        project_name=conv_project.name if conv_project else None,
+                        filename_hint='project_report',
+                    )
+                    serialized_files.append(
+                        {
+                            'filename': filename,
+                            'mime_type': mime_type,
+                            'data_base64': base64.b64encode(data).decode('ascii'),
+                        }
+                    )
+                    if not reply_text.strip():
+                        reply_text = 'Analyse abgeschlossen. Der Word-Bericht wurde erstellt.'
         except Exception:
             logger.warning('Auto report generation failed for conversation %s', conv_id)
 

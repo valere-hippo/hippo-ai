@@ -119,24 +119,31 @@ def _extract_file_names(context_text: str, max_items: int = 20) -> list[str]:
     return names
 
 
+STATUS_ONLY_RE = re.compile(
+    r'^(ich\s+werde|ich\s+habe|bericht\s+im\s+lieferordner\s+gespeichert|analyse\s+abgeschlossen|die\s+dateien\s+wurden\s+analysiert|ich\s+analysiere|ich\s+werde\s+die\s+dateien)',
+    re.IGNORECASE,
+)
+
+
+def _is_valid_report_text(report_text: str) -> bool:
+    lines = _normalize_lines(report_text)
+    if len(lines) < 4:
+        return False
+    if STATUS_ONLY_RE.search((lines[0] or '').strip()):
+        return False
+    lower = report_text.lower()
+    section_hits = sum(1 for marker in ('zusammenfassung', 'analyse', 'schluss') if f'## {marker}' in lower or marker in lower)
+    fact_hits = sum(1 for marker in _FACT_PREFIXES if marker.lower() in lower)
+    return section_hits >= 2 and fact_hits >= 1
+
+
 def build_project_report_fallback(question: str, project_files_context: str, project_name: str | None = None) -> str:
     title = (project_name or 'Projektbericht').strip() or 'Projektbericht'
     question_text = (question or '').strip() or 'Analyse der Projektdateien'
     report_text = (project_files_context or '').strip()
 
     if report_text:
-        report_lines = _normalize_lines(report_text)
-        looks_like_report = (
-            len(report_lines) >= 4
-            and (
-                report_text.lstrip().startswith('#')
-                or '## ' in report_text
-                or any(
-                    marker in report_text.lower()
-                    for marker in ('zusammenfassung', 'analyse', 'schluss', 'ergebnis', 'befund', 'fassung', 'bewertung')
-                )
-            )
-        )
+        looks_like_report = _is_valid_report_text(report_text)
         if looks_like_report:
             return '\n'.join([
                 f'# {title}',

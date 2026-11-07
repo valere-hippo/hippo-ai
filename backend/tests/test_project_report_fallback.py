@@ -1,4 +1,4 @@
-from app.services.project_report_fallback import build_project_report_fallback
+from app.services.project_report_fallback import build_project_report_fallback, _is_valid_report_text
 
 
 def test_build_project_report_fallback_preserves_structured_model_report():
@@ -44,3 +44,9 @@ Geodatenpaket für 'bitburg':
     assert "Geodatenpaket für" in result
     assert "Geometrietyp" in result
     assert "## Schluss" in result
+
+
+def test_is_valid_report_text_rejects_status_only_replies():
+    assert not _is_valid_report_text("Ich werde die geodatenbezogenen Dateien analysieren. Dies umfasst die Dateien .cpg, .dbf, .prj und .shx.")
+    assert not _is_valid_report_text("Ich habe die Dateien analysiert und einen Bericht erstellt.")
+    assert _is_valid_report_text("## Zusammenfassung\n- Punkt A\n\n## Analyse\n- Punkt B\n\n## Schluss\n- Punkt C\n- Geometrietyp: 5")
