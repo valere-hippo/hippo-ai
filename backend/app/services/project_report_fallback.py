@@ -122,9 +122,30 @@ def _extract_file_names(context_text: str, max_items: int = 20) -> list[str]:
 def build_project_report_fallback(question: str, project_files_context: str, project_name: str | None = None) -> str:
     title = (project_name or 'Projektbericht').strip() or 'Projektbericht'
     question_text = (question or '').strip() or 'Analyse der Projektdateien'
-    context_text = (project_files_context or '').strip()
-    facts = _extract_significant_lines(context_text)
-    file_names = _extract_file_names(context_text)
+    report_text = (project_files_context or '').strip()
+
+    if report_text:
+        report_lines = _normalize_lines(report_text)
+        looks_like_report = (
+            len(report_lines) >= 4
+            and (
+                report_text.lstrip().startswith('#')
+                or '## ' in report_text
+                or any(
+                    marker in report_text.lower()
+                    for marker in ('zusammenfassung', 'analyse', 'schluss', 'ergebnis', 'befund', 'fassung', 'bewertung')
+                )
+            )
+        )
+        if looks_like_report:
+            return '\n'.join([
+                f'# {title}',
+                '',
+                report_text,
+            ])
+
+    facts = _extract_significant_lines(report_text)
+    file_names = _extract_file_names(report_text)
 
     report: list[str] = [
         f'# {title}',

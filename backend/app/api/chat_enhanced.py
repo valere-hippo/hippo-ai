@@ -630,12 +630,14 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 or any(word in (payload.message or '').lower() for word in ('analyse', 'analysiere', 'analyze', 'bericht', 'report', 'gutachten', 'auswert'))
             )
             if report_intent:
-                report_context = (project_files_context or payload.project_folder_context or reply_text or '').strip()
+                report_text = (reply_text or '').strip()
+                if not report_text:
+                    report_text = (payload.project_folder_context or '').strip()
                 data, mime_type, filename = build_project_report_generated_file(
                     payload.message,
-                    report_context,
+                    report_text,
                     project_name=conv_project.name if conv_project else None,
-                    filename_hint='qgis_report',
+                    filename_hint='project_report',
                 )
                 serialized_files.append(
                     {
