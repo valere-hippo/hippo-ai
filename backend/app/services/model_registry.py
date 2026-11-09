@@ -121,6 +121,24 @@ def _normalize_model_row(source: ModelRegistrySource, model: dict[str, Any], sou
     }
 
 
+def _fallback_chat_model_row(source: ModelRegistrySource, source_url: str) -> dict[str, Any]:
+    model_id = HIPPO_CHAT_MODEL_ID or source.provider
+    return {
+        "provider": source.provider,
+        "source_url": source_url,
+        "capability": source.capability,
+        "model_id": model_id,
+        "display_name": HIPPO_CHAT_MODEL_DISPLAY_NAME if HIPPO_CHAT_MODEL_ID else source.provider,
+        "context_window": None,
+        "max_output_tokens": None,
+        "status": "ok",
+        "error_message": None,
+        "raw_payload": {"id": model_id, "source": "config-fallback"},
+        "fetched_at": datetime.now(timezone.utc),
+        "last_seen_at": datetime.now(timezone.utc),
+    }
+
+
 async def _upsert_model_registry(db: AsyncSession, row: dict[str, Any]) -> None:
     existing = await db.scalar(
         select(ModelRegistry).where(
@@ -142,14 +160,6 @@ async def sync_model_registry(db: AsyncSession) -> dict[str, Any]:
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "sources": [],
     }
-
-    if HIPPO_CHAT_MODEL_ID:
-        await db.execute(
-            delete(ModelRegistry).where(
-                (ModelRegistry.provider == "chat") & (ModelRegistry.model_id != HIPPO_CHAT_MODEL_ID)
-            )
-        )
-    await db.execute(delete(ModelRegistry).where(ModelRegistry.provider == "vision"))
 
     async with httpx.AsyncClient(timeout=20.0) as client:
         for source in MODEL_SYNC_SOURCES:
@@ -177,26 +187,46 @@ async def sync_model_registry(db: AsyncSession) -> dict[str, Any]:
             entries = _extract_model_entries(payload)
             if source.provider == "chat" and HIPPO_CHAT_MODEL_ID:
                 entries = [entry for entry in entries if str(entry.get("id") or entry.get("model") or entry.get("name") or entry.get("slug") or "") == HIPPO_CHAT_MODEL_ID]
+
             if not entries:
+                fallback_row = _fallback_chat_model_row(source, base_url)
+                await _upsert_model_registry(db, fallback_row)
                 summary["sources"].append(
                     {
                         "provider": source.provider,
-                        "status": "error" if last_error else "empty",
+                        "status": "fallback",
                         "reason": last_error or "no_model_entries",
+                        "model_id": fallback_row["model_id"],
+                        "source_url": base_url,
                     }
                 )
                 continue
 
-            persisted = 0
+            persisted_ids: set[str] = set()
             for entry in entries:
-                await _upsert_model_registry(db, _normalize_model_row(source, entry, base_url))
-                persisted += 1
+                normalized = _normalize_model_row(source, entry, base_url)
+                await _upsert_model_registry(db, normalized)
+                persisted_ids.add(normalized["model_id"])
+
+            if source.provider == "chat" and HIPPO_CHAT_MODEL_ID and HIPPO_CHAT_MODEL_ID not in persisted_ids:
+                fallback_row = _fallback_chat_model_row(source, base_url)
+                await _upsert_model_registry(db, fallback_row)
+                persisted_ids.add(fallback_row["model_id"])
+
+            if persisted_ids:
+                await db.execute(
+                    delete(ModelRegistry).where(
+                        ModelRegistry.provider == source.provider,
+                        ModelRegistry.source_url == base_url,
+                        ModelRegistry.model_id.not_in(list(persisted_ids)),
+                    )
+                )
 
             summary["sources"].append(
                 {
                     "provider": source.provider,
                     "status": "ok",
-                    "models": persisted,
+                    "models": len(persisted_ids),
                     "source_url": base_url,
                 }
             )

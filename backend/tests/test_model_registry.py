@@ -32,6 +32,16 @@ def test_normalize_model_row_maps_common_fields():
     assert row["max_output_tokens"] == 2048
 
 
+def test_fallback_chat_model_row_uses_configured_model_id():
+    source = mr.ModelRegistrySource(provider="chat", source_url="https://example.test", api_key="secret", capability="chat")
+    row = mr._fallback_chat_model_row(source, "https://example.test")
+
+    assert row["provider"] == "chat"
+    assert row["status"] == "ok"
+    assert row["model_id"]
+    assert row["raw_payload"]["source"] == "config-fallback"
+
+
 def test_resolve_chat_model_name_uses_fallback_when_registry_empty(monkeypatch):
     async def fake_get_latest_model(db, provider):
         return None
