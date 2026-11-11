@@ -6908,6 +6908,9 @@ async function sendChat() {
   const explicitPathCandidates = extractWindowsPathCandidates(cleanMessage)
   const explicitPath = explicitPathCandidates[0] || ''
   const qgisRequested = looksLikeQgisRequest(cleanMessage)
+  const projectFileAnalysisMessage = dateiRequested
+    ? (cleanMessage || 'Analysiere die angehängten Projektdateien vollständig und antworte ausschließlich auf Basis der echten Inhalte. Wenn der Projektordner mehrere Dateien enthält, beziehe sie gemeinsam ein und nenne konkrete Fakten, keine generischen Platzhalter.')
+    : cleanMessage
 
   if (explicitPath && window.electron?.readLocalFile && isLikelyFilePath(explicitPath)) {
     try {
@@ -7023,10 +7026,10 @@ async function sendChat() {
     await Promise.all(state.draftAttachments.map((attachment) => persistAttachment(project.id, attachment)))
   }
 
-  renderMessage('user', cleanMessage || message || 'Anhang', { attachments: state.draftAttachments })
+  renderMessage('user', projectFileAnalysisMessage || message || 'Anhang', { attachments: state.draftAttachments })
   resetComposer()
 
-  showThinkingIndicator(getThinkingIndicatorLabel(cleanMessage || message, state.draftAttachments))
+  showThinkingIndicator(getThinkingIndicatorLabel(projectFileAnalysisMessage || message, state.draftAttachments))
   try {
     const response = await apiJson('/chat-enhanced/', {
       method: 'POST',
@@ -7034,7 +7037,7 @@ async function sendChat() {
         conversation_id: state.currentConversationId,
         project_id: state.selectedProjectId,
         profile_id: state.selectedProfileId,
-        message: cleanMessage || message,
+        message: projectFileAnalysisMessage || message,
         attachments,
         desktop_agent: state.desktopAgentMode,
         desktop_profile: state.desktopAgentProfile,
@@ -7048,7 +7051,7 @@ async function sendChat() {
       if (state.selectedProjectId) {
         state.projectConversationMemory.set(state.selectedProjectId, response.conversation_id)
       }
-      const title = deriveConversationTitle(cleanMessage || message, state.draftAttachments)
+      const title = deriveConversationTitle(projectFileAnalysisMessage || message, state.draftAttachments)
       state.conversations = state.conversations.map((conversation) => (
         conversation.id === response.conversation_id
           ? { ...conversation, title: conversation.title || title }
