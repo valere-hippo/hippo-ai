@@ -18,13 +18,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
-    # OpenAI (deprecated) / External Hippo model
-    openai_api_key: str | None = None
-    openai_model: str = "gpt-4o-mini"
-
     # Hippo model hub
     hippo_api_url: str | None = Field(default=None, validation_alias=AliasChoices("HIPPO_AI_BASE_URL", "HIPPO_API_URL"))
-    hippo_api_key: str | None = None
+    hippo_api_key: str | None = Field(default=None, validation_alias=AliasChoices("HIPPO_API_KEY",))
     hippo_model: str = Field(
         default="/root/autodl-tmp/hippo-ai-v2/models/Qwen3-Omni-30B-A3B-Instruct",
         validation_alias=AliasChoices("HIPPO_AI_MODEL", "HIPPO_MODEL"),
@@ -80,12 +76,6 @@ class Settings(BaseSettings):
         if raw.lower() == "gpt-5o-mini":
             return "gpt-4o-mini"
         return raw
-
-    @field_validator("openai_model", mode="before")
-    @classmethod
-    def normalize_openai_model(cls, value: str | None) -> str:
-        raw = (value or "").strip()
-        return raw or "gpt-4o-mini"
 
     model_config = SettingsConfigDict(
         env_file=".env",

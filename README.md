@@ -75,6 +75,7 @@ This repo mainly builds the desktop client and docs.
 ### Repo `hippoject-infra`
 This repo should receive the backend runtime secrets and deploy the server stack.
 - `HIPPO_AI_BASE_URL=https://ai.hipposideros-cloud.de`
+- `HIPPO_API_KEY=[REDACTED]`
 - `HIPPO_AI_MODEL=/root/autodl-tmp/hippo-ai-v2/models/Qwen3-Omni-30B-A3B-Instruct`
 - `PCLOUD_API_BASE_URL=https://eapi.pcloud.com`
 - `PCLOUD_ACCESS_TOKEN=[REDACTED]`
