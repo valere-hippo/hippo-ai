@@ -145,6 +145,7 @@ const els = {
   attachImageBtn: document.getElementById('attach-image-btn'),
   attachFileBtn: document.getElementById('attach-file-btn'),
   qgisModeBtn: document.getElementById('qgis-mode-btn'),
+  analysisQgisModeBtn: document.getElementById('analysis-qgis-mode-btn'),
   analysisModeBtn: document.getElementById('analysis-mode-btn'),
   imageInput: document.getElementById('image-input'),
   fileInput: document.getElementById('file-input'),
@@ -2658,6 +2659,9 @@ function resetComposer() {
   if (els.qgisModeBtn) {
     els.qgisModeBtn.classList.remove('active')
   }
+  if (els.analysisQgisModeBtn) {
+    els.analysisQgisModeBtn.classList.remove('active')
+  }
   if (els.analysisModeBtn) {
     els.analysisModeBtn.classList.add('active')
   }
@@ -2676,10 +2680,24 @@ function setComposerQgisMode(active) {
 
 function insertQgisCommandIntoComposer() {
   const current = String(els.chatInput.value || '')
-  const stripped = current.replace(/^\s*\/qgis\s*/i, '').trim()
+  const stripped = current.replace(/^\s*\/(?:qgis|datei)\s*/i, '').trim()
   const nextValue = stripped ? `/qgis ${stripped}` : '/qgis '
   els.chatInput.value = nextValue
   setComposerQgisMode(true)
+  resizeComposer()
+  els.chatInput.focus()
+  els.chatInput.setSelectionRange(nextValue.length, nextValue.length)
+}
+
+function insertQgisAnalysisCommandIntoComposer() {
+  const current = String(els.chatInput.value || '')
+  const stripped = current.replace(/^\s*\/(?:qgis|datei)\s*/i, '').trim()
+  const nextValue = stripped ? `/qgis /datei ${stripped}` : '/qgis /datei '
+  els.chatInput.value = nextValue
+  setComposerQgisMode(true)
+  if (els.analysisQgisModeBtn) {
+    els.analysisQgisModeBtn.classList.add('active')
+  }
   resizeComposer()
   els.chatInput.focus()
   els.chatInput.setSelectionRange(nextValue.length, nextValue.length)
@@ -7360,6 +7378,10 @@ function bindComposerEvents() {
 
   els.qgisModeBtn?.addEventListener('click', () => {
     insertQgisCommandIntoComposer()
+  })
+
+  els.analysisQgisModeBtn?.addEventListener('click', () => {
+    insertQgisAnalysisCommandIntoComposer()
   })
 
   els.analysisModeBtn?.addEventListener('click', () => {

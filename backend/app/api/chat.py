@@ -425,8 +425,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                             'data_base64': base64.b64encode(data).decode('ascii'),
                         }
                     )
-                    if not reply_text.strip():
-                        reply_text = 'Analyse abgeschlossen. Der Word-Bericht wurde erstellt.'
+                    reply_text = report_text
         except Exception:
             logger.warning('Auto report generation failed for conversation %s', conv_id)
 

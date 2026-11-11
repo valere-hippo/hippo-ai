@@ -1599,7 +1599,7 @@ textarea {
   border-color: rgba(122, 31, 43, 0.2);
 }
 
-.send-button {
+.analysis-mode-switch .composer-button.command-button {
   min-height: 40px;
   padding: 0 16px;
   color: #fffaf7;
