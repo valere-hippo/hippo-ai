@@ -6985,7 +6985,8 @@ async function sendChat() {
       try {
         projectBundleAttachments = await buildProjectFileAttachments(project, { maxFiles: 1000, maxDepth: 12, includeAllFiles: true })
         if (projectBundleAttachments.length) {
-          projectFolderContext = [
+          const refreshedContext = await queueProjectFolderRefresh(project, { force: true })
+          projectFolderContext = refreshedContext || [
             'RAW_PROJECT_FILES:',
             'Die angehängten Projektdateien enthalten den Originalinhalt des Projekts.',
             'Lies die Dateien direkt und schreibe den Bericht ausschließlich auf Basis der echten Datei-Inhalte.',

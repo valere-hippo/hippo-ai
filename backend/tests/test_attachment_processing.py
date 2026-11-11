@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import base64
+import struct
 from io import BytesIO
 from types import SimpleNamespace
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from PIL import Image
 
-from app.services.attachment_processing import extract_attachment_text
+from app.services.attachment_processing import _extract_geo_bundle_context, extract_attachment_text
 
 
 def _make_docx_bytes(text: str) -> bytes:
@@ -79,3 +80,76 @@ def test_extract_attachment_text_reads_plain_text():
     )
 
     assert extract_attachment_text(attachment) == "Plain text"
+
+
+def _make_shp_header_bytes(shape_type: int = 5, bbox: tuple[float, float, float, float] = (7.0, 49.0, 7.5, 49.5)) -> bytes:
+    data = bytearray(100)
+    struct.pack_into(">i", data, 0, 9994)
+    struct.pack_into(">i", data, 24, 50)
+    struct.pack_into("<i", data, 28, 1000)
+    struct.pack_into("<i", data, 32, shape_type)
+    struct.pack_into("<4d", data, 36, *bbox)
+    return bytes(data)
+
+
+def _make_dbf_bytes() -> bytes:
+    header = bytearray(65)
+    header[0] = 0x03
+    header[1] = 26
+    header[2] = 11
+    header[3] = 11
+    struct.pack_into("<I", header, 4, 1)
+    struct.pack_into("<H", header, 8, 65)
+    struct.pack_into("<H", header, 10, 11)
+
+    field = bytearray(32)
+    field[0:4] = b"NAME"
+    field[11] = ord("C")
+    field[16] = 10
+    field[17] = 0
+    header[32:64] = field
+    header[64] = 0x0D
+
+    record = bytearray(11)
+    record[0] = 0x20
+    record[1:6] = b"ALPHA"
+
+    return bytes(header + record + b"\x1a")
+
+
+def test_extract_attachment_text_reads_geo_headers():
+    shp = SimpleNamespace(filename="route.shp", mime_type="application/octet-stream", raw_base64=base64.b64encode(_make_shp_header_bytes()).decode("ascii"), data_url=None, ocr_text=None)
+    dbf = SimpleNamespace(filename="route.dbf", mime_type="application/octet-stream", raw_base64=base64.b64encode(_make_dbf_bytes()).decode("ascii"), data_url=None, ocr_text=None)
+    prj = SimpleNamespace(filename="route.prj", mime_type="application/octet-stream", raw_base64=base64.b64encode(b'GEOGCS["WGS 84"]').decode("ascii"), data_url=None, ocr_text=None)
+    cpg = SimpleNamespace(filename="route.cpg", mime_type="application/octet-stream", raw_base64=base64.b64encode(b"UTF-8").decode("ascii"), data_url=None, ocr_text=None)
+
+    shp_text = extract_attachment_text(shp)
+    dbf_text = extract_attachment_text(dbf)
+    prj_text = extract_attachment_text(prj)
+    cpg_text = extract_attachment_text(cpg)
+
+    assert "Geometrietyp: Polygon" in shp_text
+    assert "Bounding Box:" in shp_text
+    assert "DBF-Attributtabelle" in dbf_text
+    assert "Datensatz: 1" in dbf_text
+    assert "NAME" in dbf_text
+    assert "WGS 84" in prj_text
+    assert "UTF-8" in cpg_text
+
+
+def test_extract_geo_bundle_context_combines_related_files():
+    attachments = [
+        SimpleNamespace(filename="route.shp", mime_type="application/octet-stream", raw_base64=base64.b64encode(_make_shp_header_bytes()).decode("ascii"), data_url=None, ocr_text=None),
+        SimpleNamespace(filename="route.shx", mime_type="application/octet-stream", raw_base64=base64.b64encode(_make_shp_header_bytes()).decode("ascii"), data_url=None, ocr_text=None),
+        SimpleNamespace(filename="route.dbf", mime_type="application/octet-stream", raw_base64=base64.b64encode(_make_dbf_bytes()).decode("ascii"), data_url=None, ocr_text=None),
+        SimpleNamespace(filename="route.prj", mime_type="application/octet-stream", raw_base64=base64.b64encode(b'GEOGCS["WGS 84"]').decode("ascii"), data_url=None, ocr_text=None),
+        SimpleNamespace(filename="route.cpg", mime_type="application/octet-stream", raw_base64=base64.b64encode(b"UTF-8").decode("ascii"), data_url=None, ocr_text=None),
+    ]
+
+    text = _extract_geo_bundle_context(attachments, "route.shp")
+
+    assert "Geodatenpaket für 'route'" in text
+    assert "Polygon" in text
+    assert "1 Datensatz" in text
+    assert "WGS 84" in text
+    assert "UTF-8" in text
