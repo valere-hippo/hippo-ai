@@ -213,6 +213,56 @@ def test_extract_attachment_text_reads_tar_archive():
     assert "Tar archive text" in text
 
 
+def _make_nested_zip_bytes() -> bytes:
+    inner_buffer = BytesIO()
+    with ZipFile(inner_buffer, "w", ZIP_DEFLATED) as inner:
+        inner.writestr("inner/notes.txt", "Nested archive text")
+
+    outer_buffer = BytesIO()
+    with ZipFile(outer_buffer, "w", ZIP_DEFLATED) as outer:
+        outer.writestr("outer/readme.txt", "Outer archive text")
+        outer.writestr("inner.zip", inner_buffer.getvalue())
+    return outer_buffer.getvalue()
+
+
+def _make_large_zip_bytes() -> bytes:
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("huge.txt", b"A" * (2_000_001))
+    return buffer.getvalue()
+
+
+def test_extract_attachment_text_reads_nested_archive():
+    attachment = SimpleNamespace(
+        filename="nested.zip",
+        mime_type="application/zip",
+        data_url=None,
+        raw_base64=base64.b64encode(_make_nested_zip_bytes()).decode("ascii"),
+        ocr_text=None,
+    )
+
+    text = extract_attachment_text(attachment)
+    assert "outer/readme.txt" in text
+    assert "Outer archive text" in text
+    assert "inner.zip" in text
+    assert "Nested archive text" in text
+
+
+def test_extract_attachment_text_skips_oversized_archive_member():
+    attachment = SimpleNamespace(
+        filename="huge.zip",
+        mime_type="application/zip",
+        data_url=None,
+        raw_base64=base64.b64encode(_make_large_zip_bytes()).decode("ascii"),
+        ocr_text=None,
+    )
+
+    text = extract_attachment_text(attachment)
+    assert "huge.txt" in text
+    assert "zu groß" in text or "Gesamtlimit" in text
+    assert "AAAAA" not in text
+
+
 def _make_shp_header_bytes(shape_type: int = 5, bbox: tuple[float, float, float, float] = (7.0, 49.0, 7.5, 49.5)) -> bytes:
     data = bytearray(100)
     struct.pack_into(">i", data, 0, 9994)

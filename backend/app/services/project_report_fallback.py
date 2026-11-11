@@ -157,25 +157,27 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     report: list[str] = [
         f'# {title}',
         '',
-        '## Projektdaten',
-        f'- Projekt: {title}',
+        f'Bericht zur Analyse der Projektdateien "{title}"',
+        '',
+        '## 1. Anlass und Aufgabestellung',
         f'- Anfrage: {question_text}',
         '- Bearbeiter: Hippo AI',
         '',
-        '## 1. Zusammenfassung',
+        '## 2. Projektdaten',
+        f'- Projektname: {title}',
     ]
 
+    if file_names:
+        report.append(f'- Gefundene Dateien: {", ".join(file_names[:12])}')
+
+    report.extend(['', '## 3. Ergebnisse'])
     if facts:
         report.append('Die folgenden Fakten wurden direkt aus den extrahierten Projektinhalten übernommen:')
-        report.extend([f'- {fact}' for fact in facts[:8]])
+        report.extend([f'- {fact}' for fact in facts[:10]])
     else:
         report.append('Es konnten keine detaillierten Inhaltsfakten aus dem Kontext extrahiert werden; nur die Dateistruktur war verfügbar.')
 
-    if file_names:
-        report.extend(['', '## 2. Gefundene Dateien'])
-        report.extend([f'- {name}' for name in file_names[:20]])
-
-    report.extend(['', '## 3. Analyse'])
+    report.extend(['', '## 4. Bewertung'])
     if facts:
         report.append('Der Bericht stützt sich auf den tatsächlichen Dateiinhalt und die technische Struktur des Projektordners.')
         if any('Geodatenpaket' in fact or 'Geometrietyp' in fact for fact in facts):
@@ -187,7 +189,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     else:
         report.append('Es lagen nur Dateinamen und Strukturinformationen vor. Für eine belastbare inhaltliche Analyse muss der Ordnerkontext mit echten Datei-Inhalten erneut gelesen werden.')
 
-    report.extend(['', '## 4. Schlussfolgerung'])
+    report.extend(['', '## 5. Schlussfolgerung'])
     if facts:
         report.append('Die Antwort basiert auf den aus den Dateien extrahierten Fakten und nicht auf einer generischen Vorlage.')
     else:

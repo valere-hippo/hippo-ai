@@ -267,6 +267,8 @@ def _write_attachment_bytes(target: Path, attachment: Any) -> bool:
 ARCHIVE_SUFFIXES = (".zip", ".tar", ".tgz", ".tar.gz")
 ARCHIVE_MEMBER_LIMIT = 24
 ARCHIVE_MEMBER_SIZE_LIMIT = 2_000_000
+ARCHIVE_RECURSION_LIMIT = 2
+ARCHIVE_TOTAL_SIZE_LIMIT = 8_000_000
 
 
 def _is_archive_filename(filename: str) -> bool:
@@ -284,8 +286,13 @@ def _safe_archive_member_name(name: str) -> str | None:
     return '/'.join(parts)
 
 
-def _extract_archive_context(data: bytes, filename: str) -> str:
+def _extract_archive_context(data: bytes, filename: str, depth: int = 0) -> str:
+    if depth > ARCHIVE_RECURSION_LIMIT:
+        return f"[Archiv: {filename}] verschachteltes Archiv übersprungen (maximale Rekursion erreicht)."
+
     entries: list[tuple[str, bytes]] = []
+    skipped: list[str] = []
+    total_size = 0
     try:
         with ZipFile(BytesIO(data)) as archive:
             for info in archive.infolist()[:ARCHIVE_MEMBER_LIMIT]:
@@ -296,12 +303,20 @@ def _extract_archive_context(data: bytes, filename: str) -> str:
                 member_name = _safe_archive_member_name(info.filename)
                 if not member_name:
                     continue
+                if info.file_size and info.file_size > ARCHIVE_MEMBER_SIZE_LIMIT:
+                    skipped.append(f"{member_name} (zu groß)")
+                    continue
                 payload = archive.read(info.filename)
                 if len(payload) > ARCHIVE_MEMBER_SIZE_LIMIT:
+                    skipped.append(f"{member_name} (zu groß)")
                     continue
+                total_size += len(payload)
+                if total_size > ARCHIVE_TOTAL_SIZE_LIMIT:
+                    skipped.append(f"{member_name} (Gesamtlimit erreicht)")
+                    break
                 entries.append((member_name, payload))
-            if entries:
-                return _format_archive_entries(entries, filename)
+            if entries or skipped:
+                return _format_archive_entries(entries, filename, depth=depth, skipped=skipped)
     except Exception:
         pass
 
@@ -315,30 +330,38 @@ def _extract_archive_context(data: bytes, filename: str) -> str:
                 member_name = _safe_archive_member_name(member.name)
                 if not member_name:
                     continue
+                if member.size and member.size > ARCHIVE_MEMBER_SIZE_LIMIT:
+                    skipped.append(f"{member_name} (zu groß)")
+                    continue
                 extracted = archive.extractfile(member)
                 if extracted is None:
                     continue
                 payload = extracted.read(ARCHIVE_MEMBER_SIZE_LIMIT + 1)
                 if len(payload) > ARCHIVE_MEMBER_SIZE_LIMIT:
+                    skipped.append(f"{member_name} (zu groß)")
                     continue
+                total_size += len(payload)
+                if total_size > ARCHIVE_TOTAL_SIZE_LIMIT:
+                    skipped.append(f"{member_name} (Gesamtlimit erreicht)")
+                    break
                 entries.append((member_name, payload))
-            if entries:
-                return _format_archive_entries(entries, filename)
+            if entries or skipped:
+                return _format_archive_entries(entries, filename, depth=depth, skipped=skipped)
     except Exception:
         return ''
     return ''
 
 
-def _format_archive_entries(entries: list[tuple[str, bytes]], filename: str) -> str:
+def _format_archive_entries(entries: list[tuple[str, bytes]], filename: str, *, depth: int = 0, skipped: list[str] | None = None) -> str:
     lines = [f"[Archiv: {filename}]", "Enthaltene Dateien: " + ", ".join(name for name, _payload in entries[:ARCHIVE_MEMBER_LIMIT])]
+    if skipped:
+        lines.append("Übersprungen: " + ", ".join(skipped[:ARCHIVE_MEMBER_LIMIT]))
     fake_attachments = [
         SimpleNamespace(filename=name, mime_type=mimetypes.guess_type(name)[0] or 'application/octet-stream', raw_base64=base64.b64encode(payload).decode('ascii'), data_url=None, ocr_text=None)
         for name, payload in entries
     ]
     grouped: dict[str, list[Any]] = {}
     for attachment in fake_attachments:
-        if _is_archive_filename(_attachment_name(attachment)):
-            continue
         grouped.setdefault(_attachment_stem(_attachment_name(attachment)), []).append(attachment)
 
     handled: set[str] = set()
@@ -353,10 +376,15 @@ def _format_archive_entries(entries: list[tuple[str, bytes]], filename: str) -> 
 
     for attachment in fake_attachments:
         name = _attachment_name(attachment)
-        if name.lower() in handled:
+        lower_name = name.lower()
+        if lower_name in handled:
             continue
         if _is_archive_filename(name):
-            lines.append(f"- {name}: verschachteltes Archiv erkannt; nicht rekursiv geöffnet.")
+            nested = _extract_archive_context(_decode_attachment_bytes(attachment), name, depth=depth + 1)
+            if nested:
+                lines.append(nested)
+            else:
+                lines.append(f"- {name}: verschachteltes Archiv erkannt; nicht geöffnet.")
             continue
         text = extract_attachment_text(attachment)
         if text:
