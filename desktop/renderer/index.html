@@ -129,7 +129,10 @@
             <form id="chat-form" class="composer" method="post" action="javascript:void(0)">
               <button id="attach-image-btn" class="composer-button" type="button" title="Bild anhängen">📎</button>
               <button id="attach-file-btn" class="composer-button" type="button" title="Datei anhängen">📄</button>
-              <button id="qgis-mode-btn" class="composer-button command-button" type="button" title="QGIS-Befehl einfügen">QGIS</button>
+              <div class="analysis-mode-switch" role="group" aria-label="Analysemodus">
+                <button id="analysis-mode-btn" class="composer-button command-button active" type="button" title="Analyse ohne QGIS">Analyse</button>
+                <button id="qgis-mode-btn" class="composer-button command-button" type="button" title="QGIS aktivieren">QGIS</button>
+              </div>
               <button id="mic-btn" class="composer-button" type="button" title="Sprachnachricht">🎙</button>
               <button id="create-tool-from-chat-btn" class="composer-button" type="button" title="Tool aus Chat erstellen">🧰</button>
               <button id="create-skill-from-chat-btn" class="composer-button" type="button" title="Skill aus Chat erstellen">🧠</button>
@@ -137,7 +140,7 @@
               <button id="send-chat" class="send-button" type="button">Senden</button>
             </form>
             <div class="composer-meta">
-              <span id="composer-hint">Enter zum Senden · Shift+Enter für neue Zeile · /datei für Dateianalyse · QGIS-Button fügt /qgis ein</span>
+              <span id="composer-hint">Enter zum Senden · Shift+Enter für neue Zeile · /datei für Dateianalyse · Analyse = normal, QGIS = explizit</span>
               <span id="voice-status">Mikrofon bereit</span>
             </div>
             <canvas id="voice-canvas" class="voice-canvas" width="720" height="96" aria-label="Voice recording visualization"></canvas>

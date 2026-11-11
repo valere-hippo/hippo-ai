@@ -145,6 +145,7 @@ const els = {
   attachImageBtn: document.getElementById('attach-image-btn'),
   attachFileBtn: document.getElementById('attach-file-btn'),
   qgisModeBtn: document.getElementById('qgis-mode-btn'),
+  analysisModeBtn: document.getElementById('analysis-mode-btn'),
   imageInput: document.getElementById('image-input'),
   fileInput: document.getElementById('file-input'),
   micBtn: document.getElementById('mic-btn'),
@@ -2657,6 +2658,9 @@ function resetComposer() {
   if (els.qgisModeBtn) {
     els.qgisModeBtn.classList.remove('active')
   }
+  if (els.analysisModeBtn) {
+    els.analysisModeBtn.classList.add('active')
+  }
   renderAttachmentPreview()
 }
 
@@ -2664,6 +2668,9 @@ function setComposerQgisMode(active) {
   state.qgisMode = Boolean(active)
   if (els.qgisModeBtn) {
     els.qgisModeBtn.classList.toggle('active', state.qgisMode)
+  }
+  if (els.analysisModeBtn) {
+    els.analysisModeBtn.classList.toggle('active', !state.qgisMode)
   }
 }
 
@@ -2676,6 +2683,16 @@ function insertQgisCommandIntoComposer() {
   resizeComposer()
   els.chatInput.focus()
   els.chatInput.setSelectionRange(nextValue.length, nextValue.length)
+}
+
+function insertAnalysisCommandIntoComposer() {
+  const current = String(els.chatInput.value || '')
+  const nextValue = current.replace(/^\s*\/qgis\s*/i, '').trimStart()
+  els.chatInput.value = nextValue
+  setComposerQgisMode(false)
+  resizeComposer()
+  els.chatInput.focus()
+  els.chatInput.setSelectionRange(els.chatInput.value.length, els.chatInput.value.length)
 }
 
 function syncComposerQgisModeFromInput() {
@@ -7340,6 +7357,10 @@ function bindComposerEvents() {
 
   els.qgisModeBtn?.addEventListener('click', () => {
     insertQgisCommandIntoComposer()
+  })
+
+  els.analysisModeBtn?.addEventListener('click', () => {
+    insertAnalysisCommandIntoComposer()
   })
 
   els.imageInput.addEventListener('change', async () => {
