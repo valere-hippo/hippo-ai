@@ -7074,6 +7074,7 @@ async function sendChat() {
   renderMessage('user', projectFileAnalysisMessage || message || 'Anhang', { attachments: state.draftAttachments })
   resetComposer()
 
+  showLoader(dateiRequested ? 'Analyse läuft…' : 'Hippo denkt nach…')
   showThinkingIndicator(getThinkingIndicatorLabel(projectFileAnalysisMessage || message, state.draftAttachments))
   try {
     const response = await apiJson('/chat-enhanced/', {
@@ -7137,6 +7138,7 @@ async function sendChat() {
     showToast(error.message || 'Chat fehlgeschlagen', 'error')
   } finally {
     hideThinkingIndicator()
+    hideLoader()
   }
 }
 

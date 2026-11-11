@@ -93,6 +93,87 @@ def _extract_text_from_docx(data: bytes) -> str:
     return _truncate("\n\n".join(paragraphs))
 
 
+def _extract_text_from_xlsx(data: bytes) -> str:
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            shared_strings: list[str] = []
+            try:
+                shared_xml = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+                ns = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+                for node in shared_xml.findall(".//a:si", ns):
+                    text_parts = [part.text for part in node.findall(".//a:t", ns) if part.text]
+                    shared_strings.append("".join(text_parts))
+            except Exception:
+                shared_strings = []
+
+            sheet_names: list[tuple[str, str]] = []
+            try:
+                workbook_xml = ET.fromstring(archive.read("xl/workbook.xml"))
+                ns = {
+                    "a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+                    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+                }
+                sheets = workbook_xml.findall(".//a:sheets/a:sheet", ns)
+                rels = {}
+                try:
+                    rels_xml = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+                    rel_ns = {"r": "http://schemas.openxmlformats.org/package/2006/relationships"}
+                    for rel in rels_xml.findall(".//r:Relationship", rel_ns):
+                        rels[rel.attrib.get("Id", "")] = rel.attrib.get("Target", "")
+                except Exception:
+                    rels = {}
+                for sheet in sheets[:4]:
+                    name = sheet.attrib.get("name", "Tabelle")
+                    rel_id = sheet.attrib.get(f"{{{ns['r']}}}id", "")
+                    target = rels.get(rel_id, "")
+                    if target and not target.startswith("/"):
+                        target = f"xl/{target.lstrip('/') }"
+                    if target:
+                        sheet_names.append((name, target))
+            except Exception:
+                sheet_names = []
+
+            parts: list[str] = []
+            if not sheet_names:
+                sheet_names = [("Tabelle1", "xl/worksheets/sheet1.xml")]
+
+            ns = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+            for sheet_name, target in sheet_names[:4]:
+                try:
+                    sheet_xml = ET.fromstring(archive.read(target))
+                except Exception:
+                    continue
+                rows: list[str] = []
+                for row in sheet_xml.findall(".//a:sheetData/a:row", ns)[:8]:
+                    values: list[str] = []
+                    for cell in row.findall(".//a:c", ns)[:16]:
+                        value = ""
+                        cell_type = cell.attrib.get("t", "")
+                        cell_value = cell.findtext("a:v", default="", namespaces=ns) or ""
+                        if cell_type == "s":
+                            try:
+                                value = shared_strings[int(cell_value)]
+                            except Exception:
+                                value = cell_value
+                        elif cell_type == "inlineStr":
+                            value = "".join(part.text for part in cell.findall(".//a:t", ns) if part.text)
+                        else:
+                            value = cell_value
+                        value = re.sub(r"\s+", " ", str(value or "")).strip()
+                        if value:
+                            values.append(value)
+                    if values:
+                        rows.append(" | ".join(values))
+                if rows:
+                    parts.append(f"[Sheet: {sheet_name}]\n" + "\n".join(rows))
+            return _truncate("\n\n".join(parts))
+    except (BadZipFile, KeyError, OSError):
+        return ""
+    except Exception:
+        return ""
+    return ""
+
+
 def _extract_text_from_plain_text(data: bytes) -> str:
     for encoding in ("utf-8", "utf-16", "latin-1"):
         try:
@@ -409,6 +490,13 @@ def extract_attachment_text(attachment: Any) -> str:
         or lower_name.endswith(".docx")
     ):
         return _extract_text_from_docx(data)
+
+    if (
+        mime_type
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        or lower_name.endswith(".xlsx")
+    ):
+        return _extract_text_from_xlsx(data)
 
     if mime_type.startswith("image/") or lower_name.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff")):
         return _extract_text_from_image(data)
