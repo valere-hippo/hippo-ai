@@ -2687,12 +2687,13 @@ function insertQgisCommandIntoComposer() {
 
 function insertAnalysisCommandIntoComposer() {
   const current = String(els.chatInput.value || '')
-  const nextValue = current.replace(/^\s*\/qgis\s*/i, '').trimStart()
+  const stripped = current.replace(/^\s*\/(?:qgis|datei)\s*/i, '').trim()
+  const nextValue = stripped ? `/datei ${stripped}` : '/datei '
   els.chatInput.value = nextValue
   setComposerQgisMode(false)
   resizeComposer()
   els.chatInput.focus()
-  els.chatInput.setSelectionRange(els.chatInput.value.length, els.chatInput.value.length)
+  els.chatInput.setSelectionRange(nextValue.length, nextValue.length)
 }
 
 function syncComposerQgisModeFromInput() {
