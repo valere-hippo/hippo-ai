@@ -62,6 +62,7 @@ const state = {
   thinkingMessage: null,
   desktopAgentMode: true,
   desktopAgentProfile: localStorage.getItem('hippo.desktop.profile') || 'generic',
+  qgisMode: false,
 }
 
 const PROJECT_FOLDER_CONTEXT_CACHE_KEY = 'hippo.project.folder.context.cache.v2'
@@ -143,6 +144,7 @@ const els = {
   chatInput: document.getElementById('chat-input'),
   attachImageBtn: document.getElementById('attach-image-btn'),
   attachFileBtn: document.getElementById('attach-file-btn'),
+  qgisModeBtn: document.getElementById('qgis-mode-btn'),
   imageInput: document.getElementById('image-input'),
   fileInput: document.getElementById('file-input'),
   micBtn: document.getElementById('mic-btn'),
@@ -2649,9 +2651,35 @@ function renderConversationMessages(messages) {
 
 function resetComposer() {
   state.draftAttachments = []
+  state.qgisMode = false
   els.chatInput.value = ''
   els.chatInput.style.height = 'auto'
+  if (els.qgisModeBtn) {
+    els.qgisModeBtn.classList.remove('active')
+  }
   renderAttachmentPreview()
+}
+
+function setComposerQgisMode(active) {
+  state.qgisMode = Boolean(active)
+  if (els.qgisModeBtn) {
+    els.qgisModeBtn.classList.toggle('active', state.qgisMode)
+  }
+}
+
+function insertQgisCommandIntoComposer() {
+  const current = String(els.chatInput.value || '')
+  const stripped = current.replace(/^\s*\/qgis\s*/i, '').trim()
+  const nextValue = stripped ? `/qgis ${stripped}` : '/qgis '
+  els.chatInput.value = nextValue
+  setComposerQgisMode(true)
+  resizeComposer()
+  els.chatInput.focus()
+  els.chatInput.setSelectionRange(nextValue.length, nextValue.length)
+}
+
+function syncComposerQgisModeFromInput() {
+  setComposerQgisMode(/^\s*\/qgis\b/i.test(String(els.chatInput.value || '')))
 }
 
 function getLatestProjectConversation(projectId) {
@@ -7290,7 +7318,10 @@ function bindComposerEvents() {
     event.stopPropagation()
     sendChat()
   })
-  els.chatInput.addEventListener('input', resizeComposer)
+  els.chatInput.addEventListener('input', () => {
+    resizeComposer()
+    syncComposerQgisModeFromInput()
+  })
   els.chatInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
@@ -7305,6 +7336,10 @@ function bindComposerEvents() {
 
   els.attachFileBtn.addEventListener('click', () => {
     els.fileInput.click()
+  })
+
+  els.qgisModeBtn?.addEventListener('click', () => {
+    insertQgisCommandIntoComposer()
   })
 
   els.imageInput.addEventListener('change', async () => {

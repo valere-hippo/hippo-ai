@@ -1576,6 +1576,20 @@ textarea {
   flex: 0 0 auto;
 }
 
+.composer-button.command-button {
+  width: auto;
+  min-width: 56px;
+  padding: 0 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.composer-button.command-button.active {
+  color: #fffaf7;
+  background: linear-gradient(180deg, rgba(122, 31, 43, 0.98), rgba(166, 74, 90, 0.9));
+  border-color: rgba(122, 31, 43, 0.2);
+}
+
 .send-button {
   min-height: 40px;
   padding: 0 16px;
