@@ -19,7 +19,6 @@ from app.services.chat_payloads import (
     build_message_content,
     derive_conversation_title,
     storage_text,
-    looks_like_project_detailed_report_request,
     looks_like_file_generation_request,
 )
 from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
@@ -242,7 +241,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "If the project has a saved local folder, do not say you cannot access it; use the project context or ask for a refresh instead.\n"
             "For project-folder questions, prefer a short direct folder listing over any deep scan, and do not block the chat while waiting for recursive indexing.\n"
             "Open or launch QGIS only when the user explicitly asks for QGIS or explicitly asks to load the files in QGIS. If the user only wants an analysis or a report, read the file contents directly and answer without starting QGIS.\n"
-            "When the user asks for a report, analysis, or Word/PDF deliverable from the project folders, automatically use all accessible project folders and all files in them unless the user explicitly narrows the scope. Do not ask which folders or files to use.\n"
+            "When the user asks for a report, analysis, or Word/PDF deliverable from the project folders, answer in chat first. Only create a file when the user explicitly asks to save/export it as a document.\n"
             "Write in a polished Claude-like report style: direct, structured, concise but thorough, no preamble, no self-referential commentary, no repetitive reassurance, and minimize transitional phrases.\n"
             "For project-folder questions, produce a detailed answer that is content-first: describe what the files contain, what the extracted text / geometry / OCR / transcript says, and what technical conclusions follow. Prefer paragraphs over bullet lists unless bullets add real clarity. Do not lead with file size or filename inventory unless it is genuinely relevant.\n"
             "Write the answer as a polished document with clear section headings and concise paragraphs. Prefer a three-part structure when possible: summary, analysis, conclusion. Avoid decorative Markdown around headings.\n"
@@ -406,12 +405,8 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
 
     if conv_project is not None and not serialized_files:
         try:
-            report_intent = (
-                looks_like_project_detailed_report_request(payload.message)
-                or looks_like_file_generation_request(payload.message, payload.attachments)
-                or any(word in (payload.message or '').lower() for word in ('analyse', 'analysiere', 'analyze', 'bericht', 'report', 'gutachten', 'auswert'))
-            )
-            if report_intent:
+            explicit_file_request = looks_like_file_generation_request(payload.message, payload.attachments)
+            if explicit_file_request:
                 report_text = (reply_text or '').strip()
                 if not _is_valid_report_text(report_text):
                     logger.warning('Refusing to render weak report response for conversation %s', conv_id)

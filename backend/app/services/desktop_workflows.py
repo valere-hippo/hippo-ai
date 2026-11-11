@@ -32,28 +32,18 @@ def looks_qgis_related(text: str) -> bool:
     haystack = (text or '').lower()
     qgis_keywords = (
         'qgis',
-        'geo',
-        'geodaten',
-        'geodata',
-        'karte',
-        'kart',
-        'shp',
-        'shx',
-        'dbf',
-        'prj',
-        'cpg',
-        'gpkg',
-        'geojson',
-        'kml',
-        'kmz',
-        'qgz',
-        'qgs',
-        'layer',
-        'map',
-        'maps',
-        'shapefile',
-        'shape file',
-        'shape-file',
+        'qgis öffnen',
+        'qgis oeffnen',
+        'qgis start',
+        'qgis starten',
+        'qgis laden',
+        'qgis analys',
+        'öffne qgis',
+        'oeffne qgis',
+        'starte qgis',
+        'lade in qgis',
+        'öffnen in qgis',
+        'load in qgis',
     )
     return any(keyword in haystack for keyword in qgis_keywords)
 
@@ -127,7 +117,7 @@ def extract_secondary_data_path(text: str, exclude: str | None = None) -> str | 
 def infer_desktop_launch_actions(message: str, reply_text: str, profile: str | None = None) -> list[dict[str, Any]]:
     source = f"{message or ''}\n{reply_text or ''}"
     haystack = source.lower()
-    qgis_related = looks_qgis_related(haystack) or (profile or '').strip().lower() == 'qgis'
+    qgis_related = looks_qgis_related(haystack)
     if not qgis_related and not any(keyword in haystack for keyword in ('öffne', 'oeffne', 'ouvrir', 'ouvre', 'ouvrir le', 'open', 'starte', 'start', 'launch', 'run', 'lance', 'lancer', 'charge', 'charger', 'öffnen', 'oeffnen', 'öffnest', 'öffnet', 'starten')):
         return []
 

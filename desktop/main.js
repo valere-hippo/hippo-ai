@@ -622,7 +622,7 @@ function inferAppKeyFromPayload(payload = {}) {
     .join(' ')
     .toLowerCase()
 
-  if (/\bqgis\b|\.qgz\b|\.qgs\b|\.shp\b|\.shx\b|\.dbf\b|\.gpkg\b|\.geojson\b|\.kml\b|\.kmz\b/.test(text) || profile === 'qgis') {
+  if (/\bqgis\b|qgis\s*\b(?:öffnen|oeffnen|starten|laden|analysieren)\b|\b(?:öffne|oeffne|starte|lade)\s+qgis\b/.test(text)) {
     return 'qgis'
   }
   if (/\bword\b|\.docx\b|\.doc\b|bericht|report|\.odt\b/.test(text)) return 'word'

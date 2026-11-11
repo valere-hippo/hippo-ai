@@ -1036,7 +1036,7 @@ function isLikelyFilePath(candidate) {
 
 function looksLikeFileGenerationRequest(message) {
   const text = String(message || '').toLowerCase()
-  return /(?:datei|bericht|report|pdf|docx|word|export|speichere|als\s+datei|als\s+bericht|als\s+pdf|als\s+word)/i.test(text)
+  return /(?:datei|pdf|docx|word|export|speichere|als\s+datei|als\s+pdf|als\s+word)/i.test(text)
 }
 
 function looksLikeQgisRequest(message) {
@@ -6903,7 +6903,7 @@ async function sendChat() {
   const explicitPathCandidates = extractWindowsPathCandidates(message)
   const explicitPath = explicitPathCandidates[0] || ''
   const qgisRequested = looksLikeQgisRequest(message)
-  const wantsProjectFileAnalysis = looksLikeProjectFolderInquiry(message) || looksLikeFileGenerationRequest(message)
+  const wantsProjectFileAnalysis = looksLikeProjectFolderInquiry(message) || /(?:\banalyse\b|\banalysiere\b|\banalyze\b|\bericht\b|\breport\b|\bauswert\b)/i.test(String(message || ''))
 
   if (explicitPath && window.electron?.readLocalFile && isLikelyFilePath(explicitPath)) {
     try {

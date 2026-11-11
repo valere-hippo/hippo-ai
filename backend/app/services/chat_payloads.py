@@ -12,12 +12,13 @@ def build_attachment_response_guidance() -> str:
         "Erkläre zuerst kurz, worum es sich bei der Datei handelt, dann die wichtigsten Inhalte oder erkannten Elemente, "
         "danach die relevantesten Details oder Auffälligkeiten und schließe mit einer kompakten Einordnung.\n"
         "Wenn der Benutzer eine Analyse des lokalen Projektordners, einer Datei oder mehrerer Dateien möchte, liefere eine strukturierte Antwort mit Kurzfassung, Analyse und Schluss.\n"
-        "Wenn der Benutzer einen Bericht, ein Word-Dokument oder einen PDF-Export aus dem Projektordner möchte, nutze automatisch alle verfügbaren Ordner und Dateien des Projekts; frage nicht nach bestimmten Dateien, außer der Benutzer schränkt es ausdrücklich ein.\n"
+        "Wenn der Benutzer einen Bericht, ein Word-Dokument oder einen PDF-Export aus dem Projektordner möchte, antworte in Chat zuerst. Erzeuge eine Datei nur dann, wenn der Benutzer ausdrücklich das Speichern oder Exportieren als Dokument verlangt.\n"
         "Wenn du eine Analyse für einen Bericht erstellst, liefere sie erst als inhaltliche Antwort im Chat und formuliere sie anschließend in einer klaren Berichtstruktur mit Zusammenfassung, Analyse und Schluss.\n"
         "Nenne keine internen Platzhalter, keine RAW_CONTEXT-Tags, keine Dateiblock-Labels und keine Hinweise auf das Routing- oder Analyseverfahren.\n"
         "Wenn der Benutzer eine Analyse oder einen Bericht will, arbeite mit den echten Datei-Inhalten und nicht nur mit Dateinamen, Ordnerlisten oder technischen Kontextblöcken.\n"
         "Der Bericht soll den Stil eines sachlichen technischen Revisionsdokuments haben: Kopfzeile mit Titel, dann nummerierte Abschnitte, dann präzise Fakten.\n"
         "Vermeide generische Einleitungen wie 'Der Bericht basiert auf...' und nenne stattdessen die konkreten Inhalte, Eigenschaften und Befunde.\n"
+        "Wenn der Benutzer nur eine Analyse oder einen Bericht wünscht, antworte zunächst im Chat; erzeuge eine Datei nur dann, wenn er ausdrücklich ein Word-, PDF- oder anderes Exportformat verlangt.\n"
         "Wenn der Bericht in einer Datei ausgegeben wird, warte zuerst auf die vollständige inhaltliche Antwort des Modells und schreibe genau diese Antwort in die Datei; erfinde keine zusätzliche Analyse im Dateischritt.\n"
         "Wenn eine Antwort nur einen Statussatz enthält, aber keine echten Fakten oder Abschnitte mit inhaltlichen Beobachtungen, darf daraus keine Berichtdatei erzeugt werden.\n"
         "Ein Satz wie 'Ich werde die geodatenbezogenen Dateien analysieren' oder 'Ich habe die Dateien analysiert' ist kein gültiger Bericht.\n"
@@ -147,7 +148,7 @@ PROJECT_DETAILED_REPORT_RE = re.compile(
     re.IGNORECASE,
 )
 FILE_OUTPUT_HINT_RE = re.compile(
-    r"\b(word|docx|pdf|bericht|report|dokument|document|file|datei|excel|xlsx|pptx|präsentation|presentation|svg|png|jpg|jpeg|bild|image|grafik|poster|karte|map)\b",
+    r"\b(word|docx|pdf|dokument|document|file|datei|excel|xlsx|pptx|präsentation|presentation|svg|png|jpg|jpeg|bild|image|grafik|poster|karte|map)\b",
     re.IGNORECASE,
 )
 FILE_OUTPUT_VERB_RE = re.compile(

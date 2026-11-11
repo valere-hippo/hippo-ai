@@ -18,7 +18,6 @@ from app.services.chat_payloads import (
     build_message_content,
     derive_conversation_title,
     storage_text,
-    looks_like_project_detailed_report_request,
     looks_like_file_generation_request,
 )
 from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
@@ -492,7 +491,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                         f"{project_files_context}\n\n"
                         "Nutze diesen Kontext, wenn der Benutzer die Dateien oder den Ordner analysieren möchte, antworte ausführlich auf Deutsch und bleibe content-first: erst Inhalt, Extraktion und technische Schlussfolgerung, dann erst optional Dateinamen. Vermeide Tabellen oder übertriebenes Markdown.\n"
                         "Wenn der Request bereits echte Dateianhänge enthält, behandle diese Anhänge als primäre Quelle und lies ihren Inhalt direkt statt bloß Ordnerlisten oder QGIS-Hinweise zu verwenden.\n"
-                        "Wenn der Benutzer einen Bericht, ein Word-Dokument oder einen PDF-Export aus dem Projektordner möchte, verwende automatisch alle verfügbaren Ordner und Dateien des Projekts, ohne nach bestimmten Dateien oder Unterordnern zu fragen, sofern der Benutzer die Auswahl nicht explizit einschränkt."
+                        "Wenn der Benutzer einen Bericht, ein Word-Dokument oder einen PDF-Export aus dem Projektordner möchte, antworte in Chat zuerst. Erzeuge eine Datei nur dann, wenn der Benutzer ausdrücklich das Speichern oder Exportieren als Dokument verlangt.\n"
                     ),
                 },
             )
@@ -569,23 +568,24 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         reply_text = parsed_reply
     inferred_actions: list[DesktopAction] = []
     try:
-        qgis_context = ' '.join(
-            part for part in [
-                payload.message or '',
-                ' '.join(
-                    item
-                    for attachment in (payload.attachments or [])
-                    for item in (
-                        (getattr(attachment, 'filename', '') or '').strip(),
-                        (getattr(attachment, 'file_path', '') or '').strip(),
-                    )
-                    if item
-                ),
-                reply_text or '',
-            ]
-            if part
-        )
-        if _looks_qgis_related(qgis_context) or (payload.desktop_profile or '').strip().lower() == 'qgis':
+        qgis_requested = _looks_qgis_related(payload.message or '')
+        if qgis_requested:
+            qgis_context = ' '.join(
+                part for part in [
+                    payload.message or '',
+                    ' '.join(
+                        item
+                        for attachment in (payload.attachments or [])
+                        for item in (
+                            (getattr(attachment, 'filename', '') or '').strip(),
+                            (getattr(attachment, 'file_path', '') or '').strip(),
+                        )
+                        if item
+                    ),
+                    reply_text or '',
+                ]
+                if part
+            )
             inferred_actions = [
                 DesktopAction.model_validate(action)
                 for action in infer_desktop_launch_actions(qgis_context, reply_text, payload.desktop_profile)
@@ -624,12 +624,8 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
     if conv_project is not None and not serialized_files:
         try:
-            report_intent = (
-                looks_like_project_detailed_report_request(payload.message)
-                or looks_like_file_generation_request(payload.message, payload.attachments)
-                or any(word in (payload.message or '').lower() for word in ('analyse', 'analysiere', 'analyze', 'bericht', 'report', 'gutachten', 'auswert'))
-            )
-            if report_intent:
+            explicit_file_request = looks_like_file_generation_request(payload.message, payload.attachments)
+            if explicit_file_request:
                 report_text = (reply_text or '').strip()
                 if not _is_valid_report_text(report_text):
                     logger.warning('Refusing to render weak report response for conversation %s', conv_id)
