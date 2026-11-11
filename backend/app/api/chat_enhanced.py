@@ -414,6 +414,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             "For .docx and .pdf, provide the final document text/content. For .svg, provide valid SVG markup. For raster images (.png/.jpg/.jpeg), provide a concise visual description or poster brief that should be rendered into the image.\n"
             "If the user explicitly requests an image or PNG, return a real file block with an image filename instead of prose instructions. If the user only wants analysis or a textual answer, respond in text and do not create an image file.\n"
             "If the user asks to analyze documents from the project folders, use the project context and answer in the user's language.\n"
+            "If the user wants project files analyzed but no real file attachments or project file blocks are present, ask them to add /datei rather than saying the folder is unavailable.\n"
             "If the user mentions an explicit file path or filename, read that exact file directly from the project context and do not ask for a scan.\n"
             "If the user gives a Windows path for a file or folder, treat it as direct filesystem input and read it directly; do not route it through a scan-first fallback.\n"
             "If project_folder_context is present, treat it as the source of truth for the project folder contents and do not claim you lack local filesystem access. When it is structured as file-by-file blocks, read each file block completely, not just the filenames.\n"

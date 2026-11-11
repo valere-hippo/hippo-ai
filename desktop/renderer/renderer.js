@@ -3163,7 +3163,7 @@ function isAttachableProjectFile(filename) {
   ]).has(ext)
 }
 
-async function buildProjectFileAttachments(project, { maxFiles = 48, maxDepth = 5 } = {}) {
+async function buildProjectFileAttachments(project, { maxFiles = 48, maxDepth = 5, includeAllFiles = false } = {}) {
   if (!project?.watched_folder || !window.electron?.scanProjectFolderFiles || !window.electron?.readLocalFile) {
     return []
   }
@@ -3188,7 +3188,7 @@ async function buildProjectFileAttachments(project, { maxFiles = 48, maxDepth = 
     const filename = String(file?.relative_path || file?.filename || file?.name || sourcePath.split(/[/\\]/).pop() || '').trim()
     if (!sourcePath || !filename) continue
     if (seenPaths.has(sourcePath)) continue
-    if (!isAttachableProjectFile(filename)) continue
+    if (!includeAllFiles && !isAttachableProjectFile(filename)) continue
 
     // eslint-disable-next-line no-await-in-loop
     const attachment = await buildAttachmentFromLocalPath(sourcePath, filename, 'application/octet-stream')
@@ -6900,10 +6900,14 @@ async function sendChat() {
     setDesktopAgentMode(true)
   }
 
-  const explicitPathCandidates = extractWindowsPathCandidates(message)
+  const dateiRequested = /(^|\s)\/datei(?:\s|$)/i.test(String(message || ''))
+  const cleanMessage = String(message || '')
+    .replace(/(^|\s)\/datei(?:\s|$)/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const explicitPathCandidates = extractWindowsPathCandidates(cleanMessage)
   const explicitPath = explicitPathCandidates[0] || ''
-  const qgisRequested = looksLikeQgisRequest(message)
-  const wantsProjectFileAnalysis = looksLikeProjectFolderInquiry(message) || /(?:\banalyse\b|\banalysiere\b|\banalyze\b|\bericht\b|\breport\b|\bauswert\b)/i.test(String(message || ''))
+  const qgisRequested = looksLikeQgisRequest(cleanMessage)
 
   if (explicitPath && window.electron?.readLocalFile && isLikelyFilePath(explicitPath)) {
     try {
@@ -6971,15 +6975,15 @@ async function sendChat() {
   if (project) {
     const scope = loadProjectSourceScope(project)
     const accessGranted = Boolean(scope?.sourceFolders?.length && scope.consented)
-    if (accessGranted && !explicitPath) {
+    if (accessGranted && !explicitPath && dateiRequested) {
       projectSourcePrefixes = scope.sourceFolders
     }
     if (!state.desktopAgentMode && qgisRequested) {
       setDesktopAgentMode(true)
     }
-    if (!explicitPath && !qgisRequested && wantsProjectFileAnalysis) {
+    if (!explicitPath && !qgisRequested && dateiRequested) {
       try {
-        projectBundleAttachments = await buildProjectFileAttachments(project, { maxFiles: 48, maxDepth: 5 })
+        projectBundleAttachments = await buildProjectFileAttachments(project, { maxFiles: 1000, maxDepth: 12, includeAllFiles: true })
         if (projectBundleAttachments.length) {
           projectFolderContext = [
             'RAW_PROJECT_FILES:',
@@ -6992,25 +6996,10 @@ async function sendChat() {
         console.warn('Project file attachment build failed:', error)
       }
     }
-    if (!projectFolderContext && project && !explicitPath && !qgisRequested && wantsProjectFileAnalysis) {
-      const folders = normalizeProjectFolderInput(project.watched_folder)
-      if (folders.length) {
-        const needsDeepRead = wantsProjectFileAnalysis
-        if (needsDeepRead) {
-          const deepContext = await warmProjectFolderContext(project, folders, '', { deep: true })
-          if (deepContext) {
-            projectFolderContext = deepContext
-          }
-        } else {
-          projectFolderContext = await queueProjectFolderRefresh(project, { force: true })
-        }
-      }
+    if (dateiRequested && accessGranted && !projectFolderContext) {
+      projectFolderContext = `Lokale Projektordner autorisiert: ${scope.sourceFolders.join(' | ')}`
     }
-    if (accessGranted && !projectFolderContext) {
-      const authorizedContext = `Lokale Projektordner autorisiert: ${scope.sourceFolders.join(' | ')}`
-      projectFolderContext = authorizedContext
-    }
-    if (scope?.refresh && !state.desktopAgentMode) {
+    if (dateiRequested && scope?.refresh && !state.desktopAgentMode) {
       scheduleProjectSourceSync(project, projectSourcePrefixes, { silent: true })
       showToast('Quellordner werden im Hintergrund synchronisiert.')
     }
@@ -7033,10 +7022,10 @@ async function sendChat() {
     await Promise.all(state.draftAttachments.map((attachment) => persistAttachment(project.id, attachment)))
   }
 
-  renderMessage('user', message || 'Anhang', { attachments: state.draftAttachments })
+  renderMessage('user', cleanMessage || message || 'Anhang', { attachments: state.draftAttachments })
   resetComposer()
 
-  showThinkingIndicator(getThinkingIndicatorLabel(message, state.draftAttachments))
+  showThinkingIndicator(getThinkingIndicatorLabel(cleanMessage || message, state.draftAttachments))
   try {
     const response = await apiJson('/chat-enhanced/', {
       method: 'POST',
@@ -7044,7 +7033,7 @@ async function sendChat() {
         conversation_id: state.currentConversationId,
         project_id: state.selectedProjectId,
         profile_id: state.selectedProfileId,
-        message,
+        message: cleanMessage || message,
         attachments,
         desktop_agent: state.desktopAgentMode,
         desktop_profile: state.desktopAgentProfile,
@@ -7058,7 +7047,7 @@ async function sendChat() {
       if (state.selectedProjectId) {
         state.projectConversationMemory.set(state.selectedProjectId, response.conversation_id)
       }
-      const title = deriveConversationTitle(message, state.draftAttachments)
+      const title = deriveConversationTitle(cleanMessage || message, state.draftAttachments)
       state.conversations = state.conversations.map((conversation) => (
         conversation.id === response.conversation_id
           ? { ...conversation, title: conversation.title || title }

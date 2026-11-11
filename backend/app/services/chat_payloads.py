@@ -11,7 +11,7 @@ def build_attachment_response_guidance() -> str:
         "Wenn die Antwort auf einem angehängten Dokument, Bild oder Screenshot basiert, antworte ausführlicher als üblich.\n"
         "Erkläre zuerst kurz, worum es sich bei der Datei handelt, dann die wichtigsten Inhalte oder erkannten Elemente, "
         "danach die relevantesten Details oder Auffälligkeiten und schließe mit einer kompakten Einordnung.\n"
-        "Wenn der Benutzer eine Analyse des lokalen Projektordners, einer Datei oder mehrerer Dateien möchte, liefere eine strukturierte Antwort mit Kurzfassung, Analyse und Schluss.\n"
+        "Wenn der Benutzer eine Analyse des lokalen Projektordners, einer Datei oder mehrerer Dateien möchte, liefere eine strukturierte Antwort mit Kurzfassung, Analyse und Schluss. Wenn keine echten Dateianhänge oder Projektdateien vorhanden sind, bitte den Benutzer kurz, /datei zu verwenden, statt so zu tun, als wäre der Ordner nicht erreichbar.\n"
         "Wenn der Benutzer einen Bericht, ein Word-Dokument oder einen PDF-Export aus dem Projektordner möchte, antworte in Chat zuerst. Erzeuge eine Datei nur dann, wenn der Benutzer ausdrücklich das Speichern oder Exportieren als Dokument verlangt.\n"
         "Wenn du eine Analyse für einen Bericht erstellst, liefere sie erst als inhaltliche Antwort im Chat und formuliere sie anschließend in einer klaren Berichtstruktur mit Zusammenfassung, Analyse und Schluss.\n"
         "Nenne keine internen Platzhalter, keine RAW_CONTEXT-Tags, keine Dateiblock-Labels und keine Hinweise auf das Routing- oder Analyseverfahren.\n"
