@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import struct
+import tarfile
 from io import BytesIO
 from types import SimpleNamespace
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -162,6 +163,54 @@ def test_extract_attachment_text_reads_plain_text():
     )
 
     assert extract_attachment_text(attachment) == "Plain text"
+
+
+def _make_zip_bytes() -> bytes:
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("notes/readme.txt", "Zip archive text")
+        archive.writestr("docs/info.md", "# Info\nArchive content")
+    return buffer.getvalue()
+
+
+def _make_tar_bytes() -> bytes:
+    buffer = BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        payload = b"Tar archive text"
+        info = tarfile.TarInfo("notes.txt")
+        info.size = len(payload)
+        archive.addfile(info, BytesIO(payload))
+    return buffer.getvalue()
+
+
+def test_extract_attachment_text_reads_zip_archive():
+    attachment = SimpleNamespace(
+        filename="bundle.zip",
+        mime_type="application/zip",
+        data_url=None,
+        raw_base64=base64.b64encode(_make_zip_bytes()).decode("ascii"),
+        ocr_text=None,
+    )
+
+    text = extract_attachment_text(attachment)
+    assert "Archiv:" in text
+    assert "readme.txt" in text
+    assert "Zip archive text" in text
+
+
+def test_extract_attachment_text_reads_tar_archive():
+    attachment = SimpleNamespace(
+        filename="bundle.tar",
+        mime_type="application/x-tar",
+        data_url=None,
+        raw_base64=base64.b64encode(_make_tar_bytes()).decode("ascii"),
+        ocr_text=None,
+    )
+
+    text = extract_attachment_text(attachment)
+    assert "Archiv:" in text
+    assert "notes.txt" in text
+    assert "Tar archive text" in text
 
 
 def _make_shp_header_bytes(shape_type: int = 5, bbox: tuple[float, float, float, float] = (7.0, 49.0, 7.5, 49.5)) -> bytes:

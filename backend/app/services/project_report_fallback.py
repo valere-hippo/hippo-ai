@@ -157,8 +157,12 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     report: list[str] = [
         f'# {title}',
         '',
-        '## Zusammenfassung',
-        f'Bericht zur Anfrage: {question_text}',
+        '## Projektdaten',
+        f'- Projekt: {title}',
+        f'- Anfrage: {question_text}',
+        '- Bearbeiter: Hippo AI',
+        '',
+        '## 1. Zusammenfassung',
     ]
 
     if facts:
@@ -168,20 +172,22 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         report.append('Es konnten keine detaillierten Inhaltsfakten aus dem Kontext extrahiert werden; nur die Dateistruktur war verfügbar.')
 
     if file_names:
-        report.extend(['', '## Gefundene Dateien'])
+        report.extend(['', '## 2. Gefundene Dateien'])
         report.extend([f'- {name}' for name in file_names[:20]])
 
-    report.extend(['', '## Analyse'])
+    report.extend(['', '## 3. Analyse'])
     if facts:
         report.append('Der Bericht stützt sich auf den tatsächlichen Dateiinhalt und die technische Struktur des Projektordners.')
         if any('Geodatenpaket' in fact or 'Geometrietyp' in fact for fact in facts):
             report.append('Es handelt sich um einen Geodatensatz bzw. GIS-nahen Projektordner; relevante Inhalte sind Geometrietyp, Bounding Box, Felder und Datensatzanzahl.')
         if any('Beispielinhalt' in fact for fact in facts):
             report.append('Die Attributdaten wurden aus der Datenquelle selbst ausgelesen, nicht aus Dateinamen geraten.')
+        if any('.xlsx' in fact.lower() or 'arbeitsblatt' in fact.lower() for fact in facts):
+            report.append('Tabellen- und Arbeitsblattinhalte wurden direkt aus der Datei gelesen und für die Analyse übernommen.')
     else:
         report.append('Es lagen nur Dateinamen und Strukturinformationen vor. Für eine belastbare inhaltliche Analyse muss der Ordnerkontext mit echten Datei-Inhalten erneut gelesen werden.')
 
-    report.extend(['', '## Schluss'])
+    report.extend(['', '## 4. Schlussfolgerung'])
     if facts:
         report.append('Die Antwort basiert auf den aus den Dateien extrahierten Fakten und nicht auf einer generischen Vorlage.')
     else:

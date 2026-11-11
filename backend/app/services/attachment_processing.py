@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import base64
 import binascii
+import mimetypes
 import re
 import struct
+import tarfile
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from typing import Any
 from zipfile import BadZipFile, ZipFile
 import xml.etree.ElementTree as ET
@@ -261,6 +264,109 @@ def _write_attachment_bytes(target: Path, attachment: Any) -> bool:
     return True
 
 
+ARCHIVE_SUFFIXES = (".zip", ".tar", ".tgz", ".tar.gz")
+ARCHIVE_MEMBER_LIMIT = 24
+ARCHIVE_MEMBER_SIZE_LIMIT = 2_000_000
+
+
+def _is_archive_filename(filename: str) -> bool:
+    lowered = (filename or '').lower()
+    return lowered.endswith(ARCHIVE_SUFFIXES)
+
+
+def _safe_archive_member_name(name: str) -> str | None:
+    raw = (name or '').replace('\\', '/').strip()
+    if not raw or raw.startswith('/'):
+        return None
+    parts = [part for part in raw.split('/') if part and part not in ('.', '..')]
+    if not parts:
+        return None
+    return '/'.join(parts)
+
+
+def _extract_archive_context(data: bytes, filename: str) -> str:
+    entries: list[tuple[str, bytes]] = []
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            for info in archive.infolist()[:ARCHIVE_MEMBER_LIMIT]:
+                if len(entries) >= ARCHIVE_MEMBER_LIMIT:
+                    break
+                if info.is_dir():
+                    continue
+                member_name = _safe_archive_member_name(info.filename)
+                if not member_name:
+                    continue
+                payload = archive.read(info.filename)
+                if len(payload) > ARCHIVE_MEMBER_SIZE_LIMIT:
+                    continue
+                entries.append((member_name, payload))
+            if entries:
+                return _format_archive_entries(entries, filename)
+    except Exception:
+        pass
+
+    try:
+        with tarfile.open(fileobj=BytesIO(data), mode='r:*') as archive:
+            for member in archive.getmembers()[:ARCHIVE_MEMBER_LIMIT]:
+                if len(entries) >= ARCHIVE_MEMBER_LIMIT:
+                    break
+                if not member.isfile():
+                    continue
+                member_name = _safe_archive_member_name(member.name)
+                if not member_name:
+                    continue
+                extracted = archive.extractfile(member)
+                if extracted is None:
+                    continue
+                payload = extracted.read(ARCHIVE_MEMBER_SIZE_LIMIT + 1)
+                if len(payload) > ARCHIVE_MEMBER_SIZE_LIMIT:
+                    continue
+                entries.append((member_name, payload))
+            if entries:
+                return _format_archive_entries(entries, filename)
+    except Exception:
+        return ''
+    return ''
+
+
+def _format_archive_entries(entries: list[tuple[str, bytes]], filename: str) -> str:
+    lines = [f"[Archiv: {filename}]", "Enthaltene Dateien: " + ", ".join(name for name, _payload in entries[:ARCHIVE_MEMBER_LIMIT])]
+    fake_attachments = [
+        SimpleNamespace(filename=name, mime_type=mimetypes.guess_type(name)[0] or 'application/octet-stream', raw_base64=base64.b64encode(payload).decode('ascii'), data_url=None, ocr_text=None)
+        for name, payload in entries
+    ]
+    grouped: dict[str, list[Any]] = {}
+    for attachment in fake_attachments:
+        if _is_archive_filename(_attachment_name(attachment)):
+            continue
+        grouped.setdefault(_attachment_stem(_attachment_name(attachment)), []).append(attachment)
+
+    handled: set[str] = set()
+    for stem, group in grouped.items():
+        if any(_attachment_name(item).lower().endswith('.shp') for item in group):
+            bundle = _extract_geo_bundle_context(group, f"{stem}.shp")
+            if bundle:
+                lines.append(bundle)
+                for item in group:
+                    handled.add(_attachment_name(item).lower())
+                continue
+
+    for attachment in fake_attachments:
+        name = _attachment_name(attachment)
+        if name.lower() in handled:
+            continue
+        if _is_archive_filename(name):
+            lines.append(f"- {name}: verschachteltes Archiv erkannt; nicht rekursiv geöffnet.")
+            continue
+        text = extract_attachment_text(attachment)
+        if text:
+            lines.append(f"- {name}")
+            lines.append(text)
+        else:
+            lines.append(f"- {name}: keine direkt lesbaren Inhalte.")
+    return _truncate("\n".join(lines))
+
+
 SHAPE_TYPE_NAMES = {
     0: "Null Shape",
     1: "Point",
@@ -480,6 +586,11 @@ def extract_attachment_text(attachment: Any) -> str:
                 "Für eine echte inhaltliche Analyse müssen die Begleitdateien bzw. der Projektkontext mitausgewertet werden."
             )
         return ""
+
+    if _is_archive_filename(lower_name):
+        archive_text = _extract_archive_context(data, filename)
+        if archive_text:
+            return archive_text
 
     if mime_type == "application/pdf" or lower_name.endswith(".pdf"):
         return _extract_text_from_pdf(data)

@@ -15,7 +15,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from io import BytesIO
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from zipfile import BadZipFile, ZipFile
+import tarfile
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape as xml_escape
 
@@ -784,6 +786,9 @@ def _extract_text_from_pptx_bytes(data: bytes) -> str:
 AUDIO_FILE_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".oga", ".webm", ".flac", ".opus"}
 VIDEO_FILE_EXTENSIONS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v", ".mpg", ".mpeg"}
 MEDIA_FILE_EXTENSIONS = AUDIO_FILE_EXTENSIONS | VIDEO_FILE_EXTENSIONS
+ARCHIVE_FILE_EXTENSIONS = {".zip", ".tar", ".tgz", ".tar.gz"}
+ARCHIVE_MEMBER_LIMIT = 24
+ARCHIVE_MEMBER_SIZE_LIMIT = 2_000_000
 
 
 def _probe_media_metadata(path: Path) -> str:
@@ -885,6 +890,109 @@ async def _summarize_media_file(project: Any, filename: str) -> str:
             return "\n".join(parts).strip()
 
         return meta
+
+
+def _extract_archive_preview(data: bytes, filename: str) -> str:
+    suffix = Path(filename).suffix.lower()
+    if suffix not in ARCHIVE_FILE_EXTENSIONS and not (filename or '').lower().endswith(('.tar.gz',)):
+        return ''
+
+    extracted: list[tuple[str, bytes]] = []
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            if archive.namelist():
+                for info in archive.infolist()[:ARCHIVE_MEMBER_LIMIT]:
+                    if len(extracted) >= ARCHIVE_MEMBER_LIMIT:
+                        break
+                    if info.is_dir():
+                        continue
+                    member_name = (info.filename or '').replace('\\', '/').strip()
+                    if not member_name or member_name.startswith('/'):
+                        continue
+                    member_name = '/'.join(part for part in member_name.split('/') if part and part not in ('.', '..'))
+                    if not member_name:
+                        continue
+                    payload = archive.read(info.filename)
+                    if len(payload) > ARCHIVE_MEMBER_SIZE_LIMIT:
+                        continue
+                    extracted.append((member_name, payload))
+                if extracted:
+                    return _summarize_archive_entries(extracted, filename)
+    except Exception:
+        pass
+
+    try:
+        with tarfile.open(fileobj=BytesIO(data), mode='r:*') as archive:
+            for member in archive.getmembers()[:ARCHIVE_MEMBER_LIMIT]:
+                if len(extracted) >= ARCHIVE_MEMBER_LIMIT:
+                    break
+                if not member.isfile():
+                    continue
+                member_name = (member.name or '').replace('\\', '/').strip()
+                if not member_name or member_name.startswith('/'):
+                    continue
+                member_name = '/'.join(part for part in member_name.split('/') if part and part not in ('.', '..'))
+                if not member_name:
+                    continue
+                extracted_file = archive.extractfile(member)
+                if extracted_file is None:
+                    continue
+                payload = extracted_file.read(ARCHIVE_MEMBER_SIZE_LIMIT + 1)
+                if len(payload) > ARCHIVE_MEMBER_SIZE_LIMIT:
+                    continue
+                extracted.append((member_name, payload))
+        if extracted:
+            return _summarize_archive_entries(extracted, filename)
+    except Exception:
+        return ''
+    return ''
+
+
+def _summarize_archive_entries(entries: list[tuple[str, bytes]], filename: str) -> str:
+    lines = [f"Archiv {Path(filename).name} enthält {len(entries)} Dateien."]
+    names = ", ".join(name for name, _data in entries[:ARCHIVE_MEMBER_LIMIT])
+    if names:
+        lines.append(f"Enthaltene Dateien: {names}")
+
+    fake_files = {
+        name: SimpleNamespace(filename=name, size=len(payload), storage='archive', modified_at=None)
+        for name, payload in entries
+    }
+
+    with TemporaryDirectory() as tmpdir:
+        archive_root = Path(tmpdir)
+        for name, payload in entries:
+            target = archive_root / Path(name)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                target.write_bytes(payload)
+            except Exception:
+                continue
+        fake_project = SimpleNamespace(watched_folder=str(archive_root), pcloud_path=None, pcloud_folder_id=None)
+
+        processed: set[str] = set()
+        for name, payload in entries:
+            lower = name.lower()
+            if lower in processed:
+                continue
+            if lower.endswith('.shp'):
+                stem = str(Path(name).with_suffix(''))
+                block = _extract_shapefile_context(fake_project, stem, fake_files)  # type: ignore[arg-type]
+                if block:
+                    lines.append(block)
+                    for ext in ('.shp', '.shx', '.dbf', '.prj', '.cpg'):
+                        processed.add(f"{stem}{ext}".lower())
+                    continue
+            if lower.endswith(('.zip', '.tar', '.tgz', '.tar.gz')):
+                lines.append(f"- {name}: verschachteltes Archiv erkannt; nicht rekursiv geöffnet.")
+                continue
+            preview = extract_project_file_preview(name, payload, mimetypes.guess_type(name)[0])
+            if preview:
+                lines.append(f"- {name}")
+                lines.append(preview)
+            else:
+                lines.append(f"- {name}: keine direkt lesbaren Inhalte.")
+    return _truncate("\n".join(lines), 12000)
 
 
 def _extract_text_from_plain_bytes(data: bytes) -> str:
@@ -1374,6 +1482,11 @@ def build_geodata_map_file(project: Any, query: str | None = None) -> tuple[str,
 def extract_project_file_preview(filename: str, data: bytes, content_type: str | None = None) -> str:
     safe_filename = (filename or "").lower()
     mime_type = (content_type or mimetypes.guess_type(safe_filename)[0] or "").lower()
+
+    if safe_filename.endswith(tuple(ARCHIVE_FILE_EXTENSIONS)) or safe_filename.endswith('.tar.gz'):
+        archive_preview = _extract_archive_preview(data, safe_filename)
+        if archive_preview:
+            return archive_preview
 
     if mime_type == "application/pdf" or safe_filename.endswith(".pdf"):
         return _extract_text_from_pdf_bytes(data)
