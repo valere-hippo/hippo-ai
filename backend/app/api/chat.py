@@ -29,7 +29,7 @@ from app.services.project_storage import build_project_files_context
 from app.services.project_report_fallback import build_project_report_generated_file, build_project_report_fallback, _is_valid_report_text
 from app.services.workflow_orchestration import ensure_workflow_for_message
 from app.services.workflow_executor import execute_workflow
-from app.services.workflow_planner import summarize_workflow_execution
+from app.services.workflow_planner import summarize_workflow_execution, build_workflow_summary_generated_file
 from app.services.project_skills import build_project_skills_context
 from app.services.project_tools import build_tools_context
 from app.services.model_registry import resolve_chat_max_tokens
@@ -522,6 +522,19 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             except Exception:
                 workflow_id = None
         workflow_summary = workflow_execution_result.get('summary') if isinstance(workflow_execution_result, dict) else None
+    if workflow_plan and workflow_execution_result and isinstance(workflow_execution_result, dict):
+        try:
+            file_data, mime_type, filename = build_workflow_summary_generated_file(workflow_plan, workflow_execution_result)
+            serialized_files.append(
+                {
+                    'filename': filename,
+                    'mime_type': mime_type,
+                    'data_base64': base64.b64encode(file_data).decode('ascii'),
+                }
+            )
+        except Exception:
+            logger.warning('workflow summary export failed for conversation %s', conv_id)
+
     return ChatResponse(
         reply=reply_text,
         conversation_id=conv_id,

@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass, asdict
 from typing import Any
 
+from app.services.generated_files import build_generated_file_bytes_with_fallback
+
 MODEL_TAG_ALIASES = {
     "openai": "openai",
     "gpt": "openai",
@@ -251,3 +253,9 @@ def summarize_workflow_execution(plan: dict[str, Any], execution: dict[str, Any]
         lines.append("Endbericht")
         lines.append(final_content)
     return "\n".join(lines).strip()
+
+
+def build_workflow_summary_generated_file(plan: dict[str, Any], execution: dict[str, Any], *, filename_hint: str = "workflow_report") -> tuple[bytes, str, str]:
+    summary_text = summarize_workflow_execution(plan, execution)
+    filename = f"{filename_hint}.docx"
+    return build_generated_file_bytes_with_fallback(filename, summary_text)
