@@ -460,6 +460,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             }
         )
 
+    explicit_file_request = False
     if conv_project is not None and not serialized_files:
         try:
             explicit_file_request = looks_like_file_generation_request(payload.message, payload.attachments) or looks_like_project_detailed_report_request(payload.message)
@@ -533,7 +534,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                 f"Erreur: {workflow_resolution.get('error_message') or 'modèle indisponible'}. "
                 + (f"Choisis un autre modèle: {choice_labels}." if choice_labels else "Choisis un autre modèle.")
             )
-    if workflow_plan and workflow_execution_result and isinstance(workflow_execution_result, dict):
+    if workflow_plan and workflow_execution_result and isinstance(workflow_execution_result, dict) and explicit_file_request:
         try:
             workflow_summary = workflow_execution_result.get('summary') if isinstance(workflow_execution_result.get('summary'), dict) else None
             task_sources = workflow_summary or workflow_execution_result.get('summary') or workflow_plan
