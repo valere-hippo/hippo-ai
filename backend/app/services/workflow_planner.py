@@ -183,3 +183,39 @@ def build_workflow_metadata(message: str, *, final_model_tag: str | None = None,
         "final_model_tag": normalize_model_tag(final_model_tag, default_model_tag) if final_model_tag else (normalize_model_tag(default_model_tag, "openai") if tasks else None),
         "tasks": [task.to_dict() for task in tasks],
     }
+
+
+def summarize_workflow_execution(plan: dict[str, Any], execution: dict[str, Any]) -> str:
+    tasks = plan.get("tasks") or []
+    results = execution.get("results") or {}
+    lines: list[str] = []
+    lines.append(f"Workflow-ID: {execution.get('workflow_id')}")
+    lines.append(f"Status: {execution.get('status') or 'unknown'}")
+    lines.append("")
+    lines.append("Teilaufgaben")
+    for task in tasks:
+        task_key = task.get("task_key")
+        result = results.get(task_key, {}) if isinstance(results, dict) else {}
+        content = str(result.get("content") or "").strip()
+        model_tag = task.get("model_tag") or result.get("provider") or "openai"
+        status = "done" if content else "empty"
+        lines.append(f"- {task_key} · {model_tag} · {status} · {task.get('title')}")
+        if content:
+            preview = content if len(content) <= 1200 else content[:1200].rstrip() + "…"
+            lines.append(f"  {preview}")
+    final_task = None
+    for task in reversed(tasks):
+        if task.get("model_tag") == plan.get("final_model_tag"):
+            final_task = task
+            break
+    if final_task is None and tasks:
+        final_task = tasks[-1]
+    final_key = final_task.get("task_key") if final_task else None
+    final_content = ""
+    if final_key and isinstance(results, dict):
+        final_content = str(results.get(final_key, {}).get("content") or "").strip()
+    if final_content:
+        lines.append("")
+        lines.append("Endbericht")
+        lines.append(final_content)
+    return "\n".join(lines).strip()
