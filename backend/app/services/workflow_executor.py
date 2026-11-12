@@ -8,6 +8,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import AsyncSessionLocal
 from app.models.project import Project
 from app.models.workflow import AIWorkflow, AIWorkflowTask
 from app.services.project_storage import build_project_files_context
@@ -161,6 +162,11 @@ async def _call_provider(task: AIWorkflowTask, workflow: AIWorkflow, dependency_
         "content": content,
         "raw": data,
     }
+
+
+async def execute_workflow_by_id(workflow_id: int) -> dict[str, Any]:
+    async with AsyncSessionLocal() as db:
+        return await execute_workflow(db, workflow_id)
 
 
 async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]:

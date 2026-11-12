@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy import insert, select
 
 from app.api.dependencies import DbSession, get_current_user
@@ -18,7 +18,7 @@ from app.schemas.workflow import (
 )
 from app.services.permissions import has_project_permission
 from app.services.workflow_planner import build_workflow_metadata
-from app.services.workflow_executor import execute_workflow
+from app.services.workflow_executor import execute_workflow, execute_workflow_by_id
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -173,11 +173,14 @@ async def get_workflow(workflow_id: int, db: DbSession, current_user=Depends(get
 
 
 @router.post("/{workflow_id}/execute")
-async def run_workflow(workflow_id: int, db: DbSession, current_user=Depends(get_current_user)):
+async def run_workflow(workflow_id: int, background_tasks: BackgroundTasks, db: DbSession, current_user=Depends(get_current_user), background: bool = True):
     workflow_res = await db.execute(select(AIWorkflow).where(AIWorkflow.id == workflow_id))
     workflow = workflow_res.scalar_one_or_none()
     if workflow is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow nicht gefunden.")
     project = await _load_project_if_needed(db, workflow.project_id)
     await _assert_project_access(db, current_user, project)
+    if background:
+        background_tasks.add_task(execute_workflow_by_id, workflow_id)
+        return {"workflow_id": workflow_id, "status": "queued"}
     return await execute_workflow(db, workflow_id)
