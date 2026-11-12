@@ -1256,6 +1256,23 @@ textarea {
   background: rgba(122, 31, 43, 0.08);
 }
 
+.workflow-summary--compact {
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.workflow-summary--compact .workflow-summary-final summary,
+.workflow-summary--compact .workflow-summary-task summary {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.workflow-summary--compact .workflow-summary-final-body,
+.workflow-summary--compact .workflow-summary-task-body {
+  padding-bottom: 10px;
+}
+
 .workflow-summary {
   display: grid;
   gap: 12px;

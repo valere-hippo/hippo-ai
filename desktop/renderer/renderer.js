@@ -2171,11 +2171,11 @@ function renderWorkflowResolution(resolution) {
   return container
 }
 
-function renderWorkflowSummary(summary) {
+function renderWorkflowSummary(summary, { compact = false } = {}) {
   if (!summary || typeof summary !== 'object') return null
   const tasks = Array.isArray(summary.tasks) ? summary.tasks : []
   const container = document.createElement('div')
-  container.className = 'workflow-summary'
+  container.className = `workflow-summary${compact ? ' workflow-summary--compact' : ''}`
 
   const header = document.createElement('div')
   header.className = 'workflow-summary-header'
@@ -2192,7 +2192,7 @@ function renderWorkflowSummary(summary) {
   if (finalResult.content) {
     const finalBlock = document.createElement('details')
     finalBlock.className = 'workflow-summary-final'
-    finalBlock.open = true
+    finalBlock.open = !compact
     const finalSummary = document.createElement('summary')
     finalSummary.textContent = 'Endbericht'
     const finalBody = document.createElement('div')
@@ -2258,7 +2258,7 @@ function renderMessage(role, content, extras = {}) {
   }
 
   if (extras.workflowSummary) {
-    const workflowBlock = renderWorkflowSummary(extras.workflowSummary)
+    const workflowBlock = renderWorkflowSummary(extras.workflowSummary, { compact: !extras.generatedFiles?.length })
     if (workflowBlock) {
       bubble.appendChild(workflowBlock)
     }
