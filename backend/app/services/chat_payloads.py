@@ -150,11 +150,11 @@ PROJECT_DETAILED_REPORT_RE = re.compile(
     re.IGNORECASE,
 )
 FILE_OUTPUT_HINT_RE = re.compile(
-    r"\b(word|docx|pdf|dokument|document|file|datei|excel|xlsx|pptx|präsentation|presentation|svg|png|jpg|jpeg|bild|image|grafik|poster|karte|map)\b",
+    r"\b(word|doc|docx|pdf|dokument|document|file|datei|excel|xlsx|pptx|präsentation|presentation|svg|png|jpg|jpeg|bild|image|grafik|poster|karte|map)\b",
     re.IGNORECASE,
 )
 FILE_OUTPUT_VERB_RE = re.compile(
-    r"\b(erstelle|erzeuge|generiere|schreibe|schreib|schreiben|create|generate|make|produce|exportiere|export|speichere|save|lege(?:n)?\s+als|als)\b",
+    r"\b(erstelle|erzeuge|generiere|schreibe|schreib|schreiben|create|generate|make|produce|exportiere|export|speichere|save|lege(?:n)?\s+als|als|gib(?:\s+mir)?|geb(?:\s+mir)?|schick(?:\s+mir)?)\b",
     re.IGNORECASE,
 )
 
