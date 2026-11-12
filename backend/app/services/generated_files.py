@@ -98,6 +98,12 @@ def _parse_report_blocks(text: str) -> list[ReportLine]:
                 blocks.append(ReportLine(kind="title", text=candidate, level=0))
                 continue
 
+        candidate = _strip_inline_markup(line)
+        if candidate in {"Zusammenfassung", "Analyse", "Schlussfolgerung", "Projektdaten", "Ergebnisse", "Bewertung", "Detailanalyse", "Fachliche Einordnung"}:
+            flush_paragraph()
+            blocks.append(ReportLine(kind="heading", text=candidate, level=2))
+            continue
+
         if re.match(r"^\*[^*].*\*$", line) or re.match(r"^_[^_].*_$", line):
             flush_paragraph()
             blocks.append(ReportLine(kind="subtitle", text=_strip_inline_markup(line), level=0))
