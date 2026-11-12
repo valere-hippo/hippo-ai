@@ -789,6 +789,8 @@ MEDIA_FILE_EXTENSIONS = AUDIO_FILE_EXTENSIONS | VIDEO_FILE_EXTENSIONS
 ARCHIVE_FILE_EXTENSIONS = {".zip", ".tar", ".tgz", ".tar.gz"}
 ARCHIVE_MEMBER_LIMIT = 24
 ARCHIVE_MEMBER_SIZE_LIMIT = 2_000_000
+ARCHIVE_RECURSION_LIMIT = 2
+ARCHIVE_TOTAL_SIZE_LIMIT = 8_000_000
 
 
 def _probe_media_metadata(path: Path) -> str:
@@ -892,12 +894,16 @@ async def _summarize_media_file(project: Any, filename: str) -> str:
         return meta
 
 
-def _extract_archive_preview(data: bytes, filename: str) -> str:
+def _extract_archive_preview(data: bytes, filename: str, depth: int = 0) -> str:
     suffix = Path(filename).suffix.lower()
     if suffix not in ARCHIVE_FILE_EXTENSIONS and not (filename or '').lower().endswith(('.tar.gz',)):
         return ''
+    if depth > ARCHIVE_RECURSION_LIMIT:
+        return f"[Archiv] {Path(filename).name}: verschachteltes Archiv übersprungen (maximale Rekursion erreicht)."
 
     extracted: list[tuple[str, bytes]] = []
+    skipped: list[str] = []
+    total_size = 0
     try:
         with ZipFile(BytesIO(data)) as archive:
             if archive.namelist():
@@ -912,12 +918,20 @@ def _extract_archive_preview(data: bytes, filename: str) -> str:
                     member_name = '/'.join(part for part in member_name.split('/') if part and part not in ('.', '..'))
                     if not member_name:
                         continue
+                    if info.file_size and info.file_size > ARCHIVE_MEMBER_SIZE_LIMIT:
+                        skipped.append(f"{member_name} (zu groß)")
+                        continue
                     payload = archive.read(info.filename)
                     if len(payload) > ARCHIVE_MEMBER_SIZE_LIMIT:
+                        skipped.append(f"{member_name} (zu groß)")
                         continue
+                    total_size += len(payload)
+                    if total_size > ARCHIVE_TOTAL_SIZE_LIMIT:
+                        skipped.append(f"{member_name} (Gesamtlimit erreicht)")
+                        break
                     extracted.append((member_name, payload))
-                if extracted:
-                    return _summarize_archive_entries(extracted, filename)
+                if extracted or skipped:
+                    return _summarize_archive_entries(extracted, filename, depth=depth, skipped=skipped)
     except Exception:
         pass
 
@@ -934,25 +948,35 @@ def _extract_archive_preview(data: bytes, filename: str) -> str:
                 member_name = '/'.join(part for part in member_name.split('/') if part and part not in ('.', '..'))
                 if not member_name:
                     continue
+                if member.size and member.size > ARCHIVE_MEMBER_SIZE_LIMIT:
+                    skipped.append(f"{member_name} (zu groß)")
+                    continue
                 extracted_file = archive.extractfile(member)
                 if extracted_file is None:
                     continue
                 payload = extracted_file.read(ARCHIVE_MEMBER_SIZE_LIMIT + 1)
                 if len(payload) > ARCHIVE_MEMBER_SIZE_LIMIT:
+                    skipped.append(f"{member_name} (zu groß)")
                     continue
+                total_size += len(payload)
+                if total_size > ARCHIVE_TOTAL_SIZE_LIMIT:
+                    skipped.append(f"{member_name} (Gesamtlimit erreicht)")
+                    break
                 extracted.append((member_name, payload))
-        if extracted:
-            return _summarize_archive_entries(extracted, filename)
+        if extracted or skipped:
+            return _summarize_archive_entries(extracted, filename, depth=depth, skipped=skipped)
     except Exception:
         return ''
     return ''
 
 
-def _summarize_archive_entries(entries: list[tuple[str, bytes]], filename: str) -> str:
+def _summarize_archive_entries(entries: list[tuple[str, bytes]], filename: str, *, depth: int = 0, skipped: list[str] | None = None) -> str:
     lines = [f"Archiv {Path(filename).name} enthält {len(entries)} Dateien."]
     names = ", ".join(name for name, _data in entries[:ARCHIVE_MEMBER_LIMIT])
     if names:
         lines.append(f"Enthaltene Dateien: {names}")
+    if skipped:
+        lines.append(f"Übersprungen: {', '.join(skipped[:ARCHIVE_MEMBER_LIMIT])}")
 
     fake_files = {
         name: SimpleNamespace(filename=name, size=len(payload), storage='archive', modified_at=None)
@@ -984,7 +1008,11 @@ def _summarize_archive_entries(entries: list[tuple[str, bytes]], filename: str) 
                         processed.add(f"{stem}{ext}".lower())
                     continue
             if lower.endswith(('.zip', '.tar', '.tgz', '.tar.gz')):
-                lines.append(f"- {name}: verschachteltes Archiv erkannt; nicht rekursiv geöffnet.")
+                nested = _extract_archive_preview(payload, name, depth=depth + 1)
+                if nested:
+                    lines.append(nested)
+                else:
+                    lines.append(f"- {name}: verschachteltes Archiv erkannt; nicht rekursiv geöffnet.")
                 continue
             preview = extract_project_file_preview(name, payload, mimetypes.guess_type(name)[0])
             if preview:
