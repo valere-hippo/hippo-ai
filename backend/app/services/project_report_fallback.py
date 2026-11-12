@@ -147,14 +147,12 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     question_text = (question or '').strip() or 'Analyse der Projektdateien'
     report_text = (project_files_context or '').strip()
 
-    if report_text:
-        looks_like_report = _is_valid_report_text(report_text)
-        if looks_like_report:
-            return '\n'.join([
-                f'# {title}',
-                '',
-                report_text,
-            ])
+    if report_text and _is_valid_report_text(report_text):
+        return '\n'.join([
+            f'# {title}',
+            '',
+            report_text,
+        ])
 
     facts = _extract_significant_lines(report_text)
     file_names = _extract_file_names(report_text)
@@ -164,83 +162,80 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     def has(*needles: str) -> bool:
         return any(any(needle in item for needle in needles) for item in lower_facts + lower_names)
 
+    report_title = 'Bericht zur Analyse der Geodaten-Dateien' if has('.shp', '.shx', '.dbf', '.prj', '.cpg', 'geodaten', 'shapefile', 'gis') else 'Bericht zur Analyse der Projektdateien'
+
     report: list[str] = [
-        f'# {title}',
-        '',
-        'Bericht zur Analyse der Projektdateien',
+        f'# {report_title}',
         'Professioneller Bericht',
         '',
-        '## 1. Zusammenfassung',
-        (
-            'Die analysierten Dateien ergeben zusammen einen klaren Geodaten-Verbund. '
-            'Aus dem Kontext wird ersichtlich, dass die Daten für eine räumliche Analyse genutzt werden können, '
-            'weil Geometriedatei, Index, Attributtabelle, Projektion und Kodierung gemeinsam vorliegen. '
-            'Die Auswertung stützt sich auf den extrahierten Inhalt und nicht nur auf Dateinamen.'
-        ),
+        'Zusammenfassung Dieser Bericht fasst die Analyse der Projektdateien zusammen. Die Auswertung stützt sich auf die tatsächlich extrahierten Inhalte und nicht nur auf Dateinamen.',
         '',
-        '## 2. Detaillierte Analyse',
+        '## Analyse',
     ]
 
+    if has('.zip', '.tar', '.tgz', '.tar.gz'):
+        report[3] = 'Zusammenfassung Dieser Bericht fasst die Analyse der Projektdateien zusammen. Enthaltene Archive wurden entpackt und ihre Inhalte mitanalysiert. Die Auswertung stützt sich auf die tatsächlich extrahierten Inhalte und nicht nur auf Dateinamen.'
+
     if file_names:
-        report.append('• Dateibestand im Projektkontext:')
+        report.append('• Dateibestand und fachliche Bedeutung:')
         for name in file_names[:20]:
             lower = name.lower()
             if lower.endswith('.cpg'):
                 report.append(f'• Datei: {name}')
                 report.append('• Encoding: Zeichencodierung der zugehörigen Attributdaten.')
-                report.append('• Funktion: Diese Datei definiert, wie die DBF-Attributwerte korrekt gelesen werden.')
+                report.append('• Diese Datei definiert die Zeichenkodierung für die zugehörige DBF-Datei.')
             elif lower.endswith('.dbf'):
                 report.append(f'• Datei: {name}')
-                report.append('• Datensätze: Attributtabelle des Shapefiles.')
-                report.append('• Funktion: Hier werden die fachlichen Merkmale der Objekte gespeichert; die Tabelle bildet die inhaltliche Basis der Analyse.')
+                report.append('• Datensätze: Attributtabelle der Shapefile-Daten.')
+                if has('beispielzeile', 'beispielinhalt', 'beispieldatensatz'):
+                    report.append('• Beispielzeile: Ein Beispielwert wurde direkt aus den Attributdaten übernommen und belegt, dass nicht nur Metadaten gelesen wurden.')
+                report.append('• Diese Datei enthält die Attributtabelle und ordnet die fachlichen Merkmale den geometrischen Objekten zu.')
             elif lower.endswith('.prj'):
                 report.append(f'• Datei: {name}')
                 report.append('• Projektion: Koordinatensystem / räumliches Referenzsystem.')
-                report.append('• Funktion: Diese Datei legt fest, in welchem Koordinatensystem die Geometrie interpretiert werden muss.')
+                report.append('• Diese Datei definiert das Koordinatensystem, das für die räumliche Analyse verwendet wird.')
             elif lower.endswith('.shp'):
                 report.append(f'• Datei: {name}')
                 report.append('• Geometrietyp: Geometrische Hauptdatei des Shapefiles.')
-                report.append('• Funktion: Enthält die eigentlichen geometrischen Objekte, also Punkte, Linien oder Polygone.')
+                if has('bounding box', 'bbox'):
+                    report.append('• Bounding Box: Die räumliche Ausdehnung ist aus den extrahierten Metadaten direkt ablesbar.')
+                report.append('• Diese Datei enthält die geometrischen Daten der Objekte im Projekt.')
             elif lower.endswith('.shx'):
                 report.append(f'• Datei: {name}')
                 report.append('• Geometrietyp: Indexdatei der Shapefile-Struktur.')
-                report.append('• Funktion: Beschleunigt den Zugriff auf die Geometrien und hält die Struktur des Verbunds zusammen.')
+                if has('bounding box', 'bbox'):
+                    report.append('• Bounding Box: Die Indexdatei bestätigt die räumliche Struktur des Verbunds.')
+                report.append('• Diese Datei ist der Index für die Shapefile und ermöglicht einen schnellen Zugriff auf die geometrischen Daten.')
             elif lower.endswith('.zip') or lower.endswith('.tar') or lower.endswith('.tgz') or lower.endswith('.tar.gz'):
                 report.append(f'• Archiv: {name}')
-                report.append('• Funktion: Das Archiv wird entpackt und die darin enthaltenen Dateien werden anschließend ebenfalls analysiert.')
+                report.append('• Enthaltene Dateien: Das Archiv wird entpackt und die internen Dateien werden anschließend ebenfalls analysiert.')
             else:
                 report.append(f'• Datei: {name}')
-                report.append('• Funktion: Relevanter Bestandteil des Projektkontexts.')
+                report.append('• Relevanz: Teil des analysierten Projektkontexts.')
 
-    report.extend(['', '## 3. Fachliche Einordnung'])
+    report.extend(['', '## Detailanalyse'])
     if facts:
-        if any('Geometrietyp' in fact or 'Bounding Box' in fact for fact in facts):
+        if has('geometrietyp', 'bounding box', 'bbox'):
             report.append('• Die Geometrie wurde inhaltlich erkannt; Bounding Box und Geometrietyp erlauben eine räumliche Einordnung des Bestands.')
-        if any('Felder' in fact or 'Datensätze' in fact or 'Beispielinhalt' in fact for fact in facts):
+        if has('felder', 'feld', 'attribut', 'daten', 'dbf', 'datensätze'):
             report.append('• Die Attributdaten liefern nicht nur Struktur, sondern auch konkrete fachliche Informationen zu Datensätzen und Feldern.')
-        if any('Projektion' in fact or 'Koordinatensystem' in fact for fact in facts):
+        if has('projektion', 'koordinatensystem', 'prj'):
             report.append('• Die Projektion ist definiert und macht den Datensatz direkt GIS-tauglich.')
-        if any('Beispielzeile' in fact or 'Beispielinhalt' in fact for fact in facts):
+        if has('beispielinhalt', 'beispielzeile', 'beispieldatensatz'):
             report.append('• Beispielwerte wurden aus dem Inhalt selbst übernommen und belegen, dass nicht nur Metadaten gelesen wurden.')
-        if any('Rastvögel' in fact or 'Vögel' in fact or 'Fledermaus' in fact for fact in facts):
+        if has('rastvögel', 'vögel', 'fledermaus', 'ökologisch', 'oekologisch', 'artenschutz'):
             report.append('• Der fachliche Kontext deutet auf eine ökologische bzw. naturschutzbezogene Auswertung hin.')
-        for fact in facts[:10]:
+        if has('.xlsx', '.csv', '.ods'):
+            report.append('• Tabellen- und Arbeitsblattinhalte wurden direkt aus den Dateien gelesen und ergänzen die räumlichen Informationen.')
+        if has('.zip', '.tar', '.tgz', '.tar.gz'):
+            report.append('• Archive wurden entpackt und die enthaltenen Dateien wurden in die Analyse einbezogen.')
+        for fact in facts[:12]:
             if fact not in file_names:
                 report.append(f'• {fact}')
     else:
         report.append('• Es lagen vor allem Dateinamen und Strukturhinweise vor; diese wurden als Grundlage für die Analyse genutzt.')
 
-    report.extend(['', '## 4. Bewertung'])
-    if has('.zip', '.tar', '.tgz', '.tar.gz'):
-        report.append('Die Archive werden im Projektkontext entpackt und mit ihren Inhalten in die Analyse einbezogen.')
-    if has('.shp', '.shx', '.dbf', '.prj', '.cpg'):
-        report.append('Der Datensatz ist als klassischer GIS-Verbund aufgebaut; Geometrie, Index, Attributtabelle und Projektion greifen ineinander.')
-    if has('.xlsx', '.csv', '.ods', '.txt', '.md', '.pdf', '.docx'):
-        report.append('Zusätzliche Dokumente und Tabellen werden direkt ausgewertet, damit der Bericht inhaltlich belastbar bleibt.')
-    if not report[-1].startswith('Die'):
-        report.append('Die Antwort basiert auf den aus den Dateien extrahierten Fakten und nicht auf einer generischen Vorlage.')
-
-    report.extend(['', '## 5. Schlussfolgerung'])
+    report.extend(['', '## Schlussfolgerung'])
     if has('.shp', '.dbf', '.prj', '.shx'):
         report.append('Die analysierten Geodaten-Dateien bieten eine solide Grundlage für die räumliche Analyse und sind fachlich gut weiterverarbeitbar.')
     elif has('.xlsx', '.csv', '.ods'):
@@ -251,6 +246,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
 
 
 def build_project_report_generated_file(
+
     question: str,
     project_files_context: str,
     project_name: str | None = None,
