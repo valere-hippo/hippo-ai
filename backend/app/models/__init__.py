@@ -8,6 +8,7 @@ from app.models.conversation_memory import ConversationMemory
 from app.models.skill import ProjectSkill
 from app.models.tool import AITool
 from app.models.model_registry import ModelRegistry
+from app.models.workflow import AIWorkflow, AIWorkflowTask
 from app.models.user_project_preferences import UserProjectSkillPreference, UserProjectToolPreference
 
-__all__ = ["Base", "User", "UserRole", "Project", "ProjectPermission", "PermissionLevel", "Conversation", "ChatMessage", "ChatProfile", "ConversationMemory", "ProjectSkill", "AITool", "ModelRegistry", "UserProjectSkillPreference", "UserProjectToolPreference"]
+__all__ = ["Base", "User", "UserRole", "Project", "ProjectPermission", "PermissionLevel", "Conversation", "ChatMessage", "ChatProfile", "ConversationMemory", "ProjectSkill", "AITool", "ModelRegistry", "AIWorkflow", "AIWorkflowTask", "UserProjectSkillPreference", "UserProjectToolPreference"]

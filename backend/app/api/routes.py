@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api import auth, users, admin_users, project_folders, projects, chat, files, permissions, audio
+from app.api import auth, users, admin_users, project_folders, projects, chat, files, permissions, audio, workflows
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
@@ -33,6 +33,7 @@ api_router.include_router(files.router)
 api_router.include_router(permissions.router)
 # Add additional routers
 api_router.include_router(audio.router)
+api_router.include_router(workflows.router)
 try:
     from app.api import admin_overview
     api_router.include_router(admin_overview.router)

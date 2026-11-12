@@ -7142,9 +7142,10 @@ async function sendChat() {
     const savedReportNote = savedArtifacts.length
       ? `Bericht im Lieferordner gespeichert:\n${savedArtifacts.map((filePath) => `- ${filePath}`).join('\n')}`
       : ''
-    const assistantReply = savedReportNote
-      ? `${response.reply ? `${response.reply}\n\n` : ''}${savedReportNote}`
-      : response.reply
+    const workflowNote = response.workflow_id
+      ? `Workflow gespeichert (#${response.workflow_id})${response.workflow_plan?.tasks?.length ? ` · ${response.workflow_plan.tasks.length} Task(s)` : ''}`
+      : ''
+    const assistantReply = [response.reply, savedReportNote, workflowNote].filter(Boolean).join('\n\n')
     if (assistantReply) {
       renderMessage('assistant', assistantReply, { generatedFiles: response.generated_files })
     } else if (response.generated_files?.length) {

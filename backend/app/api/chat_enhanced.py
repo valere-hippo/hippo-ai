@@ -26,6 +26,7 @@ from app.services.chat_profiles import load_chat_profile, build_chat_profile_con
 from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory
 from app.services.project_storage import build_project_files_context
 from app.services.project_report_fallback import build_project_report_generated_file, build_project_report_fallback, _is_valid_report_text
+from app.services.workflow_orchestration import ensure_workflow_for_message
 from app.services.project_skills import build_project_skills_context
 from app.services.project_tools import build_tools_context
 from app.services.desktop_workflows import infer_desktop_launch_actions
@@ -93,6 +94,8 @@ class ChatResponse(BaseModel):
     conversation_id: int | None = None
     generated_files: list[dict[str, str]] = Field(default_factory=list)
     desktop_actions: list[DesktopAction] = Field(default_factory=list)
+    workflow_id: int | None = None
+    workflow_plan: dict | None = None
 
 
 def _extract_json_object(text: str) -> dict | None:
@@ -511,6 +514,29 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             pass
 
     recent_messages = messages[-18:]
+    workflow_plan: dict[str, object] | None = None
+    try:
+        workflow_plan = await ensure_workflow_for_message(
+            db,
+            current_user=current_user,
+            conversation_id=conv_id,
+            project_id=conv_project.id if conv_project else None,
+            source_message=payload.message,
+            final_model_tag=chat_profile.model_name if chat_profile and chat_profile.model_name else None,
+        )
+        if workflow_plan:
+            hippo_messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "Erkannter Multi-Modell-Workflow:\n"
+                        f"{json.dumps(workflow_plan, ensure_ascii=False, indent=2)}\n\n"
+                        "Nutze den Workflow als Leitstruktur für die Antwort. Wenn mehrere Modelle markiert sind, gib eine präzise zusammengefasste Antwort und halte die Reihenfolge und Abhängigkeiten logisch ein."
+                    ),
+                }
+            )
+    except Exception:
+        workflow_plan = None
     for m in recent_messages:
         role = 'user' if m.role == 'user' else 'assistant' if m.role == 'assistant' else 'system'
         hippo_messages.append({"role": role, "content": m.content})
@@ -684,4 +710,14 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     except Exception:
         logger.warning("conversation memory update failed for conversation %s", conv_id)
 
-    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, desktop_actions=desktop_actions)
+    workflow_id = None
+    if workflow_plan:
+        workflow_id_value = workflow_plan.get('workflow_id')
+        if isinstance(workflow_id_value, int):
+            workflow_id = workflow_id_value
+        elif workflow_id_value is not None:
+            try:
+                workflow_id = int(str(workflow_id_value))
+            except Exception:
+                workflow_id = None
+    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, desktop_actions=desktop_actions, workflow_id=workflow_id, workflow_plan=workflow_plan)
