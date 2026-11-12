@@ -2133,6 +2133,70 @@ function clearChatLog() {
   els.emptyState.classList.remove('hidden')
 }
 
+function renderWorkflowSummary(summary) {
+  if (!summary || typeof summary !== 'object') return null
+  const tasks = Array.isArray(summary.tasks) ? summary.tasks : []
+  const container = document.createElement('div')
+  container.className = 'workflow-summary'
+
+  const header = document.createElement('div')
+  header.className = 'workflow-summary-header'
+  const title = document.createElement('div')
+  title.className = 'workflow-summary-title'
+  title.textContent = `Workflow-Auswertung${summary.workflow_id ? ` #${summary.workflow_id}` : ''}`
+  const meta = document.createElement('div')
+  meta.className = 'workflow-summary-meta'
+  meta.textContent = `${tasks.length} Task(s) · ${summary.status || 'unknown'}`
+  header.append(title, meta)
+  container.appendChild(header)
+
+  const finalResult = summary.final_result || {}
+  if (finalResult.content) {
+    const finalBlock = document.createElement('details')
+    finalBlock.className = 'workflow-summary-final'
+    finalBlock.open = true
+    const finalSummary = document.createElement('summary')
+    finalSummary.textContent = 'Endbericht'
+    const finalBody = document.createElement('div')
+    finalBody.className = 'workflow-summary-final-body'
+    finalBody.appendChild(renderRichContent(String(finalResult.content || '')))
+    finalBlock.append(finalSummary, finalBody)
+    container.appendChild(finalBlock)
+  }
+
+  tasks.forEach((task) => {
+    const details = document.createElement('details')
+    details.className = 'workflow-summary-task'
+
+    const summaryEl = document.createElement('summary')
+    const provider = task.provider || task.model_tag || 'openai'
+    const status = task.status || 'unknown'
+    const titleText = task.title || task.task_key || 'Task'
+    summaryEl.textContent = `${task.task_key || '?'} · ${provider} · ${status} · ${titleText}`
+    details.appendChild(summaryEl)
+
+    const body = document.createElement('div')
+    body.className = 'workflow-summary-task-body'
+
+    const info = document.createElement('div')
+    info.className = 'workflow-summary-task-info'
+    info.textContent = `Depends on: ${(task.depends_on || []).join(', ') || 'none'}${task.model ? ` · Model: ${task.model}` : ''}`
+    body.appendChild(info)
+
+    if (task.content) {
+      const content = document.createElement('div')
+      content.className = 'workflow-summary-task-content'
+      content.appendChild(renderRichContent(String(task.content)))
+      body.appendChild(content)
+    }
+
+    details.appendChild(body)
+    container.appendChild(details)
+  })
+
+  return container
+}
+
 function renderMessage(role, content, extras = {}) {
   els.emptyState.classList.add('hidden')
 
@@ -2153,6 +2217,13 @@ function renderMessage(role, content, extras = {}) {
     text.className = 'message-text'
     text.appendChild(renderRichContent(content))
     bubble.appendChild(text)
+  }
+
+  if (extras.workflowSummary) {
+    const workflowBlock = renderWorkflowSummary(extras.workflowSummary)
+    if (workflowBlock) {
+      bubble.appendChild(workflowBlock)
+    }
   }
 
   const actions = document.createElement('div')
@@ -7142,24 +7213,12 @@ async function sendChat() {
     const savedReportNote = savedArtifacts.length
       ? `Bericht im Lieferordner gespeichert:\n${savedArtifacts.map((filePath) => `- ${filePath}`).join('\n')}`
       : ''
-    const workflowSummaryNote = response.workflow_summary?.tasks?.length
-      ? [
-          `Workflow-Auswertung (#${response.workflow_summary.workflow_id || response.workflow_id || '?'})`,
-          ...response.workflow_summary.tasks.map((task) => {
-            const status = task.status || 'unknown'
-            const provider = task.provider || task.model_tag || 'openai'
-            const title = task.title || task.task_key || 'Task'
-            const preview = task.content ? `: ${String(task.content).slice(0, 180)}` : ''
-            return `- ${task.task_key || '?'} · ${provider} · ${status} · ${title}${preview}`
-          }),
-        ].join('\n')
-      : ''
     const workflowNote = response.workflow_id
       ? `Workflow gespeichert (#${response.workflow_id})${response.workflow_plan?.tasks?.length ? ` · ${response.workflow_plan.tasks.length} Task(s)` : ''}`
       : ''
-    const assistantReply = [response.reply, workflowSummaryNote, savedReportNote, workflowNote].filter(Boolean).join('\n\n')
+    const assistantReply = [response.workflow_summary?.final_result?.content || response.reply, savedReportNote, workflowNote].filter(Boolean).join('\n\n')
     if (assistantReply) {
-      renderMessage('assistant', assistantReply, { generatedFiles: response.generated_files })
+      renderMessage('assistant', assistantReply, { generatedFiles: response.generated_files, workflowSummary: response.workflow_summary })
     } else if (response.generated_files?.length) {
       renderMessage('assistant', 'Datei wurde erstellt.', { generatedFiles: response.generated_files })
     } else {
