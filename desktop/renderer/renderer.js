@@ -144,14 +144,9 @@ const els = {
   chatInput: document.getElementById('chat-input'),
   attachImageBtn: document.getElementById('attach-image-btn'),
   attachFileBtn: document.getElementById('attach-file-btn'),
-  qgisModeBtn: document.getElementById('qgis-mode-btn'),
-  analysisQgisModeBtn: document.getElementById('analysis-qgis-mode-btn'),
-  analysisModeBtn: document.getElementById('analysis-mode-btn'),
   imageInput: document.getElementById('image-input'),
   fileInput: document.getElementById('file-input'),
   micBtn: document.getElementById('mic-btn'),
-  createToolFromChatBtn: document.getElementById('create-tool-from-chat-btn'),
-  createSkillFromChatBtn: document.getElementById('create-skill-from-chat-btn'),
   sendChat: document.getElementById('send-chat'),
   voiceStatus: document.getElementById('voice-status'),
   voiceCanvas: document.getElementById('voice-canvas'),
@@ -2777,26 +2772,13 @@ function resetComposer() {
   state.qgisMode = false
   els.chatInput.value = ''
   els.chatInput.style.height = 'auto'
-  if (els.qgisModeBtn) {
-    els.qgisModeBtn.classList.remove('active')
-  }
-  if (els.analysisQgisModeBtn) {
-    els.analysisQgisModeBtn.classList.remove('active')
-  }
-  if (els.analysisModeBtn) {
-    els.analysisModeBtn.classList.add('active')
-  }
+  updateComposerTagSuggestions()
+  updateComposerCommandSuggestions()
   renderAttachmentPreview()
 }
 
 function setComposerQgisMode(active) {
   state.qgisMode = Boolean(active)
-  if (els.qgisModeBtn) {
-    els.qgisModeBtn.classList.toggle('active', state.qgisMode)
-  }
-  if (els.analysisModeBtn) {
-    els.analysisModeBtn.classList.toggle('active', !state.qgisMode)
-  }
 }
 
 function ensureComposerTagSuggestions() {
@@ -2821,6 +2803,27 @@ function ensureComposerTagSuggestions() {
   }
 }
 
+function ensureComposerCommandSuggestions() {
+  const composerMeta = document.querySelector('.composer-meta')
+  if (!composerMeta) return
+
+  let bar = document.getElementById('composer-command-suggestions')
+  if (!bar) {
+    bar = document.createElement('div')
+    bar.id = 'composer-command-suggestions'
+    bar.className = 'composer-command-suggestions hidden'
+    ;['datei', 'qgis'].forEach((command) => {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'composer-command-chip'
+      button.textContent = `/${command}`
+      button.addEventListener('click', () => insertComposerCommand(command))
+      bar.appendChild(button)
+    })
+    composerMeta.appendChild(bar)
+  }
+}
+
 function insertComposerTag(tag) {
   const cleanTag = String(tag || '').replace(/^#/, '').trim()
   if (!cleanTag) return
@@ -2831,11 +2834,29 @@ function insertComposerTag(tag) {
   setComposerText(nextValue)
 }
 
+function insertComposerCommand(command) {
+  const cleanCommand = String(command || '').replace(/^\//, '').trim()
+  if (!cleanCommand) return
+  const value = String(els.chatInput.value || '')
+  const nextValue = value.match(/(^|\s)\/[\w-]*$/)
+    ? value.replace(/(^|\s)\/[\w-]*$/, `$1/${cleanCommand} `)
+    : `${value}${value && !/\s$/.test(value) ? ' ' : ''}/${cleanCommand} `
+  setComposerText(nextValue, { qgis: cleanCommand === 'qgis' })
+}
+
 function updateComposerTagSuggestions() {
   const bar = document.getElementById('composer-tag-suggestions')
   if (!bar) return
   const value = String(els.chatInput.value || '')
   const shouldShow = /(^|\s)#[\w-]*$/.test(value)
+  bar.classList.toggle('hidden', !shouldShow)
+}
+
+function updateComposerCommandSuggestions() {
+  const bar = document.getElementById('composer-command-suggestions')
+  if (!bar) return
+  const value = String(els.chatInput.value || '')
+  const shouldShow = /(^|\s)\/[\w-]*$/.test(value)
   bar.classList.toggle('hidden', !shouldShow)
 }
 
@@ -2845,33 +2866,23 @@ function setComposerText(text, { qgis = false } = {}) {
   setComposerQgisMode(qgis || /^\s*\/qgis\b/i.test(value))
   resizeComposer()
   updateComposerTagSuggestions()
+  updateComposerCommandSuggestions()
   els.chatInput.focus()
   const cursor = els.chatInput.value.length
   els.chatInput.setSelectionRange(cursor, cursor)
 }
 
 function insertQgisCommandIntoComposer() {
-  const current = String(els.chatInput.value || '')
-  const stripped = current.replace(/^\s*\/(?:qgis|datei)\s*/i, '').trim()
-  const nextValue = stripped ? `/qgis ${stripped}` : '/qgis '
-  setComposerText(nextValue, { qgis: true })
+  insertComposerCommand('qgis')
 }
 
 function insertQgisAnalysisCommandIntoComposer() {
-  const current = String(els.chatInput.value || '')
-  const stripped = current.replace(/^\s*\/(?:qgis|datei)\s*/i, '').trim()
-  const nextValue = stripped ? `/qgis /datei ${stripped}` : '/qgis /datei '
-  setComposerText(nextValue, { qgis: true })
-  if (els.analysisQgisModeBtn) {
-    els.analysisQgisModeBtn.classList.add('active')
-  }
+  insertComposerCommand('qgis')
+  insertComposerCommand('datei')
 }
 
 function insertAnalysisCommandIntoComposer() {
-  const current = String(els.chatInput.value || '')
-  const stripped = current.replace(/^\s*\/(?:qgis|datei)\s*/i, '').trim()
-  const nextValue = stripped ? `/datei ${stripped}` : '/datei '
-  setComposerText(nextValue, { qgis: false })
+  insertComposerCommand('datei')
 }
 
 function syncComposerQgisModeFromInput() {
@@ -3055,6 +3066,7 @@ function renderDbStatus() {
   }
 
   const counts = overview.counts || {}
+  const recentModels = Array.isArray(overview.recent_models) ? overview.recent_models : []
   els.dbStatus.classList.remove('hidden')
   els.dbStatus.innerHTML = `
     <div class="db-status-top">
@@ -3074,6 +3086,21 @@ function renderDbStatus() {
       <span class="context-pill">E ${counts.tools || 0}</span>
       <span class="context-pill">M ${counts.model_registry || 0}</span>
       <span class="context-pill">! ${counts.model_errors || 0}</span>
+    </div>
+    <div class="db-status-models">
+      ${recentModels.length ? recentModels.map((item) => {
+        const isAvailable = String(item.status || '').toLowerCase() === 'ok'
+        const providerLabel = [item.provider, item.display_name].filter(Boolean).join(' · ')
+        return `
+          <div class="db-status-model-row">
+            <div class="db-status-model-copy">
+              <strong>${escapeHtml(item.model_id || '')}</strong>
+              <span>${escapeHtml(providerLabel || '')}</span>
+            </div>
+            <span class="context-pill ${isAvailable ? '' : 'danger'}">${isAvailable ? 'Disponible' : 'Indisponible'}</span>
+          </div>
+        `
+      }).join('') : '<div class="muted-copy">Keine Modelle gefunden.</div>'}
     </div>
   `
   const refreshButton = document.getElementById('db-status-refresh')
@@ -7521,6 +7548,7 @@ function bindComposerEvents() {
     resizeComposer()
     syncComposerQgisModeFromInput()
     updateComposerTagSuggestions()
+    updateComposerCommandSuggestions()
   })
   els.chatInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -7536,18 +7564,6 @@ function bindComposerEvents() {
 
   els.attachFileBtn.addEventListener('click', () => {
     els.fileInput.click()
-  })
-
-  els.qgisModeBtn?.addEventListener('click', () => {
-    insertQgisCommandIntoComposer()
-  })
-
-  els.analysisQgisModeBtn?.addEventListener('click', () => {
-    insertQgisAnalysisCommandIntoComposer()
-  })
-
-  els.analysisModeBtn?.addEventListener('click', () => {
-    insertAnalysisCommandIntoComposer()
   })
 
   els.imageInput.addEventListener('change', async () => {
@@ -7578,8 +7594,6 @@ function bindComposerEvents() {
     }
   })
 
-  els.createToolFromChatBtn?.addEventListener('click', () => createConversationArtifact('tool'))
-  els.createSkillFromChatBtn?.addEventListener('click', () => createConversationArtifact('skill'))
   els.sendChat.addEventListener('click', sendChat)
 }
 
@@ -7623,6 +7637,7 @@ async function bootstrap() {
   bindComposerEvents()
   ensureComposerProfileSelector()
   ensureComposerTagSuggestions()
+  ensureComposerCommandSuggestions()
   window.addEventListener('resize', () => {
     if (!isMobileViewport()) {
       closeSidebarDrawer()
