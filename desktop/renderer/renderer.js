@@ -7314,7 +7314,7 @@ async function sendChat() {
     await loadConversations()
     renderContext()
 
-    const savedArtifacts = await saveGeneratedArtifacts(response.generated_files, deliveryFolder)
+    const savedArtifacts = response.file_output_requested ? await saveGeneratedArtifacts(response.generated_files, deliveryFolder) : []
     if (response.desktop_actions?.length) {
       showLoader('Hippo steuert den PC...')
       const actionResult = await executeDesktopActions(response.desktop_actions)
@@ -7334,8 +7334,8 @@ async function sendChat() {
       : ''
     const assistantReply = [response.workflow_summary?.final_result?.content || response.reply, savedReportNote, workflowNote].filter(Boolean).join('\n\n')
     if (assistantReply) {
-      renderMessage('assistant', assistantReply, { generatedFiles: response.generated_files, workflowSummary: response.workflow_summary, workflowResolution: response.workflow_resolution })
-    } else if (response.generated_files?.length) {
+      renderMessage('assistant', assistantReply, { generatedFiles: response.file_output_requested ? response.generated_files : [], workflowSummary: response.workflow_summary, workflowResolution: response.workflow_resolution })
+    } else if (response.file_output_requested && response.generated_files?.length) {
       renderMessage('assistant', 'Datei wurde erstellt.', { generatedFiles: response.generated_files })
     } else {
       const legacySaved = showGeneratedFile(response.reply || '', deliveryFolder)

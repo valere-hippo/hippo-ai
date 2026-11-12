@@ -95,6 +95,7 @@ class ChatResponse(BaseModel):
     reply: str
     conversation_id: int | None = None
     generated_files: list[dict[str, str]] = Field(default_factory=list)
+    file_output_requested: bool = False
     desktop_actions: list[DesktopAction] = Field(default_factory=list)
     workflow_id: int | None = None
     workflow_plan: dict | None = None
@@ -770,4 +771,4 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             logger.warning('workflow summary export failed for conversation %s', conv_id)
 
-    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, desktop_actions=desktop_actions, workflow_id=workflow_id, workflow_plan=workflow_plan, workflow_summary=workflow_summary, workflow_resolution=workflow_resolution)
+    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, file_output_requested=explicit_file_request, desktop_actions=desktop_actions, workflow_id=workflow_id, workflow_plan=workflow_plan, workflow_summary=workflow_summary, workflow_resolution=workflow_resolution)

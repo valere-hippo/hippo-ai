@@ -74,6 +74,7 @@ class ChatResponse(BaseModel):
     reply: str
     conversation_id: int | None = None
     generated_files: list[dict[str, str]] = Field(default_factory=list)
+    file_output_requested: bool = False
     workflow_id: int | None = None
     workflow_plan: dict | None = None
     workflow_summary: dict | None = None
@@ -561,6 +562,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         reply=reply_text,
         conversation_id=conv_id,
         generated_files=serialized_files,
+        file_output_requested=explicit_file_request,
         workflow_id=workflow_id,
         workflow_plan=workflow_plan,
         workflow_summary=workflow_summary,
