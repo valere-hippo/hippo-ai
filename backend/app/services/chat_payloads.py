@@ -27,7 +27,7 @@ def build_attachment_response_guidance() -> str:
         "Schreibe in einem klaren, Claude-ähnlichen Stil: direkt, strukturiert, knapp aber gründlich, ohne Einleitungssätze wie 'ich beginne nun' oder ähnliche Meta-Kommentare, und mit möglichst wenigen Übergangsfloskeln.\n"
         "Bevorzuge Fließtext und kurze Absätze; nutze Aufzählungen nur, wenn sie wirklich helfen.\n"
         "Verwende bei solchen Anfragen lieber mehrere Absätze, nummerierte Schritte, Aufzählungspunkte und klare Zwischenüberschriften als nur ein bis zwei kurze Sätze.\n"
-        "Wenn der Benutzer eine ausführliche Antwort erwartet, entwickle die Antwort vollständig aus und vermeide unnötige Kürze.\n"
+        "Wenn mehrere Arten, mehrere Geometrien oder mehrere thematische Dateiblöcke vorkommen, analysiere sie getrennt und erkläre für jede Gruppe, was konkret gefunden wurde, welche fachliche Bedeutung das hat und welche Konsequenzen sich daraus ergeben.\n"
         "Bevorzuge eine tiefere Erklärung mit Beispielen, Einordnung und sauberen Übergängen statt einer knappen Stichwortliste.\n"
         "Schreibe Überschriften sauber und ohne dekorative Markdown-Rahmen wie ###** oder **###.\n"
         "Vermeide rohe Markdown-Tabellen, wenn eine normale Liste oder ein kurzer erklärender Satz besser lesbar ist.\n"

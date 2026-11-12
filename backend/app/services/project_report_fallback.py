@@ -269,15 +269,30 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
                 continue
             lower_candidate = candidate.lower()
             if any(token in lower_candidate for token in ('fledermaus', 'bat', 'quartier')):
-                report.append(f'- {candidate}: Für diese Artengruppe sind Quartiere, Flugrouten, Jagdhabitate und eine passende Gebäudestruktur maßgeblich. Fachlich bedeutet das: Die bloße Präsenz eines Fundpunkts reicht nicht; entscheidend sind Erreichbarkeit, Ruhe, Strukturvielfalt und ein zusammenhängender Lebensraum.')
+                report.append(f'- {candidate}')
+                report.append('  Beobachtung: Die Unterlagen enthalten Hinweise auf Fledermäuse bzw. Quartierbezug.')
+                report.append('  Fachliche Bedeutung: Das spricht für einen potenziellen Quartier-, Zugangs- oder Jagdhabitatbezug und damit für eine hohe Sensitivität gegenüber baulichen Eingriffen.')
+                report.append('  Implikation: Für die Bewertung sind Einflugmöglichkeiten, Hangplätze, Störungsarmut, Flugkorridore und die Anbindung an Nahrungshabitate maßgeblich.')
             elif 'haselmaus' in lower_candidate:
-                report.append(f'- {candidate}: Die Art ist als streng geschützte Kleinsäuger-Art zu bewerten; entscheidend sind Quartiermöglichkeiten, Gehölzvernetzung, Störungsarmut und die Qualität der direkten Umgebung. Daraus folgt fachlich, dass lineare Gehölzstrukturen, Saumbereiche und Rückzugsräume besonders relevant sind.')
+                report.append(f'- {candidate}')
+                report.append('  Beobachtung: Die Art ist im Projektkontext als streng geschütztes Kleinsäuger-Taxon relevant.')
+                report.append('  Fachliche Bedeutung: Die Nachweislage deutet auf eine Habitatbindung an Gehölzstrukturen, Saumbereiche und Rückzugsräume hin.')
+                report.append('  Implikation: Zu prüfen sind Vernetzung, Habitatsqualität, Störungsdruck und die Frage, ob die Fläche als Kern- oder lediglich als Randlebensraum wirkt.')
             elif any(token in lower_candidate for token in ('maus',)):
-                report.append(f'- {candidate}: Die Art ist als kleinsäugerbezogen zu bewerten; relevant sind Schutzstatus, Lebensraumstruktur und die funktionale Anbindung an die Umgebung. Fachlich ist zu prüfen, ob der Fund auf ein dauerhaft nutzbares Habitat oder nur auf einen Durchzug hindeutet.')
+                report.append(f'- {candidate}')
+                report.append('  Beobachtung: Es liegt ein Kleinsäugerbezug vor, der fachlich nicht nur auf ein Einzeltier, sondern auf die Habitatfunktion der Fläche verweist.')
+                report.append('  Fachliche Bedeutung: Der Befund kann auf Nutzung, Durchquerung oder zeitweise Anwesenheit hinweisen und sollte nicht isoliert interpretiert werden.')
+                report.append('  Implikation: Relevant sind Deckung, Vernetzung, Störungsniveau und die Frage, ob die Fläche Teil eines funktionalen Verbunds ist.')
             elif any(token in lower_candidate for token in ('rastvogel', 'vogel', 'avifauna')):
-                report.append(f'- {candidate}: Für diese Vogelgruppe sind Ruhebereiche, Nahrungshabitate, Störungsdruck und die räumliche Lage der Reviere entscheidend. Das impliziert, dass Revierzentren, Brutverdacht und Nutzungshäufigkeit getrennt bewertet werden müssen.')
+                report.append(f'- {candidate}')
+                report.append('  Beobachtung: Der Kontext verweist auf Vogelvorkommen oder avifaunistische Datensätze.')
+                report.append('  Fachliche Bedeutung: Für Vögel ist nicht nur der Nachweis selbst wichtig, sondern auch Brutstatus, Revierausdehnung, Nutzungshäufigkeit und das Umfeld.')
+                report.append('  Implikation: Erforderlich ist eine getrennte Betrachtung von Brutverdacht, Revierzentrum, Nahrungshabitat und Störungseinflüssen.')
             else:
-                report.append(f'- {candidate}: Die Art ist separat zu bewerten; relevant sind Vorkommen, Strukturbezug, Schutzstatus und die räumliche Einordnung im Projektgebiet.')
+                report.append(f'- {candidate}')
+                report.append('  Beobachtung: Für diese Art liegt ein fachlich relevanter Hinweis im Datensatz vor.')
+                report.append('  Fachliche Bedeutung: Der Hinweis ist im Kontext von Lebensraum, Schutzstatus und räumlicher Einbindung zu bewerten.')
+                report.append('  Implikation: Die Interpretation sollte artspezifisch und nicht nur datensatzbezogen erfolgen.')
 
     report.extend(['', 'Schlussfolgerung'])
     if has('.shp', '.dbf', '.prj', '.shx'):
