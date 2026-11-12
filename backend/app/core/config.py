@@ -33,9 +33,19 @@ class Settings(BaseSettings):
     # Deprecated: local attachment parsing now covers images/screenshots/documents.
     hippo_vision_model: str | None = None
 
-    # pCloud project source storage
-    pcloud_api_base_url: str = Field(default="https://api.pcloud.com", validation_alias=AliasChoices("PCLOUD_API_BASE_URL", "PCLOUD_API_URL"))
-    pcloud_access_token: str | None = Field(default=None, validation_alias=AliasChoices("PCLOUD_ACCESS_TOKEN", "PCLOUD_TOKEN"))
+    # Provider-specific model hubs for workflow routing
+    claude_api_url: str | None = Field(default=None, validation_alias=AliasChoices("CLAUDE_API_BASE_URL", "ANTHROPIC_API_URL"))
+    claude_api_key: str | None = Field(default=None, validation_alias=AliasChoices("CLAUDE_API_KEY", "ANTHROPIC_API_KEY"))
+    claude_model: str | None = Field(default="claude-3-5-sonnet", validation_alias=AliasChoices("CLAUDE_MODEL", "ANTHROPIC_MODEL"))
+    deepseek_api_url: str | None = Field(default=None, validation_alias=AliasChoices("DEEPSEEK_API_BASE_URL", "DEEPSEEK_API_URL"))
+    deepseek_api_key: str | None = Field(default=None, validation_alias=AliasChoices("DEEPSEEK_API_KEY",))
+    deepseek_model: str | None = Field(default="deepseek-chat", validation_alias=AliasChoices("DEEPSEEK_MODEL",))
+    qwen_api_url: str | None = Field(default=None, validation_alias=AliasChoices("QWEN_API_BASE_URL", "QWEN_API_URL", "ALIBABA_API_URL"))
+    qwen_api_key: str | None = Field(default=None, validation_alias=AliasChoices("QWEN_API_KEY", "ALIBABA_API_KEY"))
+    qwen_model: str | None = Field(default="qwen-plus", validation_alias=AliasChoices("QWEN_MODEL", "ALIBABA_MODEL"))
+    tencent_api_url: str | None = Field(default=None, validation_alias=AliasChoices("TENCENT_API_BASE_URL", "TENCENT_API_URL"))
+    tencent_api_key: str | None = Field(default=None, validation_alias=AliasChoices("TENCENT_API_KEY",))
+    tencent_model: str | None = Field(default="hunyuan-turbo", validation_alias=AliasChoices("TENCENT_MODEL", "HUNYUAN_MODEL"))
 
     # AWS / S3 project storage
     aws_region: str | None = None

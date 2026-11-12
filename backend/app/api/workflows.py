@@ -18,6 +18,7 @@ from app.schemas.workflow import (
 )
 from app.services.permissions import has_project_permission
 from app.services.workflow_planner import build_workflow_metadata
+from app.services.workflow_executor import execute_workflow
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -169,3 +170,14 @@ async def get_workflow(workflow_id: int, db: DbSession, current_user=Depends(get
     project = await _load_project_if_needed(db, workflow.project_id)
     await _assert_project_access(db, current_user, project)
     return await _load_workflow_with_tasks(db, workflow_id)
+
+
+@router.post("/{workflow_id}/execute")
+async def run_workflow(workflow_id: int, db: DbSession, current_user=Depends(get_current_user)):
+    workflow_res = await db.execute(select(AIWorkflow).where(AIWorkflow.id == workflow_id))
+    workflow = workflow_res.scalar_one_or_none()
+    if workflow is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow nicht gefunden.")
+    project = await _load_project_if_needed(db, workflow.project_id)
+    await _assert_project_access(db, current_user, project)
+    return await execute_workflow(db, workflow_id)
