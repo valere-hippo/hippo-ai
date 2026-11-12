@@ -7142,10 +7142,22 @@ async function sendChat() {
     const savedReportNote = savedArtifacts.length
       ? `Bericht im Lieferordner gespeichert:\n${savedArtifacts.map((filePath) => `- ${filePath}`).join('\n')}`
       : ''
+    const workflowSummaryNote = response.workflow_summary?.tasks?.length
+      ? [
+          `Workflow-Auswertung (#${response.workflow_summary.workflow_id || response.workflow_id || '?'})`,
+          ...response.workflow_summary.tasks.map((task) => {
+            const status = task.status || 'unknown'
+            const provider = task.provider || task.model_tag || 'openai'
+            const title = task.title || task.task_key || 'Task'
+            const preview = task.content ? `: ${String(task.content).slice(0, 180)}` : ''
+            return `- ${task.task_key || '?'} · ${provider} · ${status} · ${title}${preview}`
+          }),
+        ].join('\n')
+      : ''
     const workflowNote = response.workflow_id
       ? `Workflow gespeichert (#${response.workflow_id})${response.workflow_plan?.tasks?.length ? ` · ${response.workflow_plan.tasks.length} Task(s)` : ''}`
       : ''
-    const assistantReply = [response.reply, savedReportNote, workflowNote].filter(Boolean).join('\n\n')
+    const assistantReply = [response.reply, workflowSummaryNote, savedReportNote, workflowNote].filter(Boolean).join('\n\n')
     if (assistantReply) {
       renderMessage('assistant', assistantReply, { generatedFiles: response.generated_files })
     } else if (response.generated_files?.length) {

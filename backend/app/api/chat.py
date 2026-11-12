@@ -76,6 +76,7 @@ class ChatResponse(BaseModel):
     generated_files: list[dict[str, str]] = Field(default_factory=list)
     workflow_id: int | None = None
     workflow_plan: dict | None = None
+    workflow_summary: dict | None = None
 
 
 class ChatMessageResponse(BaseModel):
@@ -370,6 +371,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         hippo_messages[-1]["content"] = build_message_content(payload.message, payload.attachments, include_images=True)
 
     reply_text = ''
+    workflow_execution_result = None
     if workflow_plan:
         workflow_id = int(str(workflow_plan.get('workflow_id') or '0'))
         if workflow_id <= 0:
@@ -509,6 +511,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         logger.warning("conversation memory update failed for conversation %s", conv_id)
 
     workflow_id = None
+    workflow_summary = None
     if workflow_plan:
         workflow_id_value = workflow_plan.get('workflow_id')
         if isinstance(workflow_id_value, int):
@@ -518,12 +521,14 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                 workflow_id = int(str(workflow_id_value))
             except Exception:
                 workflow_id = None
+        workflow_summary = workflow_execution_result.get('summary') if isinstance(workflow_execution_result, dict) else None
     return ChatResponse(
         reply=reply_text,
         conversation_id=conv_id,
         generated_files=serialized_files,
         workflow_id=workflow_id,
         workflow_plan=workflow_plan,
+        workflow_summary=workflow_summary,
     )
 
 

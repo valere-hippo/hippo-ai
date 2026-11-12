@@ -12,6 +12,7 @@ from app.models.project import Project
 from app.models.workflow import AIWorkflow, AIWorkflowTask
 from app.services.project_storage import build_project_files_context
 from app.services.provider_clients import build_chat_completion_payload, build_provider_headers, resolve_provider_runtime
+from app.services.workflow_planner import build_workflow_execution_summary
 
 
 async def _load_workflow_tasks(db: AsyncSession, workflow_id: int) -> list[AIWorkflowTask]:
@@ -224,8 +225,13 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
     workflow.status = "completed"
     workflow.updated_at = datetime.utcnow()
     await db.commit()
+    summary = build_workflow_execution_summary(
+        {"workflow_id": workflow.id, "final_model_tag": workflow.final_model_tag, "tasks": [task.__dict__ for task in tasks]},
+        {"workflow_id": workflow.id, "status": workflow.status, "results": executed},
+    )
     return {
         "workflow_id": workflow.id,
         "status": workflow.status,
         "results": executed,
+        "summary": summary,
     }

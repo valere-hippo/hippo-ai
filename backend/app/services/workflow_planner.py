@@ -185,35 +185,67 @@ def build_workflow_metadata(message: str, *, final_model_tag: str | None = None,
     }
 
 
-def summarize_workflow_execution(plan: dict[str, Any], execution: dict[str, Any]) -> str:
+def build_workflow_execution_summary(plan: dict[str, Any], execution: dict[str, Any]) -> dict[str, Any]:
     tasks = plan.get("tasks") or []
     results = execution.get("results") or {}
-    lines: list[str] = []
-    lines.append(f"Workflow-ID: {execution.get('workflow_id')}")
-    lines.append(f"Status: {execution.get('status') or 'unknown'}")
-    lines.append("")
-    lines.append("Teilaufgaben")
+    task_summaries: list[dict[str, Any]] = []
+    final_result: dict[str, Any] | None = None
+
     for task in tasks:
         task_key = task.get("task_key")
         result = results.get(task_key, {}) if isinstance(results, dict) else {}
         content = str(result.get("content") or "").strip()
-        model_tag = task.get("model_tag") or result.get("provider") or "openai"
+        provider = str(result.get("provider") or task.get("model_tag") or "openai")
+        model = str(result.get("model") or "")
+        status = str(result.get("status") or ("done" if content else "empty"))
+        summary = {
+            "task_key": task_key,
+            "title": task.get("title"),
+            "model_tag": task.get("model_tag"),
+            "provider": provider,
+            "model": model,
+            "status": status,
+            "depends_on": task.get("depends_on") or [],
+            "is_final": task.get("model_tag") == plan.get("final_model_tag"),
+            "content": content,
+        }
+        task_summaries.append(summary)
+        if summary["is_final"] and content:
+            final_result = summary
+
+    if final_result is None:
+        for summary in reversed(task_summaries):
+            if summary["content"]:
+                final_result = summary
+                break
+
+    return {
+        "workflow_id": execution.get("workflow_id"),
+        "status": execution.get("status") or "unknown",
+        "task_count": len(task_summaries),
+        "tasks": task_summaries,
+        "final_result": final_result or {},
+    }
+
+
+def summarize_workflow_execution(plan: dict[str, Any], execution: dict[str, Any]) -> str:
+    summary = build_workflow_execution_summary(plan, execution)
+    tasks = summary.get("tasks") or []
+    lines: list[str] = []
+    lines.append(f"Workflow-ID: {summary.get('workflow_id')}")
+    lines.append(f"Status: {summary.get('status') or 'unknown'}")
+    lines.append("")
+    lines.append("Teilaufgaben")
+    for task in tasks:
+        content = str(task.get("content") or "").strip()
+        model_tag = task.get("model_tag") or task.get("provider") or "openai"
         status = "done" if content else "empty"
-        lines.append(f"- {task_key} · {model_tag} · {status} · {task.get('title')}")
+        lines.append(f"- {task.get('task_key')} · {model_tag} · {status} · {task.get('title')}")
         if content:
             preview = content if len(content) <= 1200 else content[:1200].rstrip() + "…"
             lines.append(f"  {preview}")
-    final_task = None
-    for task in reversed(tasks):
-        if task.get("model_tag") == plan.get("final_model_tag"):
-            final_task = task
-            break
-    if final_task is None and tasks:
-        final_task = tasks[-1]
-    final_key = final_task.get("task_key") if final_task else None
-    final_content = ""
-    if final_key and isinstance(results, dict):
-        final_content = str(results.get(final_key, {}).get("content") or "").strip()
+    final_result = summary.get("final_result") or {}
+    final_content = str(final_result.get("content") or "").strip()
     if final_content:
         lines.append("")
         lines.append("Endbericht")

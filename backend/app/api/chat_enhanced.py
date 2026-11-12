@@ -98,6 +98,7 @@ class ChatResponse(BaseModel):
     desktop_actions: list[DesktopAction] = Field(default_factory=list)
     workflow_id: int | None = None
     workflow_plan: dict | None = None
+    workflow_summary: dict | None = None
 
 
 def _extract_json_object(text: str) -> dict | None:
@@ -544,6 +545,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         hippo_messages.append({"role": role, "content": m.content})
 
     reply_text = ''
+    workflow_execution_result = None
     if workflow_plan:
         workflow_id = int(str(workflow_plan.get('workflow_id') or '0'))
         if workflow_id <= 0:
@@ -721,6 +723,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         logger.warning("conversation memory update failed for conversation %s", conv_id)
 
     workflow_id = None
+    workflow_summary = None
     if workflow_plan:
         workflow_id_value = workflow_plan.get('workflow_id')
         if isinstance(workflow_id_value, int):
@@ -730,4 +733,5 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 workflow_id = int(str(workflow_id_value))
             except Exception:
                 workflow_id = None
-    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, desktop_actions=desktop_actions, workflow_id=workflow_id, workflow_plan=workflow_plan)
+        workflow_summary = workflow_execution_result.get('summary') if isinstance(workflow_execution_result, dict) else None
+    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, desktop_actions=desktop_actions, workflow_id=workflow_id, workflow_plan=workflow_plan, workflow_summary=workflow_summary)
