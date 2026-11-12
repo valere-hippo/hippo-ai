@@ -40,7 +40,7 @@ services:
     depends_on:
       - redis
       - api
-    command: ["python", "-u", "worker.py"]
+    command: ["python", "-u", "-m", "app.worker"]
     deploy:
       resources: {}
 

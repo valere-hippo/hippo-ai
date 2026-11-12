@@ -164,6 +164,33 @@ async def _call_provider(task: AIWorkflowTask, workflow: AIWorkflow, dependency_
     }
 
 
+async def queue_workflow_execution(db: AsyncSession, workflow_id: int) -> None:
+    workflow_res = await db.execute(select(AIWorkflow).where(AIWorkflow.id == workflow_id))
+    workflow = workflow_res.scalar_one_or_none()
+    if workflow is None:
+        raise RuntimeError("Workflow nicht gefunden.")
+    workflow.status = "queued"
+    workflow.updated_at = datetime.utcnow()
+    await db.commit()
+
+
+async def claim_next_queued_workflow(db: AsyncSession) -> int | None:
+    result = await db.execute(
+        select(AIWorkflow)
+        .where(AIWorkflow.status == "queued")
+        .order_by(AIWorkflow.updated_at.asc(), AIWorkflow.created_at.asc(), AIWorkflow.id.asc())
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    workflow = result.scalar_one_or_none()
+    if workflow is None:
+        return None
+    workflow.status = "running"
+    workflow.updated_at = datetime.utcnow()
+    await db.commit()
+    return workflow.id
+
+
 async def execute_workflow_by_id(workflow_id: int) -> dict[str, Any]:
     async with AsyncSessionLocal() as db:
         return await execute_workflow(db, workflow_id)
