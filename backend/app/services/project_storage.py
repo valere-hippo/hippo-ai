@@ -1596,6 +1596,13 @@ def _normalize_chat_completion_url(value: str | None) -> str | None:
     return f"{raw}/v1/chat/completions"
 
 
+def _uses_openai_reasoning_completions(model_name: str | None) -> bool:
+    raw = (model_name or "").strip().lower()
+    if "/" in raw:
+        raw = raw.rsplit("/", 1)[-1]
+    return raw.startswith("gpt-5") or raw.startswith("o1") or raw.startswith("o3") or raw.startswith("o4")
+
+
 def _extract_chat_response_text(payload: Any) -> str:
     if isinstance(payload, dict) and payload.get("choices"):
         try:
@@ -1628,12 +1635,19 @@ async def _call_chat_completion(prompt_messages: list[dict[str, str]], *, temper
     base_url = _normalize_chat_completion_url(settings.hippo_api_url)
     if not base_url:
         return ""
+    reasoning_model = _uses_openai_reasoning_completions(settings.hippo_model)
     payload = {
         "model": settings.hippo_model,
         "messages": prompt_messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
+        "max_completion_tokens": max_tokens if reasoning_model else None,
+        "temperature": None if reasoning_model else temperature,
     }
+    if not reasoning_model:
+        payload["max_tokens"] = max_tokens
+        payload.pop("max_completion_tokens", None)
+        payload.pop("temperature", None)
+    else:
+        payload.pop("temperature", None)
     headers = {"Content-Type": "application/json"}
     if settings.hippo_api_key:
         headers["Authorization"] = f"Bearer {settings.hippo_api_key}"

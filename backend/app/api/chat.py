@@ -51,6 +51,13 @@ def _normalize_chat_base_url(value: str | None) -> str | None:
         return f"{raw}/chat/completions"
     return f"{raw}/v1/chat/completions"
 
+
+def _uses_openai_reasoning_completions(model_name: str | None) -> bool:
+    raw = (model_name or "").strip().lower()
+    if "/" in raw:
+        raw = raw.rsplit("/", 1)[-1]
+    return raw.startswith("gpt-5") or raw.startswith("o1") or raw.startswith("o3") or raw.startswith("o4")
+
 class ChatRequest(BaseModel):
     conversation_id: int | None = None
     project_id: int | None = None
@@ -353,12 +360,19 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         max_tokens = await resolve_chat_max_tokens(db, settings.hippo_response_max_tokens, settings.hippo_response_max_tokens_long)
         if payload.attachments or conv_project is not None:
             max_tokens = max(512, min(max_tokens, settings.hippo_response_max_tokens_long))
+        reasoning_model = _uses_openai_reasoning_completions(model_name)
         model_payload = {
             "model": model_name,
             "messages": hippo_messages,
-            "temperature": 0.45 if (payload.attachments or conv_project is not None) else 0.7,
-            "max_tokens": max_tokens,
+            "max_completion_tokens": max_tokens if reasoning_model else None,
+            "temperature": None if reasoning_model else (0.45 if (payload.attachments or conv_project is not None) else 0.7),
         }
+        if not reasoning_model:
+            model_payload["max_tokens"] = max_tokens
+            model_payload.pop("max_completion_tokens", None)
+            model_payload.pop("temperature", None)
+        else:
+            model_payload.pop("temperature", None)
         logger.info(
             "Calling Hippo model | url=%s | model=%s | max_tokens=%s | timeout=%s | auth=%s | project=%s | attachments=%s",
             settings.hippo_api_url,

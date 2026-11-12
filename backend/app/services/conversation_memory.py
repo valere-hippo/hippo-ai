@@ -30,6 +30,13 @@ def _normalize_chat_base_url(value: str | None) -> str | None:
     return f"{raw}/v1/chat/completions"
 
 
+def _uses_openai_reasoning_completions(model_name: str | None) -> bool:
+    raw = (model_name or "").strip().lower()
+    if "/" in raw:
+        raw = raw.rsplit("/", 1)[-1]
+    return raw.startswith("gpt-5") or raw.startswith("o1") or raw.startswith("o3") or raw.startswith("o4")
+
+
 def _extract_json_object(text: str) -> dict[str, Any] | None:
     source = (text or "").strip()
     if not source:
@@ -173,15 +180,22 @@ async def refresh_conversation_memory(
     if settings.hippo_api_key:
         headers["Authorization"] = f"Bearer {settings.hippo_api_key}"
 
+    reasoning_model = _uses_openai_reasoning_completions(settings.hippo_model)
     payload = {
         "model": settings.hippo_model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.1,
-        "max_tokens": 320,
+        "max_completion_tokens": 320 if reasoning_model else None,
+        "temperature": None if reasoning_model else 0.1,
     }
+    if not reasoning_model:
+        payload["max_tokens"] = 320
+        payload.pop("max_completion_tokens", None)
+        payload.pop("temperature", None)
+    else:
+        payload.pop("temperature", None)
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10.0)) as client:

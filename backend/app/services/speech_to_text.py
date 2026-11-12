@@ -24,6 +24,13 @@ def _normalize_chat_base_url(value: str | None) -> str | None:
     return f"{raw}/v1/chat/completions"
 
 
+def _uses_openai_reasoning_completions(model_name: str | None) -> bool:
+    raw = (model_name or "").strip().lower()
+    if "/" in raw:
+        raw = raw.rsplit("/", 1)[-1]
+    return raw.startswith("gpt-5") or raw.startswith("o1") or raw.startswith("o3") or raw.startswith("o4")
+
+
 @lru_cache(maxsize=16)
 def _guess_mime_type(audio_path: str | Path) -> str:
     suffix = Path(audio_path).suffix.lower()
@@ -56,6 +63,7 @@ async def transcribe_audio_file(audio_path: str | Path) -> str:
         "Wenn die Sprache erkennbar ist, behalte sie bei. "
         "Gib nur den reinen Text zurück."
     )
+    reasoning_model = _uses_openai_reasoning_completions(settings.hippo_model)
     payload: dict[str, Any] = {
         "model": settings.hippo_model,
         "messages": [
@@ -67,9 +75,15 @@ async def transcribe_audio_file(audio_path: str | Path) -> str:
                 ],
             }
         ],
-        "temperature": 0.0,
-        "max_tokens": 1024,
+        "max_completion_tokens": 1024 if reasoning_model else None,
+        "temperature": None if reasoning_model else 0.0,
     }
+    if not reasoning_model:
+        payload["max_tokens"] = 1024
+        payload.pop("max_completion_tokens", None)
+        payload.pop("temperature", None)
+    else:
+        payload.pop("temperature", None)
     headers = {"Content-Type": "application/json"}
     api_key = (settings.hippo_api_key or "").strip()
     if api_key:

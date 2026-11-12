@@ -8,6 +8,13 @@ import httpx
 
 from app.core.config import settings
 
+
+def _uses_openai_reasoning_completions(model_name: str | None) -> bool:
+    raw = (model_name or "").strip().lower()
+    if "/" in raw:
+        raw = raw.rsplit("/", 1)[-1]
+    return raw.startswith("gpt-5") or raw.startswith("o1") or raw.startswith("o3") or raw.startswith("o4")
+
 _ALLOWED_ELEMENT_TYPES = {
     "sun",
     "moon",
@@ -158,15 +165,22 @@ async def build_image_scene_spec(message: str, assistant_reply: str | None = Non
         f"Erlaubte Typen: {', '.join(sorted(_ALLOWED_ELEMENT_TYPES))}. "
         "Benutze nur diese Typen. Wähle eine Illustration, die das Sujet deutlich und ohne Text vermittelt."
     )
+    reasoning_model = _uses_openai_reasoning_completions(settings.hippo_model)
     payload = {
         "model": settings.hippo_model,
         "messages": [
             {"role": "system", "content": prompt},
             {"role": "user", "content": message.strip()},
         ],
-        "temperature": 0.2,
-        "max_tokens": 384,
+        "max_completion_tokens": 384 if reasoning_model else None,
+        "temperature": None if reasoning_model else 0.2,
     }
+    if not reasoning_model:
+        payload["max_tokens"] = 384
+        payload.pop("max_completion_tokens", None)
+        payload.pop("temperature", None)
+    else:
+        payload.pop("temperature", None)
     headers = {"Content-Type": "application/json"}
     api_key = (settings.hippo_api_key or "").strip()
     if api_key:
