@@ -109,3 +109,24 @@ def test_build_project_files_context_uses_multi_pass_model_synthesis_when_contex
 
     assert result == 'FINAL-SYNTHESIS'
     assert len(calls) >= 2
+
+
+def test_list_project_files_filters_by_source_prefixes():
+    project = SimpleNamespace(
+        watched_folder='/data/shared-project',
+        pcloud_path=None,
+        pcloud_folder_id=None,
+    )
+    fake_files = [
+        SimpleNamespace(filename='images/a.png', size=10, modified_at=datetime(2024, 1, 1), storage='local'),
+        SimpleNamespace(filename='texts/b.txt', size=10, modified_at=datetime(2024, 1, 1), storage='local'),
+    ]
+
+    original_iter = project_storage._iter_local_project_files
+    try:
+        project_storage._iter_local_project_files = lambda _project: fake_files
+        result = project_storage.list_project_files(project, source_prefixes=['images/'])
+    finally:
+        project_storage._iter_local_project_files = original_iter
+
+    assert [item.filename for item in result] == ['images/a.png']

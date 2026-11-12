@@ -8,7 +8,9 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.project import Project
 from app.models.workflow import AIWorkflow, AIWorkflowTask
+from app.services.project_storage import build_project_files_context
 from app.services.provider_clients import build_chat_completion_payload, build_provider_headers, resolve_provider_runtime
 
 
@@ -32,7 +34,79 @@ def _task_ready(task: AIWorkflowTask, tasks_by_key: dict[str, AIWorkflowTask]) -
     return all(tasks_by_key.get(dep) and tasks_by_key[dep].status == "done" for dep in deps)
 
 
-def _build_task_messages(workflow: AIWorkflow, task: AIWorkflowTask, dependency_texts: list[str]) -> list[dict[str, str]]:
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        candidate = item.strip().lower()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        result.append(candidate)
+    return result
+
+
+def _task_source_prefixes(task: AIWorkflowTask) -> list[str]:
+    text = f"{getattr(task, 'title', '')} {getattr(task, 'instruction', '')} {getattr(task, 'input_kind', '')}".lower()
+    prefixes: list[str] = []
+
+    if getattr(task, "input_kind", "") == "images" or any(token in text for token in ("bild", "image", "photo", "foto", "scan", "ortho", "orthofoto")):
+        prefixes.extend(["image", "images", "bild", "bilder", "photo", "photos", "foto", "fotos"])
+    if getattr(task, "input_kind", "") == "geodata" or any(token in text for token in ("geo", "gis", "qgis", "shape", "shp", "gpkg", "wms", "wfs", "kart", "koord", "geod")):
+        prefixes.extend(["geo", "geodata", "gis", "qgis", "shape", "shp", "gpkg", "kart", "karten", "koordin", "coords"])
+    if getattr(task, "input_kind", "") == "text" or any(token in text for token in ("text", "bericht", "doc", "docx", "pdf", "csv", "xlsx", "txt", "rtf")):
+        prefixes.extend(["text", "texte", "docs", "doc", "docx", "pdf", "csv", "xlsx", "bericht", "report", "txt"])
+
+    if not prefixes and getattr(task, "input_kind", "") not in {"mixed", ""}:
+        prefixes.append(str(getattr(task, "input_kind", "")).strip().lower())
+    return _dedupe_preserve_order(prefixes)
+
+
+def _context_is_uninformative(context: str) -> bool:
+    lowered = (context or "").lower()
+    return any(
+        phrase in lowered
+        for phrase in (
+            "keine dateien zuverlässig ausgelesen",
+            "keine dateien sichtbar",
+            "noch keine dateien",
+            "leerer ordner",
+            "kontext fehlt",
+            "nicht lesbar",
+        )
+    )
+
+
+async def build_task_file_context(db: AsyncSession, workflow: AIWorkflow, task: AIWorkflowTask) -> str:
+    if workflow.project_id is None:
+        return ""
+    project_res = await db.execute(select(Project).where(Project.id == workflow.project_id))
+    project = project_res.scalar_one_or_none()
+    if project is None:
+        return ""
+    source_prefixes = _task_source_prefixes(task)
+    context = await build_project_files_context(
+        project,
+        question=task.instruction,
+        source_prefixes=source_prefixes or None,
+    )
+    if source_prefixes and _context_is_uninformative(context):
+        fallback_context = await build_project_files_context(
+            project,
+            question=task.instruction,
+            source_prefixes=None,
+        )
+        if fallback_context.strip():
+            return fallback_context
+    return context
+
+
+def _build_task_messages(
+    workflow: AIWorkflow,
+    task: AIWorkflowTask,
+    dependency_texts: list[str],
+    file_context: str = "",
+) -> list[dict[str, str]]:
     context_bits = [
         f"Workflow-ID: {workflow.id}",
         f"Task-Key: {task.task_key}",
@@ -41,6 +115,11 @@ def _build_task_messages(workflow: AIWorkflow, task: AIWorkflowTask, dependency_
         f"Execution-Mode: {task.execution_mode}",
         f"Aufgabe: {task.instruction}",
     ]
+    if file_context.strip():
+        context_bits.append(
+            "Reale lokale Projektdaten aus dem Dateisystem (dieser Kontext stammt aus echten Dateien und hat Vorrang vor allgemeinen Annahmen):\n"
+            f"{file_context.strip()}"
+        )
     if dependency_texts:
         context_bits.append("Abhängigkeiten:")
         context_bits.extend(f"- {text}" for text in dependency_texts)
@@ -58,12 +137,12 @@ def _build_task_messages(workflow: AIWorkflow, task: AIWorkflowTask, dependency_
     ]
 
 
-async def _call_provider(task: AIWorkflowTask, workflow: AIWorkflow, dependency_texts: list[str]) -> dict[str, Any]:
+async def _call_provider(task: AIWorkflowTask, workflow: AIWorkflow, dependency_texts: list[str], file_context: str = "") -> dict[str, Any]:
     runtime = resolve_provider_runtime(task.model_tag)
     if not runtime.api_url:
         raise RuntimeError(f"Kein API-URL für Provider {runtime.tag} konfiguriert.")
     headers = build_provider_headers(runtime.api_key)
-    messages = _build_task_messages(workflow, task, dependency_texts)
+    messages = _build_task_messages(workflow, task, dependency_texts, file_context=file_context)
     payload = build_chat_completion_payload(runtime.model_name, messages, max_tokens=4096, temperature=0.25)
     async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=20.0)) as client:
         response = await client.post(f"{runtime.api_url}/v1/chat/completions", json=payload, headers=headers)
@@ -111,8 +190,9 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
             task.started_at = datetime.utcnow()
             await db.commit()
             deps = [executed[dep]["content"] for dep in (task.depends_on or []) if dep in executed]
+            file_context = await build_task_file_context(db, workflow, task)
             try:
-                result = await _call_provider(task, workflow, deps)
+                result = await _call_provider(task, workflow, deps, file_context=file_context)
             except Exception as exc:
                 task.status = "failed"
                 task.error_text = str(exc)

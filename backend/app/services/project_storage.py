@@ -364,7 +364,23 @@ def list_project_files(project: Any, source_prefixes: list[str] | None = None) -
     if _project_uses_pcloud(project):
         return []
 
-    return _iter_local_project_files(project)
+    items = _iter_local_project_files(project)
+    if not normalized_prefixes:
+        return items
+
+    filtered: list[ProjectFile] = []
+    for item in items:
+        item_name = _normalize_storage_path(item.filename).rstrip('/').lower()
+        item_leaf = Path(item_name).name.lower()
+        if any(
+            item_name == prefix.lower()
+            or item_name.startswith(prefix.lower().rstrip('/') + '/')
+            or item_name.startswith(prefix.lower())
+            or item_leaf == Path(prefix).name.lower()
+            for prefix in normalized_prefixes
+        ):
+            filtered.append(item)
+    return filtered
 
 
 def read_project_file(project: Any, filename: str) -> tuple[bytes, str, str]:
