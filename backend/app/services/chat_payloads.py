@@ -144,7 +144,7 @@ PROJECT_INVENTORY_RE = re.compile(
     re.IGNORECASE,
 )
 PROJECT_DETAILED_REPORT_RE = re.compile(
-    r"\b(rapport\s+d[ée]taill[ée]|detaill?ier(?:ter|tes|te)?\s+bericht|report\s+details?|full\s+report|komplette?r?\s+bericht|alle\s+dateien\s+und\s+ordner\s+auswerten|alle\s+dateien\s+analysieren|tous\s+les\s+fichiers|analyser\s+tous\s+les\s+fichiers|analyze\s+all\s+files|analyse\s+all\s+files)\b",
+    r"\b(rapport\s+d[ée]taill[ée]|detaill?ier(?:ter|tes|te)?\s+bericht|report\s+details?|full\s+report|komplette?r?\s+bericht|alle\s+dateien\s+und\s+ordner\s+auswerten|alle\s+dateien\s+analysieren|tous\s+les\s+fichiers|analyser\s+tous\s+les\s+fichiers|analyze\s+all\s+files|analyse\s+all\s+files|sende(?:r)?\s+mir\s+(?:einen?\s+)?bericht|sende\s+den\s+bericht|send\s+me\s+(?:the\s+)?report|please\s+send\s+the\s+report)\b",
     re.IGNORECASE,
 )
 FILE_OUTPUT_HINT_RE = re.compile(

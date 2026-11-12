@@ -244,6 +244,33 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     else:
         report.append('Es lagen vor allem Dateinamen und Strukturhinweise vor; diese wurden als Grundlage für die Analyse genutzt.')
 
+    species_candidates: list[str] = []
+    for item in facts + file_names:
+        parts: list[str] = []
+        if 'artenhinweise' in item.lower() or 'arten' in item.lower() or 'art:' in item.lower():
+            raw = item.split(':', 1)[-1] if ':' in item else item
+            for chunk in re.split(r'[;,/]|\band\b|\bund\b', raw, flags=re.IGNORECASE):
+                candidate = re.sub(r'\s+', ' ', chunk).strip(' .:-–—')
+                if candidate and len(candidate) > 2:
+                    parts.append(candidate)
+        for candidate in parts:
+            if candidate.lower() not in {s.lower() for s in species_candidates}:
+                species_candidates.append(candidate)
+    for candidate in species_candidates:
+        if len(candidate) > 40:
+            continue
+        lower_candidate = candidate.lower()
+        if any(token in lower_candidate for token in ('fledermaus', 'bat', 'quartier')):
+            report.append(f'- {candidate}: Für diese Artengruppe sind Quartiere, Flugrouten, Jagdhabitate und eine passende Gebäudestruktur maßgeblich.')
+        elif 'haselmaus' in lower_candidate:
+            report.append(f'- {candidate}: Die Art ist als streng geschützte Kleinsäuger-Art zu bewerten; entscheidend sind Quartiermöglichkeiten, Gehölzvernetzung, Störungsarmut und die Qualität der direkten Umgebung.')
+        elif any(token in lower_candidate for token in ('maus',)):
+            report.append(f'- {candidate}: Die Art ist als kleinsäugerbezogen zu bewerten; relevant sind Schutzstatus, Lebensraumstruktur und die funktionale Anbindung an die Umgebung.')
+        elif any(token in lower_candidate for token in ('rastvogel', 'vogel', 'avifauna')):
+            report.append(f'- {candidate}: Für diese Vogelgruppe sind Ruhebereiche, Nahrungshabitate, Störungsdruck und die räumliche Lage der Reviere entscheidend.')
+        else:
+            report.append(f'- {candidate}: Die Art ist separat zu bewerten; relevant sind Vorkommen, Strukturbezug, Schutzstatus und die räumliche Einordnung im Projektgebiet.')
+
     report.extend(['', 'Schlussfolgerung'])
     if has('.shp', '.dbf', '.prj', '.shx'):
         report.append('Die analysierten Geodaten-Dateien bieten eine solide Grundlage für die räumliche Analyse und sind fachlich gut weiterverarbeitbar.')

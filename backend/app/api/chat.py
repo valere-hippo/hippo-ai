@@ -20,6 +20,7 @@ from app.services.chat_payloads import (
     derive_conversation_title,
     storage_text,
     looks_like_file_generation_request,
+    looks_like_project_detailed_report_request,
 )
 from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
@@ -236,6 +237,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             "If the user explicitly requests an image or PNG, return a real file block with an image filename instead of prose instructions. If the user only wants analysis or a textual answer, respond in text and do not create an image file.\n"
             "If the user asks to analyze documents from the project folders, use the project context and answer in the user's language.\n"
             "If the user wants project files analyzed or wants QGIS to work with the project folder, and project_folder_context is present, use that context directly and do not ask for a specific file; only ask for /datei when no project context is available.\n"
+            "If the user asks for a report or analysis, do not answer with a preliminary acknowledgement like 'I will analyze' or 'I am analyzing'; provide the substantive analysis directly in the first reply.\n"
             "If the user mentions an explicit file path or filename, read that exact file directly from the project context and do not ask for a scan.\n"
             "If the user gives a Windows path for a file or folder, treat it as direct filesystem input and read it directly; do not route it through a scan-first fallback.\n"
             "If project_folder_context is present, treat it as the source of truth for the project folder contents and do not claim you lack local filesystem access. When it is structured as file-by-file blocks, read each file block completely, not just the filenames. If the user explicitly requested QGIS, do not ask which single file to open when the project context already lists relevant project files; use the listed files directly.\n"
@@ -406,7 +408,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
 
     if conv_project is not None and not serialized_files:
         try:
-            explicit_file_request = looks_like_file_generation_request(payload.message, payload.attachments)
+            explicit_file_request = looks_like_file_generation_request(payload.message, payload.attachments) or looks_like_project_detailed_report_request(payload.message)
             if explicit_file_request:
                 report_text = (reply_text or '').strip()
                 if not _is_valid_report_text(report_text):
