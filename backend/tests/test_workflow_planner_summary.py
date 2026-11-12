@@ -1,4 +1,4 @@
-from app.services.workflow_planner import build_workflow_execution_summary, build_workflow_summary_generated_file, summarize_workflow_execution
+from app.services.workflow_planner import build_workflow_execution_summary, build_workflow_summary_generated_file, build_workflow_task_generated_file, summarize_workflow_execution
 
 
 def test_build_workflow_execution_summary_includes_provider_results():
@@ -51,5 +51,23 @@ def test_build_workflow_summary_generated_file_returns_docx():
     data, mime_type, filename = build_workflow_summary_generated_file(plan, execution)
 
     assert filename.endswith('.docx')
+    assert mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    assert data[:4] == b'PK\x03\x04'
+
+
+def test_build_workflow_task_generated_file_returns_task_specific_docx():
+    task = {
+        'task_key': 't1',
+        'title': 'Analyse Bilder',
+        'model_tag': 'deepseek',
+        'provider': 'deepseek',
+        'content': 'Bildanalyse',
+        'depends_on': ['t0'],
+        'status': 'done',
+    }
+
+    data, mime_type, filename = build_workflow_task_generated_file(task, workflow_id=99)
+
+    assert filename == 'workflow_99_t1_deepseek.docx'
     assert mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     assert data[:4] == b'PK\x03\x04'

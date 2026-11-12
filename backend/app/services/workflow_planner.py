@@ -255,6 +255,40 @@ def summarize_workflow_execution(plan: dict[str, Any], execution: dict[str, Any]
     return "\n".join(lines).strip()
 
 
+def build_workflow_task_generated_file(task: dict[str, Any], *, workflow_id: int | None = None, filename_hint: str | None = None) -> tuple[bytes, str, str]:
+    task_key = str(task.get('task_key') or 'task').strip() or 'task'
+    provider = str(task.get('provider') or task.get('model_tag') or 'openai').strip().lower() or 'openai'
+    prefix = filename_hint or f"workflow_{workflow_id or 'x'}_{task_key}_{provider}"
+    filename = f"{prefix}.docx"
+    content = str(task.get('content') or '').strip()
+    if not content:
+        content = str(task.get('title') or task_key).strip() or 'Workflow-Task'
+    lines = [
+        f"Task: {task.get('title') or task_key}",
+        f"Workflow-ID: {workflow_id if workflow_id is not None else 'unbekannt'}",
+        f"Task-Key: {task_key}",
+        f"Provider: {provider}",
+        f"Status: {task.get('status') or 'done'}",
+    ]
+    depends_on = task.get('depends_on') or []
+    if depends_on:
+        lines.append(f"Abhängigkeiten: {', '.join(str(dep) for dep in depends_on)}")
+    lines.append('')
+    lines.append(content)
+    body = '\n'.join(lines)
+    return build_generated_file_bytes_with_fallback(filename, body)
+
+
+def build_workflow_task_generated_files(summary: dict[str, Any], *, filename_hint: str | None = None) -> list[tuple[bytes, str, str]]:
+    workflow_id = summary.get('workflow_id')
+    files: list[tuple[bytes, str, str]] = []
+    for task in summary.get('tasks') or []:
+        if not str(task.get('content') or '').strip():
+            continue
+        files.append(build_workflow_task_generated_file(task, workflow_id=workflow_id, filename_hint=filename_hint))
+    return files
+
+
 def build_workflow_summary_generated_file(plan: dict[str, Any], execution: dict[str, Any], *, filename_hint: str = "workflow_report") -> tuple[bytes, str, str]:
     summary_text = summarize_workflow_execution(plan, execution)
     filename = f"{filename_hint}.docx"
