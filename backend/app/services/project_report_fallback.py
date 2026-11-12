@@ -222,27 +222,32 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
                 report.append(f'- Datei: {name}')
                 report.append('  Relevanz: Teil des analysierten Projektkontexts.')
 
-    report.extend(['', 'Detailanalyse'])
+    report.extend(['', 'Detailanalyse', 'Technische Einordnung'])
     if facts:
         if has('geometrietyp', 'bounding box', 'bbox'):
-            report.append('Die Geometrie wurde inhaltlich erkannt; Bounding Box und Geometrietyp erlauben eine räumliche Einordnung des Bestands.')
+            report.append('Die Geometrie wurde inhaltlich erkannt; Bounding Box und Geometrietyp zeigen nicht nur die Form der Objekte, sondern auch die räumliche Ausdehnung und die Eignung für GIS-Auswertungen.')
         if has('felder', 'feld', 'attribut', 'daten', 'dbf', 'datensätze'):
-            report.append('Die Attributdaten liefern nicht nur Struktur, sondern auch konkrete fachliche Informationen zu Datensätzen und Feldern.')
+            report.append('Die Attributdaten liefern nicht nur Struktur, sondern auch fachliche Kernaussagen darüber, wie viele Objekte vorliegen, welche Merkmale gespeichert sind und wie zuverlässig der Datensatz auswertbar ist.')
         if has('projektion', 'koordinatensystem', 'prj'):
-            report.append('Die Projektion ist definiert und macht den Datensatz direkt GIS-tauglich.')
+            report.append('Die Projektion ist definiert und macht den Datensatz direkt GIS-tauglich; ohne diese Angabe wäre eine räumliche Einordnung riskant oder ungenau.')
         if has('beispielinhalt', 'beispielzeile', 'beispieldatensatz'):
-            report.append('Beispielwerte wurden aus dem Inhalt selbst übernommen und belegen, dass nicht nur Metadaten gelesen wurden.')
-        if has('rastvögel', 'vögel', 'fledermaus', 'ökologisch', 'oekologisch', 'artenschutz'):
-            report.append('Der fachliche Kontext deutet auf eine ökologische bzw. naturschutzbezogene Auswertung hin.')
+            report.append('Beispielwerte wurden aus dem Inhalt selbst übernommen und belegen, dass nicht nur Metadaten gelesen wurden, sondern auch der fachliche Kern der Datei.')
         if has('.xlsx', '.csv', '.ods'):
-            report.append('Tabellen- und Arbeitsblattinhalte wurden direkt aus den Dateien gelesen und ergänzen die räumlichen Informationen.')
+            report.append('Tabellen- und Arbeitsblattinhalte wurden direkt aus den Dateien gelesen und ergänzen die räumlichen Informationen um konkrete Beobachtungs- und Auswertungswerte.')
         if has('.zip', '.tar', '.tgz', '.tar.gz'):
-            report.append('Archive wurden entpackt und die enthaltenen Dateien wurden in die Analyse einbezogen.')
-        for fact in facts[:12]:
-            if fact not in file_names:
-                report.append(fact)
+            report.append('Archive wurden entpackt und die enthaltenen Dateien wurden in die Analyse einbezogen; das ist wichtig, weil die fachliche Bedeutung oft erst in den entpackten Begleitdateien sichtbar wird.')
     else:
         report.append('Es lagen vor allem Dateinamen und Strukturhinweise vor; diese wurden als Grundlage für die Analyse genutzt.')
+
+    report.extend(['', 'Fachliche Einordnung'])
+    if has('.shp', '.dbf', '.prj', '.shx'):
+        report.append('Der Datensatz ist als klassischer GIS-Verbund aufgebaut; Geometrie, Index, Attributtabelle und Projektion greifen ineinander und sind nur gemeinsam vollständig interpretierbar.')
+    if has('rastvögel', 'vögel', 'fledermaus', 'ökologisch', 'oekologisch', 'artenschutz', 'haselmaus'):
+        report.append('Der fachliche Kontext deutet auf eine ökologische bzw. naturschutzbezogene Auswertung hin. Das bedeutet: Nicht nur die Existenz der Dateien ist relevant, sondern vor allem Lage, Dichte, Nutzung, Quartierqualität, Störungsdruck und die räumliche Vernetzung.')
+    if has('.xlsx', '.csv', '.ods'):
+        report.append('Tabelleninhalte liefern meist Beobachtungs- oder Auswertungsdaten; fachlich ist entscheidend, ob diese Werte Häufigkeiten, Zeitbezug, Orte oder Bewertungen abbilden.')
+    if has('.zip', '.tar', '.tgz', '.tar.gz'):
+        report.append('Archive sind hier kein Nebenschauplatz: Sie können zusätzliche Begleitdaten, Karten, Tabellen oder Rohdaten enthalten, die den eigentlichen Befund erst belastbar machen.')
 
     species_candidates: list[str] = []
     for item in facts + file_names:
@@ -256,20 +261,23 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         for candidate in parts:
             if candidate.lower() not in {s.lower() for s in species_candidates}:
                 species_candidates.append(candidate)
-    for candidate in species_candidates:
-        if len(candidate) > 40:
-            continue
-        lower_candidate = candidate.lower()
-        if any(token in lower_candidate for token in ('fledermaus', 'bat', 'quartier')):
-            report.append(f'- {candidate}: Für diese Artengruppe sind Quartiere, Flugrouten, Jagdhabitate und eine passende Gebäudestruktur maßgeblich.')
-        elif 'haselmaus' in lower_candidate:
-            report.append(f'- {candidate}: Die Art ist als streng geschützte Kleinsäuger-Art zu bewerten; entscheidend sind Quartiermöglichkeiten, Gehölzvernetzung, Störungsarmut und die Qualität der direkten Umgebung.')
-        elif any(token in lower_candidate for token in ('maus',)):
-            report.append(f'- {candidate}: Die Art ist als kleinsäugerbezogen zu bewerten; relevant sind Schutzstatus, Lebensraumstruktur und die funktionale Anbindung an die Umgebung.')
-        elif any(token in lower_candidate for token in ('rastvogel', 'vogel', 'avifauna')):
-            report.append(f'- {candidate}: Für diese Vogelgruppe sind Ruhebereiche, Nahrungshabitate, Störungsdruck und die räumliche Lage der Reviere entscheidend.')
-        else:
-            report.append(f'- {candidate}: Die Art ist separat zu bewerten; relevant sind Vorkommen, Strukturbezug, Schutzstatus und die räumliche Einordnung im Projektgebiet.')
+    if species_candidates:
+        report.append('')
+        report.append('Artbezogene Bewertung')
+        for candidate in species_candidates:
+            if len(candidate) > 40:
+                continue
+            lower_candidate = candidate.lower()
+            if any(token in lower_candidate for token in ('fledermaus', 'bat', 'quartier')):
+                report.append(f'- {candidate}: Für diese Artengruppe sind Quartiere, Flugrouten, Jagdhabitate und eine passende Gebäudestruktur maßgeblich. Fachlich bedeutet das: Die bloße Präsenz eines Fundpunkts reicht nicht; entscheidend sind Erreichbarkeit, Ruhe, Strukturvielfalt und ein zusammenhängender Lebensraum.')
+            elif 'haselmaus' in lower_candidate:
+                report.append(f'- {candidate}: Die Art ist als streng geschützte Kleinsäuger-Art zu bewerten; entscheidend sind Quartiermöglichkeiten, Gehölzvernetzung, Störungsarmut und die Qualität der direkten Umgebung. Daraus folgt fachlich, dass lineare Gehölzstrukturen, Saumbereiche und Rückzugsräume besonders relevant sind.')
+            elif any(token in lower_candidate for token in ('maus',)):
+                report.append(f'- {candidate}: Die Art ist als kleinsäugerbezogen zu bewerten; relevant sind Schutzstatus, Lebensraumstruktur und die funktionale Anbindung an die Umgebung. Fachlich ist zu prüfen, ob der Fund auf ein dauerhaft nutzbares Habitat oder nur auf einen Durchzug hindeutet.')
+            elif any(token in lower_candidate for token in ('rastvogel', 'vogel', 'avifauna')):
+                report.append(f'- {candidate}: Für diese Vogelgruppe sind Ruhebereiche, Nahrungshabitate, Störungsdruck und die räumliche Lage der Reviere entscheidend. Das impliziert, dass Revierzentren, Brutverdacht und Nutzungshäufigkeit getrennt bewertet werden müssen.')
+            else:
+                report.append(f'- {candidate}: Die Art ist separat zu bewerten; relevant sind Vorkommen, Strukturbezug, Schutzstatus und die räumliche Einordnung im Projektgebiet.')
 
     report.extend(['', 'Schlussfolgerung'])
     if has('.shp', '.dbf', '.prj', '.shx'):
