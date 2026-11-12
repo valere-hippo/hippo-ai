@@ -165,6 +165,20 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
 
     report_title = 'Fachbeitrag Artenschutz / Geodatenanalyse' if has('.shp', '.shx', '.dbf', '.prj', '.cpg', 'geodaten', 'shapefile', 'gis') else 'Bericht zur Analyse der Projektdateien'
 
+    def field_value(*labels: str) -> str | None:
+        for line in _normalize_lines(report_text):
+            lowered = line.lower()
+            if any(label in lowered for label in labels):
+                if ':' in line:
+                    return line.split(':', 1)[-1].strip()
+                return line.strip()
+        return None
+
+    bundesland = field_value('bundesland') or 'laut Unterlagen'
+    auftraggeber = field_value('auftraggeber') or 'laut Unterlagen'
+    datum = field_value('datum') or 'laut Unterlagen'
+    gutachter = field_value('gutachter') or 'Hippo AI'
+
     summary_line = (
         'Dieser Bericht fasst die Analyse der Projektdateien zusammen. '
         'Die Auswertung stützt sich auf die tatsächlich extrahierten Inhalte und nicht nur auf Dateinamen.'
@@ -176,14 +190,47 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
             'Die Auswertung stützt sich auf die tatsächlich extrahierten Inhalte und nicht nur auf Dateinamen.'
         )
 
+    figure_lines = [line.strip() for line in _normalize_lines(report_text) if line.lower().startswith('abbildung')][:6]
+    table_lines = [line.strip() for line in _normalize_lines(report_text) if line.lower().startswith('tabelle')][:6]
+
     report: list[str] = [
         f'# {report_title}',
         '',
         f'Projekt: {title}',
+        f'Bundesland: {bundesland}',
+        f'Auftraggeber: {auftraggeber}',
+        f'Datum: {datum}',
+        f'Gutachter: {gutachter}',
+        '',
+        'Dieses Gutachten ist einschließlich des Deckblatts und der Anlagen urheberrechtlich geschützt.',
+        'Vervielfältigung und Weitergabe - auch auszugsweise - sind nur mit Zustimmung des Auftragnehmers gestattet.',
+        '',
+        'Inhalt',
+        '1. Anlass und Zielsetzung',
+        '2. Methodik',
+        '3. Ergebnisse',
+        '3.1. Dateibestand und fachliche Einordnung',
+        '3.2. Technische Einordnung',
+        '3.3. Fachliche Einordnung',
+        '3.4. Artbezogene Bewertung',
+        '4. Zusammenfassende Bewertung',
+        '5. Schlussfolgerung',
+    ]
+
+    if figure_lines:
+        report.extend(['', 'Abbildungsverzeichnis'])
+        for line in figure_lines:
+            report.append(f'- {line}')
+    if table_lines:
+        report.extend(['', 'Tabellenverzeichnis'])
+        for line in table_lines:
+            report.append(f'- {line}')
+
+    report.extend([
         '',
         '1. Anlass und Zielsetzung',
         summary_line,
-    ]
+    ])
 
     if question_text:
         cleaned_question = question_text.rstrip(' .!?')
