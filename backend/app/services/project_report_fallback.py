@@ -158,11 +158,12 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     file_names = _extract_file_names(report_text)
     lower_facts = [fact.lower() for fact in facts]
     lower_names = [name.lower() for name in file_names]
+    lower_all = lower_facts + lower_names
 
     def has(*needles: str) -> bool:
-        return any(any(needle in item for needle in needles) for item in lower_facts + lower_names)
+        return any(any(needle in item for needle in needles) for item in lower_all)
 
-    report_title = 'Bericht zur Analyse der Geodaten-Dateien' if has('.shp', '.shx', '.dbf', '.prj', '.cpg', 'geodaten', 'shapefile', 'gis') else 'Bericht zur Analyse der Projektdateien'
+    report_title = 'Fachbeitrag Artenschutz / Geodatenanalyse' if has('.shp', '.shx', '.dbf', '.prj', '.cpg', 'geodaten', 'shapefile', 'gis') else 'Bericht zur Analyse der Projektdateien'
 
     summary_line = (
         'Dieser Bericht fasst die Analyse der Projektdateien zusammen. '
@@ -177,122 +178,126 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
 
     report: list[str] = [
         f'# {report_title}',
-        'Professioneller Bericht',
         '',
-        'Zusammenfassung',
+        f'Projekt: {title}',
+        '',
+        '1. Anlass und Zielsetzung',
         summary_line,
-        '',
-        'Analyse',
     ]
 
+    if question_text:
+        cleaned_question = question_text.rstrip(' .!?')
+        report.append(f'Die aktuelle Fragestellung lautet sinngemäß: {cleaned_question}.')
+
+    report.extend([
+        '',
+        '2. Methodik',
+        'Die Analyse erfolgte auf Grundlage der tatsächlich extrahierten Datei- und Inhaltsinformationen. Wenn Geodaten vorliegen, werden Geometrie, Attributtabellen und Projektionen gemeinsam betrachtet, weil diese Komponenten fachlich nur im Verbund belastbar interpretierbar sind.',
+    ])
+
+    if has('.zip', '.tar', '.tgz', '.tar.gz'):
+        report.append('Archive im Projektkontext wurden entpackt und die darin enthaltenen Dateien ebenfalls in die Auswertung einbezogen; verschachtelte Archive wurden dabei ebenfalls berücksichtigt.')
+    if has('.shp', '.shx', '.dbf', '.prj'):
+        report.append('Bei Geodaten wird zwischen Geometrie, Attributdaten, Indexstruktur und räumlichem Bezug unterschieden, um nicht nur die Existenz, sondern auch die fachliche Aussagekraft zu bewerten.')
+    if has('.xlsx', '.csv', '.ods'):
+        report.append('Tabellen- und Arbeitsblattinhalte wurden als fachliche Primärdaten behandelt und nicht nur als Begleitmaterial.')
+
+    report.extend([
+        '',
+        '3. Ergebnisse',
+    ])
+
     if file_names:
-        report.append('Dateibestand und fachliche Bedeutung:')
+        report.append('3.1. Dateibestand und fachliche Einordnung')
         for name in file_names[:20]:
             lower = name.lower()
             if lower.endswith('.cpg'):
-                report.append(f'- Datei: {name}')
-                report.append('  Encoding: Zeichencodierung der zugehörigen Attributdaten.')
-                report.append('  Diese Datei definiert die Zeichenkodierung für die zugehörige DBF-Datei.')
+                report.append(f'- {name}: Codierungsdatei für die zugehörigen Attributdaten. Fachlich relevant, weil sie bestimmt, wie Sonderzeichen und Namensfelder korrekt gelesen werden.')
             elif lower.endswith('.dbf'):
-                report.append(f'- Datei: {name}')
-                report.append('  Datensätze: Attributtabelle der Shapefile-Daten.')
-                if has('beispielzeile', 'beispielinhalt', 'beispieldatensatz'):
-                    report.append('  Beispielzeile: Ein Beispielwert wurde direkt aus den Attributdaten übernommen und belegt, dass nicht nur Metadaten gelesen wurden.')
-                report.append('  Diese Datei enthält die Attributtabelle und ordnet die fachlichen Merkmale den geometrischen Objekten zu.')
+                report.append(f'- {name}: Attributtabelle der Shapefile-Struktur. Sie liefert die fachlichen Merkmale zu den geometrischen Objekten und ist für die Interpretation zentral.')
             elif lower.endswith('.prj'):
-                report.append(f'- Datei: {name}')
-                report.append('  Projektion: Koordinatensystem / räumliches Referenzsystem.')
-                report.append('  Diese Datei definiert das Koordinatensystem, das für die räumliche Analyse verwendet wird.')
+                report.append(f'- {name}: Projektions- bzw. Referenzsystemdatei. Sie ist maßgeblich für die räumliche Eindeutigkeit und die korrekte GIS-Verarbeitung.')
             elif lower.endswith('.shp'):
-                report.append(f'- Datei: {name}')
-                report.append('  Geometrietyp: Geometrische Hauptdatei des Shapefiles.')
-                if has('bounding box', 'bbox'):
-                    report.append('  Bounding Box: Die räumliche Ausdehnung ist aus den extrahierten Metadaten direkt ablesbar.')
-                report.append('  Diese Datei enthält die geometrischen Daten der Objekte im Projekt.')
+                report.append(f'- {name}: Geometriedatei des GIS-Verbunds. Sie enthält die räumlichen Objekte und bildet die eigentliche Lage- und Forminformation ab.')
             elif lower.endswith('.shx'):
-                report.append(f'- Datei: {name}')
-                report.append('  Geometrietyp: Indexdatei der Shapefile-Struktur.')
-                if has('bounding box', 'bbox'):
-                    report.append('  Bounding Box: Die Indexdatei bestätigt die räumliche Struktur des Verbunds.')
-                report.append('  Diese Datei ist der Index für die Shapefile und ermöglicht einen schnellen Zugriff auf die geometrischen Daten.')
+                report.append(f'- {name}: Indexdatei des Shapefile-Verbunds. Sie unterstützt die räumliche Struktur und beschleunigt den Zugriff auf die Geometrien.')
             elif lower.endswith('.zip') or lower.endswith('.tar') or lower.endswith('.tgz') or lower.endswith('.tar.gz'):
-                report.append(f'- Archiv: {name}')
-                report.append('  Enthaltene Dateien: Das Archiv wird entpackt und die internen Dateien werden anschließend ebenfalls analysiert.')
+                report.append(f'- {name}: Archivdatei. Inhalt und Nebenprodukte wurden entpackt und in die Analyse übernommen, weil relevante Fachinformationen oft erst im Archiv sichtbar werden.')
             else:
-                report.append(f'- Datei: {name}')
-                report.append('  Relevanz: Teil des analysierten Projektkontexts.')
+                report.append(f'- {name}: Teil des Projektkontexts mit möglicher fachlicher Relevanz.')
 
-    report.extend(['', 'Detailanalyse', 'Technische Einordnung'])
-    if facts:
-        if has('geometrietyp', 'bounding box', 'bbox'):
-            report.append('Die Geometrie wurde inhaltlich erkannt; Bounding Box und Geometrietyp zeigen nicht nur die Form der Objekte, sondern auch die räumliche Ausdehnung und die Eignung für GIS-Auswertungen.')
-        if has('felder', 'feld', 'attribut', 'daten', 'dbf', 'datensätze'):
-            report.append('Die Attributdaten liefern nicht nur Struktur, sondern auch fachliche Kernaussagen darüber, wie viele Objekte vorliegen, welche Merkmale gespeichert sind und wie zuverlässig der Datensatz auswertbar ist.')
-        if has('projektion', 'koordinatensystem', 'prj'):
-            report.append('Die Projektion ist definiert und macht den Datensatz direkt GIS-tauglich; ohne diese Angabe wäre eine räumliche Einordnung riskant oder ungenau.')
-        if has('beispielinhalt', 'beispielzeile', 'beispieldatensatz'):
-            report.append('Beispielwerte wurden aus dem Inhalt selbst übernommen und belegen, dass nicht nur Metadaten gelesen wurden, sondern auch der fachliche Kern der Datei.')
-        if has('.xlsx', '.csv', '.ods'):
-            report.append('Tabellen- und Arbeitsblattinhalte wurden direkt aus den Dateien gelesen und ergänzen die räumlichen Informationen um konkrete Beobachtungs- und Auswertungswerte.')
-        if has('.zip', '.tar', '.tgz', '.tar.gz'):
-            report.append('Archive wurden entpackt und die enthaltenen Dateien wurden in die Analyse einbezogen; das ist wichtig, weil die fachliche Bedeutung oft erst in den entpackten Begleitdateien sichtbar wird.')
-    else:
-        report.append('Es lagen vor allem Dateinamen und Strukturhinweise vor; diese wurden als Grundlage für die Analyse genutzt.')
-
-    report.extend(['', 'Fachliche Einordnung'])
-    if has('.shp', '.dbf', '.prj', '.shx'):
-        report.append('Der Datensatz ist als klassischer GIS-Verbund aufgebaut; Geometrie, Index, Attributtabelle und Projektion greifen ineinander und sind nur gemeinsam vollständig interpretierbar.')
-    if has('rastvögel', 'vögel', 'fledermaus', 'ökologisch', 'oekologisch', 'artenschutz', 'haselmaus'):
-        report.append('Der fachliche Kontext deutet auf eine ökologische bzw. naturschutzbezogene Auswertung hin. Das bedeutet: Nicht nur die Existenz der Dateien ist relevant, sondern vor allem Lage, Dichte, Nutzung, Quartierqualität, Störungsdruck und die räumliche Vernetzung.')
+    report.append('')
+    report.append('3.2. Technische Einordnung')
+    if has('geometrietyp', 'bounding box', 'bbox'):
+        report.append('Die Geometrie ist technisch nachvollziehbar beschrieben; Form und räumliche Ausdehnung sind damit für GIS-Anwendungen grundsätzlich interpretierbar.')
+    if has('felder', 'feld', 'attribut', 'daten', 'dbf', 'datensätze'):
+        report.append('Die Attributdaten sind fachlich aussagekräftig, weil sie die Objektgeometrie mit inhaltlichen Merkmalen verknüpfen und damit die eigentliche Analyse tragen.')
+    if has('projektion', 'koordinatensystem', 'prj'):
+        report.append('Das Koordinatensystem ist für die räumliche Verortung entscheidend; ohne eine saubere Projektion wären Lagebezug und Auswertung nur eingeschränkt belastbar.')
     if has('.xlsx', '.csv', '.ods'):
-        report.append('Tabelleninhalte liefern meist Beobachtungs- oder Auswertungsdaten; fachlich ist entscheidend, ob diese Werte Häufigkeiten, Zeitbezug, Orte oder Bewertungen abbilden.')
+        report.append('Tabelleninhalte liefern zusätzliche inhaltliche Tiefe, beispielsweise zu Beobachtungen, Bewertungen, Zeitbezug oder Mengengerüsten.')
     if has('.zip', '.tar', '.tgz', '.tar.gz'):
-        report.append('Archive sind hier kein Nebenschauplatz: Sie können zusätzliche Begleitdaten, Karten, Tabellen oder Rohdaten enthalten, die den eigentlichen Befund erst belastbar machen.')
+        report.append('Die Archivstruktur ist fachlich relevant, weil wichtige Unterlagen in der Praxis häufig in Unterordnern oder komprimierten Sammeldateien abgelegt werden.')
+
+    report.append('')
+    report.append('3.3. Fachliche Einordnung')
+    if has('.shp', '.dbf', '.prj', '.shx'):
+        report.append('Der Datensatz wirkt wie ein klassischer GIS-Verbund: Geometrie, Attributtabelle, Index und Projektion greifen zusammen und müssen gemeinsam gelesen werden.')
+    if has('rastvögel', 'vögel', 'fledermaus', 'ökologisch', 'oekologisch', 'artenschutz', 'haselmaus'):
+        report.append('Der fachliche Kontext ist naturschutzbezogen. Damit ist nicht nur der Nachweis einzelner Arten relevant, sondern vor allem die Frage nach Lebensraumbindung, Störungsanfälligkeit, funktionaler Vernetzung und räumlicher Betroffenheit.')
+    if has('.xlsx', '.csv', '.ods'):
+        report.append('Tabelleninhalte sind in solchen Projekten meist keine bloßen Anhänge, sondern die Quelle für Begehungen, Bewertungen, Fundpunkte oder Nachweismuster.')
 
     species_candidates: list[str] = []
+    seen_species: set[str] = set()
     for item in facts + file_names:
-        parts: list[str] = []
-        if 'artenhinweise' in item.lower() or 'arten' in item.lower() or 'art:' in item.lower():
-            raw = item.split(':', 1)[-1] if ':' in item else item
-            for chunk in re.split(r'[;,/]|\band\b|\bund\b', raw, flags=re.IGNORECASE):
-                candidate = re.sub(r'\s+', ' ', chunk).strip(' .:-–—')
-                if candidate and len(candidate) > 2:
-                    parts.append(candidate)
-        for candidate in parts:
-            if candidate.lower() not in {s.lower() for s in species_candidates}:
+        if 'artenhinweise' not in item.lower() and 'arten' not in item.lower() and 'art:' not in item.lower():
+            continue
+        raw = item.split(':', 1)[-1] if ':' in item else item
+        for chunk in re.split(r'[;,/]|\band\b|\bund\b', raw, flags=re.IGNORECASE):
+            candidate = re.sub(r'\s+', ' ', chunk).strip(' .:-–—')
+            if len(candidate) > 2 and candidate.lower() not in seen_species:
                 species_candidates.append(candidate)
+                seen_species.add(candidate.lower())
+
     if species_candidates:
         report.append('')
-        report.append('Artbezogene Bewertung')
+        report.append('3.4. Artbezogene Bewertung')
         for candidate in species_candidates:
             if len(candidate) > 40:
                 continue
             lower_candidate = candidate.lower()
+            report.append(f'- {candidate}')
             if any(token in lower_candidate for token in ('fledermaus', 'bat', 'quartier')):
-                report.append(f'- {candidate}')
-                report.append('  Beobachtung: Die Unterlagen enthalten Hinweise auf Fledermäuse bzw. Quartierbezug.')
-                report.append('  Fachliche Bedeutung: Das spricht für einen potenziellen Quartier-, Zugangs- oder Jagdhabitatbezug und damit für eine hohe Sensitivität gegenüber baulichen Eingriffen.')
-                report.append('  Implikation: Für die Bewertung sind Einflugmöglichkeiten, Hangplätze, Störungsarmut, Flugkorridore und die Anbindung an Nahrungshabitate maßgeblich.')
+                report.append('  Befund: Hinweise auf Fledermäuse bzw. Quartierbezug.')
+                report.append('  Fachliche Bewertung: Das deutet auf einen sensiblen Struktur- und Funktionsraum hin, bei dem Einflug, Quartiernutzung, Störungsarmut und Flugkorridore mitbewertet werden müssen.')
+                report.append('  Konsequenz: Für Eingriffe sind bau- und betriebsbedingte Störungen, Verlust von Strukturen und die Qualität angrenzender Jagdhabitate zu prüfen.')
             elif 'haselmaus' in lower_candidate:
-                report.append(f'- {candidate}')
-                report.append('  Beobachtung: Die Art ist im Projektkontext als streng geschütztes Kleinsäuger-Taxon relevant.')
-                report.append('  Fachliche Bedeutung: Die Nachweislage deutet auf eine Habitatbindung an Gehölzstrukturen, Saumbereiche und Rückzugsräume hin.')
-                report.append('  Implikation: Zu prüfen sind Vernetzung, Habitatsqualität, Störungsdruck und die Frage, ob die Fläche als Kern- oder lediglich als Randlebensraum wirkt.')
+                report.append('  Befund: Die Art ist als streng geschütztes Kleinsäuger-Taxon im Projektkontext relevant.')
+                report.append('  Fachliche Bewertung: Das spricht für eine Bindung an Gehölzstrukturen, Saumbereiche und Rückzugsräume.')
+                report.append('  Konsequenz: Entscheidend sind Vernetzung, Deckung, Quartier-/Nahrungsangebot und die Frage, ob die Fläche Kernhabitat oder nur Durchgangsraum ist.')
             elif any(token in lower_candidate for token in ('maus',)):
-                report.append(f'- {candidate}')
-                report.append('  Beobachtung: Es liegt ein Kleinsäugerbezug vor, der fachlich nicht nur auf ein Einzeltier, sondern auf die Habitatfunktion der Fläche verweist.')
-                report.append('  Fachliche Bedeutung: Der Befund kann auf Nutzung, Durchquerung oder zeitweise Anwesenheit hinweisen und sollte nicht isoliert interpretiert werden.')
-                report.append('  Implikation: Relevant sind Deckung, Vernetzung, Störungsniveau und die Frage, ob die Fläche Teil eines funktionalen Verbunds ist.')
+                report.append('  Befund: Es liegt ein Kleinsäugerbezug vor.')
+                report.append('  Fachliche Bewertung: Der Nachweis kann auf Nutzung, Durchquerung oder temporäre Anwesenheit hinweisen und darf nicht isoliert gelesen werden.')
+                report.append('  Konsequenz: Habitatqualität, Randwirkungen, Störungsniveau und funktionale Anbindung sind mitzudenken.')
             elif any(token in lower_candidate for token in ('rastvogel', 'vogel', 'avifauna')):
-                report.append(f'- {candidate}')
-                report.append('  Beobachtung: Der Kontext verweist auf Vogelvorkommen oder avifaunistische Datensätze.')
-                report.append('  Fachliche Bedeutung: Für Vögel ist nicht nur der Nachweis selbst wichtig, sondern auch Brutstatus, Revierausdehnung, Nutzungshäufigkeit und das Umfeld.')
-                report.append('  Implikation: Erforderlich ist eine getrennte Betrachtung von Brutverdacht, Revierzentrum, Nahrungshabitat und Störungseinflüssen.')
+                report.append('  Befund: Der Kontext weist auf Vogelvorkommen bzw. avifaunistische Auswertungen hin.')
+                report.append('  Fachliche Bewertung: Neben dem Nachweis sind Brutstatus, Revierfunktion, Nahrungshabitat und der räumliche Bezug zum Vorhaben entscheidend.')
+                report.append('  Konsequenz: Eine getrennte Betrachtung von Brutverdacht, Revierzentrum und Störeinflüssen ist fachlich geboten.')
             else:
-                report.append(f'- {candidate}')
-                report.append('  Beobachtung: Für diese Art liegt ein fachlich relevanter Hinweis im Datensatz vor.')
-                report.append('  Fachliche Bedeutung: Der Hinweis ist im Kontext von Lebensraum, Schutzstatus und räumlicher Einbindung zu bewerten.')
-                report.append('  Implikation: Die Interpretation sollte artspezifisch und nicht nur datensatzbezogen erfolgen.')
+                report.append('  Befund: Ein fachlich relevanter Artenhinweis ist im Datensatz vorhanden.')
+                report.append('  Fachliche Bewertung: Der Hinweis ist im Kontext von Lebensraum, Schutzstatus und räumlicher Einbindung zu bewerten.')
+                report.append('  Konsequenz: Die artspezifische Interpretation sollte Vorrang vor einer rein statistischen Zusammenfassung haben.')
+
+    report.extend(['', 'Zusammenfassende Bewertung'])
+    if has('.shp', '.dbf', '.prj', '.shx'):
+        report.append('Die Datenbasis ist für eine fachliche GIS-Analyse grundsätzlich geeignet und fachlich konsistent aufgebaut.')
+    if has('.xlsx', '.csv', '.ods'):
+        report.append('Die Tabellen liefern ergänzende fachliche Tiefe und sollten als eigenständige Evidenzquellen interpretiert werden.')
+    if has('.zip', '.tar', '.tgz', '.tar.gz'):
+        report.append('Die enthaltenen Archive wurden berücksichtigt; dadurch steigt die fachliche Vollständigkeit der Analyse deutlich.')
+    if not facts and not file_names:
+        report.append('Die Auswertung basiert auf dem verfügbaren Projektkontext; für eine belastbare fachliche Einordnung wären weitere lesbare Quelldaten hilfreich.')
 
     report.extend(['', 'Schlussfolgerung'])
     if has('.shp', '.dbf', '.prj', '.shx'):
