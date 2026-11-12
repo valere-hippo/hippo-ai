@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import Any
 
 import asyncio
+import json
+import logging
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,8 +14,16 @@ from app.db.session import AsyncSessionLocal
 from app.models.project import Project
 from app.models.workflow import AIWorkflow, AIWorkflowTask
 from app.services.project_storage import build_project_files_context
-from app.services.provider_clients import build_chat_completion_payload, build_provider_headers, resolve_provider_runtime
+from app.services.provider_clients import (
+    build_chat_completion_payload,
+    build_fallback_model_choices,
+    build_provider_headers,
+    describe_provider_http_error,
+    resolve_provider_runtime,
+)
 from app.services.workflow_planner import build_workflow_execution_summary
+
+logger = logging.getLogger("hippo-ai.workflow")
 
 
 async def _load_workflow_tasks(db: AsyncSession, workflow_id: int) -> list[AIWorkflowTask]:
@@ -142,14 +152,24 @@ def _build_task_messages(
 async def _call_provider(task: AIWorkflowTask, workflow: AIWorkflow, dependency_texts: list[str], file_context: str = "") -> dict[str, Any]:
     runtime = resolve_provider_runtime(task.model_tag)
     if not runtime.api_url:
-        raise RuntimeError(f"Kein API-URL für Provider {runtime.tag} konfiguriert.")
+        raise RuntimeError(json.dumps({
+            "provider": runtime.tag,
+            "model": runtime.model_name,
+            "api_url": runtime.api_url,
+            "error_kind": "missing_configuration",
+            "error_message": f"Kein API-URL für Provider {runtime.tag} konfiguriert.",
+        }, ensure_ascii=False))
     headers = build_provider_headers(runtime.api_key)
     messages = _build_task_messages(workflow, task, dependency_texts, file_context=file_context)
     payload = build_chat_completion_payload(runtime.model_name, messages, max_tokens=4096, temperature=0.25)
     async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=20.0)) as client:
-        response = await client.post(f"{runtime.api_url}/v1/chat/completions", json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
+        try:
+            response = await client.post(f"{runtime.api_url}/v1/chat/completions", json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as exc:
+            error_info = describe_provider_http_error(exc, provider=runtime.tag, model_name=runtime.model_name, api_url=runtime.api_url)
+            raise RuntimeError(json.dumps(error_info, ensure_ascii=False)) from exc
     content = ""
     if isinstance(data, dict) and data.get("choices"):
         message = data["choices"][0].get("message") or {}
@@ -210,11 +230,14 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
 
     executed: dict[str, dict[str, Any]] = {}
     pending_keys = [task.task_key for task in tasks]
+    failed_task: dict[str, Any] | None = None
+    workflow_state = "completed"
 
     while pending_keys:
         ready_tasks = [tasks_by_key[key] for key in pending_keys if _task_ready(tasks_by_key[key], tasks_by_key)]
         if not ready_tasks:
-            raise RuntimeError("Workflow enthält zirkuläre oder unerfüllte Abhängigkeiten.")
+            workflow_state = "failed"
+            break
 
         parallel_tasks = [task for task in ready_tasks if task.execution_mode == "parallel"]
         sequential_tasks = [task for task in ready_tasks if task.execution_mode != "parallel"]
@@ -228,13 +251,37 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
             try:
                 result = await _call_provider(task, workflow, deps, file_context=file_context)
             except Exception as exc:
+                error_info: dict[str, Any]
+                try:
+                    error_info = json.loads(str(exc)) if str(exc).strip().startswith("{") else {"error_message": str(exc)}
+                except Exception:
+                    error_info = {"error_message": str(exc)}
+                result = {
+                    "provider": getattr(task, 'model_tag', None) or "openai",
+                    "model": resolve_provider_runtime(task.model_tag).model_name,
+                    "content": "",
+                    "status": "failed",
+                    **error_info,
+                }
                 task.status = "failed"
-                task.error_text = str(exc)
+                task.error_text = json.dumps(error_info, ensure_ascii=False)
+                task.result_json = result
+                task.result_text = None
+                task.result_files = []
                 task.finished_at = datetime.utcnow()
                 workflow.status = "failed"
                 workflow.updated_at = datetime.utcnow()
                 await db.commit()
-                raise
+                logger.warning(
+                    "Workflow task failed | workflow=%s | task=%s | provider=%s | model=%s | kind=%s | message=%s",
+                    workflow.id,
+                    task.task_key,
+                    error_info.get('provider'),
+                    error_info.get('model'),
+                    error_info.get('error_kind'),
+                    error_info.get('error_message'),
+                )
+                return task.task_key, result
             task.status = "done"
             task.result_text = result["content"]
             task.result_json = result
@@ -249,22 +296,49 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
             for key, result in results:
                 executed[key] = result
                 pending_keys.remove(key)
+                if result.get("status") == "failed" and failed_task is None:
+                    failed_task = {"task_key": key, **result}
+                    workflow_state = "needs_model_choice" if result.get("error_kind") in {"unauthorized", "forbidden", "not_found", "unprocessable_entity", "service_unavailable", "timeout", "connection_error"} else "failed"
+                    pending_keys.clear()
+                    break
+            if workflow_state != "completed":
+                break
 
         for task in sequential_tasks:
             key, result = await _run(task)
             executed[key] = result
             pending_keys.remove(key)
+            if result.get("status") == "failed":
+                failed_task = {"task_key": key, **result}
+                workflow_state = "needs_model_choice" if result.get("error_kind") in {"unauthorized", "forbidden", "not_found", "unprocessable_entity", "service_unavailable", "timeout", "connection_error"} else "failed"
+                pending_keys.clear()
+                break
+        if workflow_state != "completed":
+            break
 
-    workflow.status = "completed"
+    workflow.status = workflow_state
     workflow.updated_at = datetime.utcnow()
     await db.commit()
     summary = build_workflow_execution_summary(
         {"workflow_id": workflow.id, "final_model_tag": workflow.final_model_tag, "tasks": [task.__dict__ for task in tasks]},
         {"workflow_id": workflow.id, "status": workflow.status, "results": executed},
     )
+    resolution = None
+    if failed_task:
+        resolution = {
+            "task_key": failed_task.get("task_key"),
+            "title": failed_task.get("title"),
+            "instruction": failed_task.get("instruction"),
+            "provider": failed_task.get("provider"),
+            "model": failed_task.get("model"),
+            "error_kind": failed_task.get("error_kind"),
+            "error_message": failed_task.get("error_message"),
+            "choices": build_fallback_model_choices(exclude_provider=str(failed_task.get("provider") or "")),
+        }
     return {
         "workflow_id": workflow.id,
         "status": workflow.status,
         "results": executed,
         "summary": summary,
+        "resolution": resolution,
     }

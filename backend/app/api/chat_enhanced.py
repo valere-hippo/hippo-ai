@@ -99,6 +99,7 @@ class ChatResponse(BaseModel):
     workflow_id: int | None = None
     workflow_plan: dict | None = None
     workflow_summary: dict | None = None
+    workflow_resolution: dict | None = None
 
 
 def _extract_json_object(text: str) -> dict | None:
@@ -724,6 +725,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
     workflow_id = None
     workflow_summary = None
+    workflow_resolution = None
     if workflow_plan:
         workflow_id_value = workflow_plan.get('workflow_id')
         if isinstance(workflow_id_value, int):
@@ -734,6 +736,15 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             except Exception:
                 workflow_id = None
         workflow_summary = workflow_execution_result.get('summary') if isinstance(workflow_execution_result, dict) else None
+        workflow_resolution = workflow_execution_result.get('resolution') if isinstance(workflow_execution_result, dict) else None
+        if workflow_resolution:
+            choices = workflow_resolution.get('choices') or []
+            choice_labels = ', '.join(choice.get('label') for choice in choices if choice.get('label'))
+            reply_text = (
+                f"Le modèle demandé n’est pas disponible pour cette tâche. "
+                f"Erreur: {workflow_resolution.get('error_message') or 'modèle indisponible'}. "
+                + (f"Choisis un autre modèle: {choice_labels}." if choice_labels else "Choisis un autre modèle.")
+            )
 
     if workflow_plan and workflow_execution_result and isinstance(workflow_execution_result, dict):
         try:
@@ -758,4 +769,4 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             logger.warning('workflow summary export failed for conversation %s', conv_id)
 
-    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, desktop_actions=desktop_actions, workflow_id=workflow_id, workflow_plan=workflow_plan, workflow_summary=workflow_summary)
+    return ChatResponse(reply=reply_text, conversation_id=conv_id, generated_files=serialized_files, desktop_actions=desktop_actions, workflow_id=workflow_id, workflow_plan=workflow_plan, workflow_summary=workflow_summary, workflow_resolution=workflow_resolution)

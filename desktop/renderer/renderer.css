@@ -1201,6 +1201,54 @@ textarea {
   margin-bottom: 12px;
 }
 
+.workflow-resolution {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(122, 31, 43, 0.14);
+  background: rgba(122, 31, 43, 0.04);
+}
+
+.workflow-resolution-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workflow-resolution-title {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.workflow-resolution-meta,
+.workflow-resolution-message {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.workflow-resolution-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workflow-resolution-button {
+  border: 1px solid rgba(122, 31, 43, 0.22);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.workflow-resolution-button:hover {
+  background: rgba(122, 31, 43, 0.08);
+}
+
 .workflow-summary {
   display: grid;
   gap: 12px;
@@ -1674,6 +1722,28 @@ textarea {
   gap: 16px;
   margin-top: 6px;
   padding: 0 4px;
+  flex-wrap: wrap;
+}
+
+.composer-tag-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.composer-tag-chip {
+  border: 1px solid rgba(122, 31, 43, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.composer-tag-chip:hover {
+  background: rgba(122, 31, 43, 0.08);
 }
 
 .project-item .item-actions,

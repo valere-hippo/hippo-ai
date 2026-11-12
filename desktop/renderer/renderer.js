@@ -2133,6 +2133,49 @@ function clearChatLog() {
   els.emptyState.classList.remove('hidden')
 }
 
+function renderWorkflowResolution(resolution) {
+  if (!resolution || typeof resolution !== 'object') return null
+  const choices = Array.isArray(resolution.choices) ? resolution.choices : []
+  const container = document.createElement('div')
+  container.className = 'workflow-resolution'
+
+  const header = document.createElement('div')
+  header.className = 'workflow-resolution-header'
+  const title = document.createElement('div')
+  title.className = 'workflow-resolution-title'
+  title.textContent = 'Modèle indisponible'
+  const meta = document.createElement('div')
+  meta.className = 'workflow-resolution-meta'
+  meta.textContent = [resolution.provider, resolution.model].filter(Boolean).join(' · ')
+  header.append(title, meta)
+  container.appendChild(header)
+
+  const message = document.createElement('div')
+  message.className = 'workflow-resolution-message'
+  message.textContent = resolution.error_message || 'Le modèle demandé n’est pas disponible.'
+  container.appendChild(message)
+
+  const actions = document.createElement('div')
+  actions.className = 'workflow-resolution-actions'
+  choices.forEach((choice) => {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'workflow-resolution-button'
+    button.textContent = choice.label || choice.provider || choice.model || 'Choisir'
+    button.addEventListener('click', () => {
+      const instruction = String(resolution.instruction || resolution.title || '').trim()
+      const providerTag = choice.provider || choice.label || 'openai'
+      const prefix = providerTag ? `#${String(providerTag).replace(/^#/, '')}` : ''
+      const nextValue = [instruction, prefix].filter(Boolean).join(' ').trim() || prefix || instruction
+      setComposerText(nextValue)
+      showToast(`Modèle prêt: ${button.textContent}`)
+    })
+    actions.appendChild(button)
+  })
+  container.appendChild(actions)
+  return container
+}
+
 function renderWorkflowSummary(summary) {
   if (!summary || typeof summary !== 'object') return null
   const tasks = Array.isArray(summary.tasks) ? summary.tasks : []
@@ -2223,6 +2266,13 @@ function renderMessage(role, content, extras = {}) {
     const workflowBlock = renderWorkflowSummary(extras.workflowSummary)
     if (workflowBlock) {
       bubble.appendChild(workflowBlock)
+    }
+  }
+
+  if (extras.workflowResolution) {
+    const resolutionBlock = renderWorkflowResolution(extras.workflowResolution)
+    if (resolutionBlock) {
+      bubble.appendChild(resolutionBlock)
     }
   }
 
@@ -2749,40 +2799,79 @@ function setComposerQgisMode(active) {
   }
 }
 
+function ensureComposerTagSuggestions() {
+  const composerMeta = document.querySelector('.composer-meta')
+  if (!composerMeta) return
+
+  let bar = document.getElementById('composer-tag-suggestions')
+  if (!bar) {
+    bar = document.createElement('div')
+    bar.id = 'composer-tag-suggestions'
+    bar.className = 'composer-tag-suggestions hidden'
+    const tags = ['openai', 'claude', 'deepseek', 'qwen', 'tencent']
+    tags.forEach((tag) => {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'composer-tag-chip'
+      button.textContent = `#${tag}`
+      button.addEventListener('click', () => insertComposerTag(tag))
+      bar.appendChild(button)
+    })
+    composerMeta.appendChild(bar)
+  }
+}
+
+function insertComposerTag(tag) {
+  const cleanTag = String(tag || '').replace(/^#/, '').trim()
+  if (!cleanTag) return
+  const value = String(els.chatInput.value || '')
+  const nextValue = value.match(/(^|\s)#[\w-]*$/)
+    ? value.replace(/(^|\s)#[\w-]*$/, `$1#${cleanTag} `)
+    : `${value}${value && !/\s$/.test(value) ? ' ' : ''}#${cleanTag} `
+  setComposerText(nextValue)
+}
+
+function updateComposerTagSuggestions() {
+  const bar = document.getElementById('composer-tag-suggestions')
+  if (!bar) return
+  const value = String(els.chatInput.value || '')
+  const shouldShow = /(^|\s)#[\w-]*$/.test(value)
+  bar.classList.toggle('hidden', !shouldShow)
+}
+
+function setComposerText(text, { qgis = false } = {}) {
+  const value = String(text || '')
+  els.chatInput.value = value
+  setComposerQgisMode(qgis || /^\s*\/qgis\b/i.test(value))
+  resizeComposer()
+  updateComposerTagSuggestions()
+  els.chatInput.focus()
+  const cursor = els.chatInput.value.length
+  els.chatInput.setSelectionRange(cursor, cursor)
+}
+
 function insertQgisCommandIntoComposer() {
   const current = String(els.chatInput.value || '')
   const stripped = current.replace(/^\s*\/(?:qgis|datei)\s*/i, '').trim()
   const nextValue = stripped ? `/qgis ${stripped}` : '/qgis '
-  els.chatInput.value = nextValue
-  setComposerQgisMode(true)
-  resizeComposer()
-  els.chatInput.focus()
-  els.chatInput.setSelectionRange(nextValue.length, nextValue.length)
+  setComposerText(nextValue, { qgis: true })
 }
 
 function insertQgisAnalysisCommandIntoComposer() {
   const current = String(els.chatInput.value || '')
   const stripped = current.replace(/^\s*\/(?:qgis|datei)\s*/i, '').trim()
   const nextValue = stripped ? `/qgis /datei ${stripped}` : '/qgis /datei '
-  els.chatInput.value = nextValue
-  setComposerQgisMode(true)
+  setComposerText(nextValue, { qgis: true })
   if (els.analysisQgisModeBtn) {
     els.analysisQgisModeBtn.classList.add('active')
   }
-  resizeComposer()
-  els.chatInput.focus()
-  els.chatInput.setSelectionRange(nextValue.length, nextValue.length)
 }
 
 function insertAnalysisCommandIntoComposer() {
   const current = String(els.chatInput.value || '')
   const stripped = current.replace(/^\s*\/(?:qgis|datei)\s*/i, '').trim()
   const nextValue = stripped ? `/datei ${stripped}` : '/datei '
-  els.chatInput.value = nextValue
-  setComposerQgisMode(false)
-  resizeComposer()
-  els.chatInput.focus()
-  els.chatInput.setSelectionRange(nextValue.length, nextValue.length)
+  setComposerText(nextValue, { qgis: false })
 }
 
 function syncComposerQgisModeFromInput() {
@@ -7218,7 +7307,7 @@ async function sendChat() {
       : ''
     const assistantReply = [response.workflow_summary?.final_result?.content || response.reply, savedReportNote, workflowNote].filter(Boolean).join('\n\n')
     if (assistantReply) {
-      renderMessage('assistant', assistantReply, { generatedFiles: response.generated_files, workflowSummary: response.workflow_summary })
+      renderMessage('assistant', assistantReply, { generatedFiles: response.generated_files, workflowSummary: response.workflow_summary, workflowResolution: response.workflow_resolution })
     } else if (response.generated_files?.length) {
       renderMessage('assistant', 'Datei wurde erstellt.', { generatedFiles: response.generated_files })
     } else {
@@ -7431,6 +7520,7 @@ function bindComposerEvents() {
   els.chatInput.addEventListener('input', () => {
     resizeComposer()
     syncComposerQgisModeFromInput()
+    updateComposerTagSuggestions()
   })
   els.chatInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -7531,6 +7621,8 @@ async function bootstrap() {
   bindAuthEvents()
   bindSidebarEvents()
   bindComposerEvents()
+  ensureComposerProfileSelector()
+  ensureComposerTagSuggestions()
   window.addEventListener('resize', () => {
     if (!isMobileViewport()) {
       closeSidebarDrawer()
