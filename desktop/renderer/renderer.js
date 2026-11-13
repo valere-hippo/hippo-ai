@@ -7129,7 +7129,8 @@ async function sendChat() {
     updatePresence()
     return
   }
-  const message = els.chatInput.value.trim()
+  const rawMessage = String(els.chatInput.value || '')
+  const message = rawMessage.trim()
   if (!message && state.draftAttachments.length === 0) return
 
   normalizeActiveConversationState()
@@ -7151,11 +7152,10 @@ async function sendChat() {
     setDesktopAgentMode(true)
   }
 
-  const dateiRequested = /(^|\s)\/datei(?:\s|$)/i.test(String(message || ''))
-  const cleanMessage = String(message || '')
+  const dateiRequested = /(^|\s)\/datei(?:\s|$)/i.test(String(rawMessage || ''))
+  const cleanMessage = String(rawMessage || '')
     .replace(/(^|\s)\/datei(?:\s|$)/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+    .replace(/\r/g, '')
   const explicitPathCandidates = extractWindowsPathCandidates(cleanMessage)
   const explicitPath = explicitPathCandidates[0] || ''
   const qgisRequested = looksLikeQgisRequest(cleanMessage)
@@ -7289,7 +7289,7 @@ async function sendChat() {
         conversation_id: state.currentConversationId,
         project_id: state.selectedProjectId,
         profile_id: state.selectedProfileId,
-        message: projectFileAnalysisMessage || message,
+        message: projectFileAnalysisMessage || rawMessage,
         attachments,
         desktop_agent: state.desktopAgentMode,
         desktop_profile: state.desktopAgentProfile,
