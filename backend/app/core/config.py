@@ -34,9 +34,9 @@ class Settings(BaseSettings):
     hippo_vision_model: str | None = None
 
     # Provider-specific model hubs for workflow routing
-    claude_api_url: str | None = Field(default=None, validation_alias=AliasChoices("CLAUDE_API_BASE_URL", "ANTHROPIC_API_URL"))
-    claude_api_key: str | None = Field(default=None, validation_alias=AliasChoices("CLAUDE_API_KEY", "ANTHROPIC_API_KEY"))
-    claude_model: str | None = Field(default="claude-3-5-sonnet", validation_alias=AliasChoices("CLAUDE_MODEL", "ANTHROPIC_MODEL"))
+    claude_api_url: str | None = Field(default=None, validation_alias=AliasChoices("CLAUDE_API_BASE_URL",))
+    claude_api_key: str | None = Field(default=None, validation_alias=AliasChoices("CLAUDE_API_KEY",))
+    claude_model: str | None = Field(default="claude-3-5-sonnet", validation_alias=AliasChoices("CLAUDE_MODEL",))
     deepseek_api_url: str | None = Field(default=None, validation_alias=AliasChoices("DEEPSEEK_API_BASE_URL", "DEEPSEEK_API_URL"))
     deepseek_api_key: str | None = Field(default=None, validation_alias=AliasChoices("DEEPSEEK_API_KEY",))
     deepseek_model: str | None = Field(default="deepseek-chat", validation_alias=AliasChoices("DEEPSEEK_MODEL",))
