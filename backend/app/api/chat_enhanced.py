@@ -29,6 +29,7 @@ from app.services.project_report_fallback import build_project_report_generated_
 from app.services.workflow_orchestration import ensure_workflow_for_message
 from app.services.workflow_executor import queue_workflow_execution
 from app.services.workflow_planner import summarize_workflow_execution, build_workflow_summary_generated_file, build_workflow_task_generated_files
+from app.services.attachment_segment_analysis import build_segmented_attachment_analysis_context
 from app.services.project_skills import build_project_skills_context
 from app.services.project_tools import build_tools_context
 from app.services.desktop_workflows import infer_desktop_launch_actions
@@ -483,6 +484,12 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
         project_context_parts: list[str] = []
         project_files_context = ''
+        analysis_attachments = list(payload.attachments or [])
+        fileAnalysisRequested = bool(
+            getattr(payload, 'file_direct_mode', False)
+            or looks_like_file_generation_request(payload.message, payload.attachments)
+            or looks_like_project_detailed_report_request(payload.message)
+        )
         try:
             direct_context = (payload.project_folder_context or '').strip()
             if conv_project is not None and not payload.attachments:
@@ -502,7 +509,26 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                     "Lokale Projektordner werden direkt über den vorhandenen Projektkontext gelesen; "
                     "wenn der Kontext noch leer ist, antworte ohne erfundene Dateinamen und fordere nur eine kurze direkte Ordnerauflistung an."
                 )
-            if payload.attachments and stored_message_content.strip():
+            if settings.hippo_api_url and analysis_attachments and fileAnalysisRequested:
+                try:
+                    attachment_segment_context = await build_segmented_attachment_analysis_context(
+                        analysis_attachments,
+                        question=payload.message,
+                        chat_api_url=settings.hippo_api_url,
+                        api_key=settings.hippo_api_key,
+                        model_name=settings.hippo_model,
+                        request_timeout_seconds=180,
+                    )
+                    if attachment_segment_context.strip():
+                        project_context_parts.insert(
+                            0,
+                            "Segmentierte Dateianalyse aus den direkt hochgeladenen Dateien:\n"
+                            f"{attachment_segment_context.strip()}"
+                        )
+                        analysis_attachments = []
+                except Exception as error:
+                    logger.warning('Segmented attachment analysis failed for conversation %s: %s', conv_id, error)
+            if payload.attachments and stored_message_content.strip() and analysis_attachments:
                 project_context_parts.insert(
                     0,
                     "Datei-Inhalt der direkt hochgeladenen Projektdateien:\n"
