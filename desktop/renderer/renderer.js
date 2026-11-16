@@ -55,6 +55,7 @@ const state = {
   projectFolderWarmJobs: new Map(),
   projectFolderDeepWarmState: new Map(),
   projectRefreshJobs: new Map(),
+  activeWorkflowPolls: new Map(),
   projectMenuCleanup: null,
   projectQuery: '',
   chatQuery: '',
@@ -3288,6 +3289,51 @@ async function openConversationById(conversationId) {
     showToast(error.message || 'Failed to load conversation', 'error')
   } finally {
     hideLoader()
+  }
+}
+
+async function watchWorkflowCompletion(workflowId, conversationId) {
+  const numericWorkflowId = Number(workflowId || 0)
+  const numericConversationId = Number(conversationId || 0)
+  if (!Number.isFinite(numericWorkflowId) || numericWorkflowId <= 0) return
+  if (state.activeWorkflowPolls.has(numericWorkflowId)) return
+  state.activeWorkflowPolls.set(numericWorkflowId, true)
+
+  let attempts = 0
+  try {
+    while (state.activeWorkflowPolls.has(numericWorkflowId)) {
+      attempts += 1
+      if (attempts > 240) {
+        state.activeWorkflowPolls.delete(numericWorkflowId)
+        showToast('Analyse prend plus de temps que prévu', 'error')
+        return
+      }
+      try {
+        const workflow = await apiJson(`/workflows/${numericWorkflowId}`)
+        const status = String(workflow?.status || '').toLowerCase()
+        if (status === 'completed' || status === 'failed' || status === 'needs_model_choice') {
+          state.activeWorkflowPolls.delete(numericWorkflowId)
+          await new Promise((resolve) => setTimeout(resolve, 1200))
+          if (numericConversationId && Number(state.currentConversationId) === numericConversationId) {
+            await openConversationById(numericConversationId)
+          }
+          await loadConversations()
+          if (status === 'completed') {
+            showToast('Analyse terminée')
+          } else if (status === 'needs_model_choice') {
+            showToast('Analyse terminée: choisis un autre modèle', 'error')
+          } else {
+            showToast('Analyse terminée avec une erreur', 'error')
+          }
+          return
+        }
+      } catch (error) {
+        console.warn('Workflow poll failed', error)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2500))
+    }
+  } finally {
+    state.activeWorkflowPolls.delete(numericWorkflowId)
   }
 }
 
@@ -7340,6 +7386,9 @@ async function sendChat() {
     } else {
       const legacySaved = showGeneratedFile(response.reply || '', deliveryFolder)
       if (legacySaved) return
+    }
+    if (response.workflow_id && !response.workflow_summary && !response.workflow_resolution) {
+      void watchWorkflowCompletion(response.workflow_id, response.conversation_id || state.currentConversationId)
     }
   } catch (error) {
     showToast(error.message || 'Chat fehlgeschlagen', 'error')

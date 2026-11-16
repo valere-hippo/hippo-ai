@@ -27,7 +27,7 @@ from app.services.conversation_memory import build_conversation_memory_context, 
 from app.services.project_storage import build_project_files_context
 from app.services.project_report_fallback import build_project_report_generated_file, build_project_report_fallback, _is_valid_report_text
 from app.services.workflow_orchestration import ensure_workflow_for_message
-from app.services.workflow_executor import execute_workflow
+from app.services.workflow_executor import queue_workflow_execution
 from app.services.workflow_planner import summarize_workflow_execution, build_workflow_summary_generated_file, build_workflow_task_generated_files
 from app.services.project_skills import build_project_skills_context
 from app.services.project_tools import build_tools_context
@@ -553,12 +553,17 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
 
     reply_text = ''
     workflow_execution_result = None
+    workflow_queued = False
     if workflow_plan:
         workflow_id = int(str(workflow_plan.get('workflow_id') or '0'))
         if workflow_id <= 0:
             raise HTTPException(status_code=500, detail="Workflow-ID missing from workflow plan")
-        workflow_execution_result = await execute_workflow(db, workflow_id)
-        reply_text = summarize_workflow_execution(workflow_plan, workflow_execution_result)
+        await queue_workflow_execution(db, workflow_id)
+        workflow_queued = True
+        reply_text = (
+            "Analyse lancée en arrière-plan. "
+            "Je publie automatiquement le résultat ici dès que le workflow est terminé."
+        )
     else:
         if not settings.hippo_api_url:
             raise HTTPException(status_code=503, detail="Die Hippo-API ist nicht konfiguriert. Bitte HIPPO_AI_BASE_URL und HIPPO_AI_MODEL setzen.")
@@ -715,20 +720,21 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             logger.warning('Auto report generation failed for conversation %s', conv_id)
 
-    await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user_id, role='assistant', content=reply_text))
-    await db.commit()
+    if not workflow_queued:
+        await db.execute(insert(ChatMessage).values(conversation_id=conv_id, user_id=current_user_id, role='assistant', content=reply_text))
+        await db.commit()
 
-    try:
-        await refresh_conversation_memory(
-            db,
-            conv_id,
-            recent_messages=messages[-18:],
-            assistant_reply=reply_text,
-            project_name=conv_project.name if conv_project else None,
-            profile_name=getattr(chat_profile, 'name', None),
-        )
-    except Exception:
-        logger.warning("conversation memory update failed for conversation %s", conv_id)
+        try:
+            await refresh_conversation_memory(
+                db,
+                conv_id,
+                recent_messages=list(messages[-18:]),
+                assistant_reply=reply_text,
+                project_name=conv_project.name if conv_project else None,
+                profile_name=getattr(chat_profile, 'name', None),
+            )
+        except Exception:
+            logger.warning("conversation memory update failed for conversation %s", conv_id)
 
     workflow_id = None
     workflow_summary = None

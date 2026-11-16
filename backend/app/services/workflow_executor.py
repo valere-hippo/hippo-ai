@@ -7,12 +7,14 @@ import asyncio
 import json
 import logging
 import httpx
-from sqlalchemy import select
+from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import AsyncSessionLocal
+from app.models.chat import ChatMessage
 from app.models.project import Project
 from app.models.workflow import AIWorkflow, AIWorkflowTask
+from app.services.conversation_memory import refresh_conversation_memory
 from app.services.project_storage import build_project_files_context
 from app.services.provider_clients import (
     build_chat_completion_payload,
@@ -22,6 +24,7 @@ from app.services.provider_clients import (
     resolve_provider_runtime,
 )
 from app.services.workflow_planner import build_workflow_execution_summary
+from app.services.workflow_planner import summarize_workflow_execution
 
 logger = logging.getLogger("hippo-ai.workflow")
 
@@ -222,7 +225,68 @@ async def claim_next_queued_workflow(db: AsyncSession) -> int | None:
 
 async def execute_workflow_by_id(workflow_id: int) -> dict[str, Any]:
     async with AsyncSessionLocal() as db:
-        return await execute_workflow(db, workflow_id)
+        result = await execute_workflow(db, workflow_id)
+        await _persist_workflow_result_message(db, workflow_id, result)
+        return result
+
+
+async def _persist_workflow_result_message(db: AsyncSession, workflow_id: int, execution_result: dict[str, Any]) -> None:
+    workflow_res = await db.execute(select(AIWorkflow).where(AIWorkflow.id == workflow_id))
+    workflow = workflow_res.scalar_one_or_none()
+    if workflow is None or workflow.conversation_id is None:
+        return
+
+    tasks = await _load_workflow_tasks(db, workflow_id)
+    plan = {
+        "workflow_id": workflow.id,
+        "final_model_tag": workflow.final_model_tag,
+        "tasks": [task.__dict__ for task in tasks],
+    }
+    reply_text = summarize_workflow_execution(plan, execution_result)
+    resolution = execution_result.get("resolution") if isinstance(execution_result, dict) else None
+    if resolution:
+        choices = resolution.get("choices") or []
+        choice_labels = ", ".join(choice.get("label") for choice in choices if choice.get("label"))
+        reply_text = (
+            f"Le modèle demandé n’est pas disponible pour cette tâche. "
+            f"Erreur: {resolution.get('error_message') or 'modèle indisponible'}. "
+            + (f"Choisis un autre modèle: {choice_labels}." if choice_labels else "Choisis un autre modèle.")
+        )
+
+    recent_messages_res = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.conversation_id == workflow.conversation_id)
+        .order_by(ChatMessage.created_at.asc())
+        .limit(18)
+    )
+    recent_messages = list(recent_messages_res.scalars().all())
+    if recent_messages and str(recent_messages[-1].content or '').strip() == reply_text.strip():
+        recent_messages = recent_messages[:-1]
+
+    await db.execute(
+        insert(ChatMessage).values(
+            conversation_id=workflow.conversation_id,
+            user_id=workflow.created_by_user_id,
+            role="assistant",
+            content=reply_text,
+        )
+    )
+    await db.commit()
+
+    try:
+        await asyncio.wait_for(
+            refresh_conversation_memory(
+                db,
+                workflow.conversation_id,
+                recent_messages=recent_messages,
+                assistant_reply=reply_text,
+                project_name=None,
+                profile_name=None,
+            ),
+            timeout=15,
+        )
+    except Exception as exc:
+        logger.warning("workflow conversation memory refresh failed for workflow %s: %s", workflow_id, exc)
 
 
 async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]:
