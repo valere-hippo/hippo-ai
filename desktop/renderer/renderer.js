@@ -7205,7 +7205,8 @@ async function sendChat() {
   const explicitPathCandidates = extractWindowsPathCandidates(cleanMessage)
   const explicitPath = explicitPathCandidates[0] || ''
   const qgisRequested = looksLikeQgisRequest(cleanMessage)
-  const projectFileAnalysisMessage = dateiRequested
+  const fileAnalysisRequested = dateiRequested || looksLikeFileGenerationRequest(cleanMessage) || /(?:\banalysiere\b|\banalyse\b|\bericht\b)/i.test(cleanMessage)
+  const projectFileAnalysisMessage = fileAnalysisRequested
     ? (cleanMessage || 'Analysiere die angehängten Projektdateien vollständig und antworte ausschließlich auf Basis der echten Inhalte. Wenn der Projektordner mehrere Dateien enthält, beziehe sie gemeinsam ein und nenne konkrete Fakten, keine generischen Platzhalter.')
     : cleanMessage
 
@@ -7281,7 +7282,7 @@ async function sendChat() {
     if (!state.desktopAgentMode && qgisRequested) {
       setDesktopAgentMode(true)
     }
-    if (!explicitPath && !qgisRequested && dateiRequested) {
+    if (!explicitPath && !qgisRequested && fileAnalysisRequested) {
       try {
         projectBundleAttachments = await buildProjectFileAttachments(project, { maxFiles: 1000, maxDepth: 12, includeAllFiles: true })
         if (projectBundleAttachments.length) {
@@ -7297,10 +7298,10 @@ async function sendChat() {
         console.warn('Project file attachment build failed:', error)
       }
     }
-    if (dateiRequested && accessGranted && !projectFolderContext) {
+    if (fileAnalysisRequested && accessGranted && !projectFolderContext) {
       projectFolderContext = `Lokale Projektordner autorisiert: ${scope.sourceFolders.join(' | ')}`
     }
-    if (dateiRequested && scope?.refresh && !state.desktopAgentMode) {
+    if (fileAnalysisRequested && scope?.refresh && !state.desktopAgentMode) {
       scheduleProjectSourceSync(project, projectSourcePrefixes, { silent: true })
       showToast('Quellordner werden im Hintergrund synchronisiert.')
     }
@@ -7339,9 +7340,9 @@ async function sendChat() {
       attachments,
       desktop_agent: state.desktopAgentMode,
       desktop_profile: state.desktopAgentProfile,
-      project_folder_context: dateiRequested ? null : (projectFolderContext || null),
-      project_source_prefixes: dateiRequested ? null : projectSourcePrefixes,
-      file_direct_mode: dateiRequested && !qgisRequested,
+      project_folder_context: fileAnalysisRequested ? null : (projectFolderContext || null),
+      project_source_prefixes: fileAnalysisRequested ? null : projectSourcePrefixes,
+      file_direct_mode: fileAnalysisRequested && !qgisRequested,
       }),
     })
 
