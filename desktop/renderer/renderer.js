@@ -7332,15 +7332,16 @@ async function sendChat() {
     const response = await apiJson('/chat-enhanced/', {
       method: 'POST',
       body: JSON.stringify({
-        conversation_id: state.currentConversationId,
-        project_id: state.selectedProjectId,
-        profile_id: state.selectedProfileId,
-        message: projectFileAnalysisMessage || rawMessage,
-        attachments,
-        desktop_agent: state.desktopAgentMode,
-        desktop_profile: state.desktopAgentProfile,
-        project_folder_context: projectFolderContext || null,
-        project_source_prefixes: projectSourcePrefixes,
+      conversation_id: state.currentConversationId,
+      project_id: state.selectedProjectId,
+      profile_id: state.selectedProfileId,
+      message: projectFileAnalysisMessage || rawMessage,
+      attachments,
+      desktop_agent: state.desktopAgentMode,
+      desktop_profile: state.desktopAgentProfile,
+      project_folder_context: dateiRequested ? null : (projectFolderContext || null),
+      project_source_prefixes: dateiRequested ? null : projectSourcePrefixes,
+      file_direct_mode: dateiRequested && !qgisRequested,
       }),
     })
 

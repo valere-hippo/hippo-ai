@@ -72,6 +72,7 @@ class ChatRequest(BaseModel):
     desktop_result: str | None = None
     project_folder_context: str | None = None
     project_source_prefixes: list[str] | None = None
+    file_direct_mode: bool = False
 
 
 class DesktopAction(BaseModel):
@@ -518,33 +519,36 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         except Exception:
             pass
 
+    project_files_context = ''
     recent_messages = messages[-18:]
     workflow_plan: dict[str, object] | None = None
+    direct_file_mode = bool(getattr(payload, 'file_direct_mode', False))
     try:
-        workflow_plan = await ensure_workflow_for_message(
-            db,
-            current_user=current_user,
-            conversation_id=conv_id,
-            project_id=conv_project.id if conv_project else None,
-            source_message=payload.message,
-            metadata={
-                "source": "auto",
-                "project_folder_context": project_files_context,
-                "project_source_prefixes": payload.project_source_prefixes,
-            },
-            final_model_tag=chat_profile.model_name if chat_profile and chat_profile.model_name else None,
-        )
-        if workflow_plan:
-            hippo_messages.append(
-                {
-                    "role": "system",
-                    "content": (
-                        "Erkannter Multi-Modell-Workflow:\n"
-                        f"{json.dumps(workflow_plan, ensure_ascii=False, indent=2)}\n\n"
-                        "Nutze den Workflow als Leitstruktur für die Antwort. Wenn mehrere Modelle markiert sind, gib eine präzise zusammengefasste Antwort und halte die Reihenfolge und Abhängigkeiten logisch ein."
-                    ),
-                }
+        if not direct_file_mode:
+            workflow_plan = await ensure_workflow_for_message(
+                db,
+                current_user=current_user,
+                conversation_id=conv_id,
+                project_id=conv_project.id if conv_project else None,
+                source_message=payload.message,
+                metadata={
+                    "source": "auto",
+                    "project_folder_context": '' if direct_file_mode else project_files_context,
+                    "project_source_prefixes": payload.project_source_prefixes,
+                },
+                final_model_tag=chat_profile.model_name if chat_profile and chat_profile.model_name else None,
             )
+            if workflow_plan:
+                hippo_messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "Erkannter Multi-Modell-Workflow:\n"
+                            f"{json.dumps(workflow_plan, ensure_ascii=False, indent=2)}\n\n"
+                            "Nutze den Workflow als Leitstruktur für die Antwort. Wenn mehrere Modelle markiert sind, gib eine präzise zusammengefasste Antwort und halte die Reihenfolge und Abhängigkeiten logisch ein."
+                        ),
+                    }
+                )
     except Exception:
         workflow_plan = None
     for m in recent_messages:
