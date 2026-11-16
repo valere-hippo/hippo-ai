@@ -7324,7 +7324,7 @@ async function sendChat() {
     await Promise.all(state.draftAttachments.map((attachment) => persistAttachment(project.id, attachment)))
   }
 
-  renderMessage('user', projectFileAnalysisMessage || message || 'Anhang', { attachments: state.draftAttachments })
+  renderMessage('user', rawMessage || projectFileAnalysisMessage || message || 'Anhang', { attachments: state.draftAttachments })
   resetComposer()
 
   showLoader(dateiRequested ? 'Analyse läuft…' : 'Hippo denkt nach…')
@@ -7333,16 +7333,16 @@ async function sendChat() {
     const response = await apiJson('/chat-enhanced/', {
       method: 'POST',
       body: JSON.stringify({
-      conversation_id: state.currentConversationId,
-      project_id: state.selectedProjectId,
-      profile_id: state.selectedProfileId,
-      message: projectFileAnalysisMessage || rawMessage,
-      attachments,
-      desktop_agent: state.desktopAgentMode,
-      desktop_profile: state.desktopAgentProfile,
-      project_folder_context: fileAnalysisRequested ? null : (projectFolderContext || null),
-      project_source_prefixes: fileAnalysisRequested ? null : projectSourcePrefixes,
-      file_direct_mode: fileAnalysisRequested && !qgisRequested,
+        conversation_id: state.currentConversationId,
+        project_id: state.selectedProjectId,
+        profile_id: state.selectedProfileId,
+        message: fileAnalysisRequested ? rawMessage : (projectFileAnalysisMessage || rawMessage),
+        attachments,
+        desktop_agent: state.desktopAgentMode,
+        desktop_profile: state.desktopAgentProfile,
+        project_folder_context: fileAnalysisRequested ? null : (projectFolderContext || null),
+        project_source_prefixes: fileAnalysisRequested ? null : projectSourcePrefixes,
+        file_direct_mode: fileAnalysisRequested && !qgisRequested,
       }),
     })
 
