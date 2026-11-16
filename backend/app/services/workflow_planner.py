@@ -127,8 +127,35 @@ def is_final_task(text: str) -> bool:
     return any(keyword in lowered for keyword in FINAL_TASK_KEYWORDS) or bool(FINAL_RE.search(lowered))
 
 
+def _segment_workflow_message(message: str) -> list[str]:
+    text = (message or "").replace("\r", "")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) > 1:
+        return lines
+
+    single_line = text.strip()
+    if not single_line:
+        return []
+
+    provider_matches = list(re.finditer(r"#(?:openai|gpt|claude|anthropic|deepseek|qwen|qween|alibaba|tencent|hunyuan)\b", single_line, re.IGNORECASE))
+    if len(provider_matches) <= 1:
+        return [single_line]
+
+    segments: list[str] = []
+    for index, match in enumerate(provider_matches):
+        start = provider_matches[index - 1].start() if index > 0 else 0
+        end = provider_matches[index + 1].start() if index + 1 < len(provider_matches) else len(single_line)
+        segment = single_line[start:end].strip()
+        if segment:
+            segments.append(segment)
+
+    if not segments:
+        return [single_line]
+    return segments
+
+
 def parse_workflow_message(message: str) -> list[PlannedTask]:
-    lines = [line.strip() for line in (message or "").splitlines() if line.strip()]
+    lines = _segment_workflow_message(message)
     if not lines:
         return []
 

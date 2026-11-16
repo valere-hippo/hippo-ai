@@ -350,6 +350,11 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             conversation_id=conv_id,
             project_id=conv_project.id if conv_project else None,
             source_message=payload.message,
+            metadata={
+                "source": "auto",
+                "project_folder_context": project_files_context,
+                "project_source_prefixes": payload.project_source_prefixes,
+            },
             final_model_tag=profile.model_name if profile and profile.model_name else None,
         )
         if workflow_plan:

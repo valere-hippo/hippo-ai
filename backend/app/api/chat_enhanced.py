@@ -527,6 +527,11 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             conversation_id=conv_id,
             project_id=conv_project.id if conv_project else None,
             source_message=payload.message,
+            metadata={
+                "source": "auto",
+                "project_folder_context": project_files_context,
+                "project_source_prefixes": payload.project_source_prefixes,
+            },
             final_model_tag=chat_profile.model_name if chat_profile and chat_profile.model_name else None,
         )
         if workflow_plan:

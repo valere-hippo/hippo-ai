@@ -90,13 +90,22 @@ def _context_is_uninformative(context: str) -> bool:
 
 
 async def build_task_file_context(db: AsyncSession, workflow: AIWorkflow, task: AIWorkflowTask) -> str:
+    metadata = workflow.workflow_metadata or {}
+    direct_context = str(metadata.get("project_folder_context") or "").strip()
+    if direct_context:
+        return direct_context
     if workflow.project_id is None:
         return ""
     project_res = await db.execute(select(Project).where(Project.id == workflow.project_id))
     project = project_res.scalar_one_or_none()
     if project is None:
         return ""
-    source_prefixes = _task_source_prefixes(task)
+    source_prefixes_meta = workflow.workflow_metadata.get("project_source_prefixes") if isinstance(workflow.workflow_metadata, dict) else None
+    source_prefixes = []
+    if isinstance(source_prefixes_meta, list):
+        source_prefixes = [str(item).strip() for item in source_prefixes_meta if str(item).strip()]
+    if not source_prefixes:
+        source_prefixes = _task_source_prefixes(task)
     context = await build_project_files_context(
         project,
         question=task.instruction,
