@@ -326,6 +326,12 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                     "Lokale Projektordner werden direkt über den vorhandenen Projektkontext gelesen; "
                     "wenn der Kontext noch leer ist, antworte ohne erfundene Dateinamen und bitte nur um eine kurze direkte Ordnerauflistung."
                 )
+            if payload.attachments and stored_message_content.strip():
+                project_context_parts.insert(
+                    0,
+                    "Datei-Inhalt der direkt hochgeladenen Projektdateien:\n"
+                    f"{stored_message_content.strip()}"
+                )
             project_files_context = "\n\n".join(project_context_parts)
             hippo_messages.append(
                 {
@@ -342,7 +348,6 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         except Exception:
             pass
 
-    project_files_context = ''
     recent_messages = messages[-18:]
     workflow_plan: dict[str, object] | None = None
     direct_file_mode = bool(getattr(payload, 'file_direct_mode', False))
