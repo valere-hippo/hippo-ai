@@ -28,7 +28,7 @@ from app.services.project_storage import build_project_files_context
 from app.services.project_report_fallback import build_project_report_generated_file, build_project_report_fallback, _is_valid_report_text
 from app.services.workflow_orchestration import ensure_workflow_for_message
 from app.services.workflow_executor import queue_workflow_execution
-from app.services.workflow_planner import summarize_workflow_execution, build_workflow_summary_generated_file, build_workflow_task_generated_files
+from app.services.workflow_planner import summarize_workflow_execution, build_workflow_summary_generated_file, build_workflow_task_generated_files, has_workflow_markers
 from app.services.project_skills import build_project_skills_context
 from app.services.project_tools import build_tools_context
 from app.services.desktop_workflows import infer_desktop_launch_actions
@@ -484,6 +484,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         project_context_parts: list[str] = []
         project_files_context = ''
         analysis_attachments = list(payload.attachments or [])
+        fileAnalysisRequested = False
         fileAnalysisRequested = bool(
             getattr(payload, 'file_direct_mode', False)
             or looks_like_file_generation_request(payload.message, payload.attachments)
@@ -535,7 +536,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
     workflow_plan: dict[str, object] | None = None
     direct_file_mode = bool(getattr(payload, 'file_direct_mode', False))
     try:
-        if not direct_file_mode:
+        if fileAnalysisRequested or has_workflow_markers(payload.message):
             workflow_plan = await ensure_workflow_for_message(
                 db,
                 current_user=current_user,
@@ -546,9 +547,10 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                     "source": "auto",
                     "project_folder_context": '' if direct_file_mode else project_files_context,
                     "project_source_prefixes": payload.project_source_prefixes,
-                    "analysis_attachments": [attachment.model_dump() for attachment in payload.attachments or []] if direct_file_mode and payload.attachments else [],
+                    "analysis_attachments": [attachment.model_dump() for attachment in payload.attachments or []] if fileAnalysisRequested and payload.attachments else [],
                 },
                 final_model_tag=chat_profile.model_name if chat_profile and chat_profile.model_name else None,
+                force_workflow=fileAnalysisRequested,
             )
             if workflow_plan:
                 hippo_messages.append(

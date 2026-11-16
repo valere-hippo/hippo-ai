@@ -9,7 +9,7 @@ from app.models.permission import PermissionLevel
 from app.models.project import Project
 from app.models.workflow import AIWorkflow, AIWorkflowTask
 from app.services.permissions import has_project_permission
-from app.services.workflow_planner import build_workflow_metadata, has_workflow_markers
+from app.services.workflow_planner import build_workflow_metadata, has_workflow_markers, infer_input_kind, infer_title, normalize_model_tag
 
 
 async def ensure_workflow_for_message(
@@ -21,12 +21,33 @@ async def ensure_workflow_for_message(
     source_message: str,
     metadata: dict[str, Any] | None = None,
     final_model_tag: str | None = None,
+    force_workflow: bool = False,
 ) -> dict[str, Any] | None:
     text = (source_message or "").strip()
-    if not text or not has_workflow_markers(text):
+    if not text:
         return None
-
-    plan = build_workflow_metadata(text, final_model_tag=final_model_tag, default_model_tag="openai")
+    if has_workflow_markers(text):
+        plan = build_workflow_metadata(text, final_model_tag=final_model_tag, default_model_tag="openai")
+    elif force_workflow:
+        chosen_model = normalize_model_tag(final_model_tag, "openai") if final_model_tag else normalize_model_tag("openai", "openai")
+        plan = {
+            "status": "pending",
+            "final_model_tag": chosen_model,
+            "tasks": [
+                {
+                    "task_key": "t1",
+                    "title": infer_title(text, 0),
+                    "instruction": text,
+                    "model_tag": chosen_model,
+                    "input_kind": infer_input_kind(text),
+                    "execution_mode": "sequential",
+                    "depends_on": [],
+                    "sort_order": 0,
+                }
+            ],
+        }
+    else:
+        return None
     tasks = plan.get("tasks") or []
     if not tasks:
         return None
