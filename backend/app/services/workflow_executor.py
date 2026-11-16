@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from types import SimpleNamespace
 
 import asyncio
 import json
@@ -15,6 +16,7 @@ from app.models.chat import ChatMessage
 from app.models.project import Project
 from app.models.workflow import AIWorkflow, AIWorkflowTask
 from app.services.conversation_memory import refresh_conversation_memory
+from app.services.attachment_segment_analysis import build_segmented_attachment_analysis_context
 from app.services.project_storage import build_project_files_context
 from app.services.provider_clients import (
     build_chat_completion_payload,
@@ -94,6 +96,29 @@ def _context_is_uninformative(context: str) -> bool:
 
 async def build_task_file_context(db: AsyncSession, workflow: AIWorkflow, task: AIWorkflowTask) -> str:
     metadata = workflow.workflow_metadata or {}
+    attachments_meta = metadata.get("analysis_attachments") if isinstance(metadata, dict) else None
+    if isinstance(attachments_meta, list) and attachments_meta:
+        attachments = [
+            SimpleNamespace(**attachment)
+            for attachment in attachments_meta
+            if isinstance(attachment, dict)
+        ]
+        if attachments:
+            runtime = resolve_provider_runtime(task.model_tag)
+            if runtime.api_url:
+                try:
+                    attachment_context = await build_segmented_attachment_analysis_context(
+                        attachments,
+                        question=task.instruction,
+                        chat_api_url=runtime.api_url,
+                        api_key=runtime.api_key,
+                        model_name=runtime.model_name,
+                        request_timeout_seconds=180,
+                    )
+                    if attachment_context.strip():
+                        return attachment_context
+                except Exception as exc:
+                    logger.warning("attachment segmentation failed for workflow %s task %s: %s", workflow.id, task.task_key, exc)
     direct_context = str(metadata.get("project_folder_context") or "").strip()
     if direct_context:
         return direct_context
