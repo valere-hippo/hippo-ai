@@ -290,10 +290,10 @@ def _workflow_significant_lines(text: str, max_items: int = 10) -> list[str]:
         if not stripped:
             continue
         if any(marker in lowered for marker in markers):
-            lines.append(stripped)
+            lines.append(stripped.lstrip('-• ').strip())
             continue
         if re.search(r'\b(file|datei|projekt|fund|kontrolle|baumart|bbox|geometr|artenschutz)\b', lowered):
-            lines.append(stripped)
+            lines.append(stripped.lstrip('-• ').strip())
     if not lines:
         for raw in (text or '').splitlines():
             stripped = raw.strip()

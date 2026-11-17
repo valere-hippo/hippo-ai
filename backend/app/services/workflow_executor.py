@@ -27,7 +27,12 @@ from app.services.provider_clients import (
     resolve_provider_runtime,
 )
 from app.services.workflow_planner import build_workflow_execution_summary
-from app.services.workflow_planner import summarize_workflow_execution, build_workflow_summary_generated_file, build_workflow_task_generated_files
+from app.services.workflow_planner import (
+    build_workflow_gutachter_report_text,
+    summarize_workflow_execution,
+    build_workflow_summary_generated_file,
+    build_workflow_task_generated_files,
+)
 
 logger = logging.getLogger("hippo-ai.workflow")
 
@@ -268,7 +273,7 @@ async def _persist_workflow_result_message(db: AsyncSession, workflow_id: int, e
         "final_model_tag": workflow.final_model_tag,
         "tasks": [task.__dict__ for task in tasks],
     }
-    reply_text = summarize_workflow_execution(plan, execution_result)
+    reply_text = build_workflow_gutachter_report_text(plan, execution_result)
     resolution = execution_result.get("resolution") if isinstance(execution_result, dict) else None
     if resolution:
         choices = resolution.get("choices") or []

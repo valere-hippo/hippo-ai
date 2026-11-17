@@ -1,4 +1,10 @@
-from app.services.workflow_planner import build_workflow_execution_summary, build_workflow_summary_generated_file, build_workflow_task_generated_file, summarize_workflow_execution
+from app.services.workflow_planner import (
+    build_workflow_execution_summary,
+    build_workflow_summary_generated_file,
+    build_workflow_task_generated_file,
+    build_workflow_gutachter_report_text,
+    summarize_workflow_execution,
+)
 
 
 def test_build_workflow_execution_summary_includes_provider_results():
@@ -53,6 +59,46 @@ def test_build_workflow_summary_generated_file_returns_docx():
     assert filename.endswith('.docx')
     assert mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     assert data[:4] == b'PK\x03\x04'
+
+
+def test_build_workflow_gutachter_report_text_uses_evidence_from_tasks():
+    plan = {
+        'workflow_id': 9,
+        'source_message': '/datei Analysiere die Dateien und erstelle einen Bericht #openai',
+        'final_model_tag': 'openai',
+        'tasks': [
+            {'task_key': 't1', 'title': 'Analyse', 'instruction': 'Analyse', 'model_tag': 'openai'},
+        ],
+    }
+    execution = {
+        'workflow_id': 9,
+        'status': 'completed',
+        'results': {
+            't1': {
+                'provider': 'openai',
+                'model': 'gpt-5.4-mini',
+                'content': '\n'.join([
+                    '[Archiv: projekt.zip]',
+                    'Enthaltene Dateien: a.txt, b.xml',
+                    '- HaselmausNiströhrenKaltenengersabgehangen.shp',
+                    '- Geometrietyp: MultiPointZ',
+                    '- Bounding Box: 395857.305103, 5584856.571759, 396232.670946, 5585390.858271',
+                    '- HaselmausNiströhrenKaltenengersabgehangen.dbf',
+                    '- Datensätze: 35',
+                    '- Projektion: PROJCS["ETRS89 / UTM zone 32N"]',
+                ]),
+            },
+        },
+    }
+
+    report = build_workflow_gutachter_report_text(plan, execution)
+
+    assert 'Fachbeitrag Artenschutz / Geodatenanalyse' in report
+    assert 'projekt.zip' in report
+    assert 'MultiPointZ' in report
+    assert '35' in report
+    assert 'ETRS89 / UTM zone 32N' in report
+    assert 'Die aktuelle Fragestellung lautet sinngemäß' in report
 
 
 def test_build_workflow_task_generated_file_returns_task_specific_docx():
