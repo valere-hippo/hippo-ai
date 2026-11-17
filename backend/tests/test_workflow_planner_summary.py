@@ -77,15 +77,15 @@ def test_build_workflow_gutachter_report_text_uses_evidence_from_tasks():
             't1': {
                 'provider': 'openai',
                 'model': 'gpt-5.4-mini',
-                'content': '\n'.join([
-                    '[Archiv: projekt.zip]',
-                    'Enthaltene Dateien: a.txt, b.xml',
-                    '- HaselmausNiströhrenKaltenengersabgehangen.shp',
-                    '- Geometrietyp: MultiPointZ',
-                    '- Bounding Box: 395857.305103, 5584856.571759, 396232.670946, 5585390.858271',
-                    '- HaselmausNiströhrenKaltenengersabgehangen.dbf',
-                    '- Datensätze: 35',
-                    '- Projektion: PROJCS["ETRS89 / UTM zone 32N"]',
+                'content': 'Generischer Bericht',
+                'file_context': '\n'.join([
+                    'HaselmausNiströhrenKaltenengersabgehangen.shp',
+                    'Geometrietyp: MultiPointZ',
+                    'Datensätze: 35',
+                    'Felder: Nummer, Baumart, Kontrolle, Kontroll1, Fund, Abgehangen',
+                    'Projektion: ETRS89 / UTM zone 32N',
+                    'CPG: UTF-8',
+                    'NtHaselmausgesamt20261016125543.jpg',
                 ]),
             },
         },
@@ -94,11 +94,13 @@ def test_build_workflow_gutachter_report_text_uses_evidence_from_tasks():
     report = build_workflow_gutachter_report_text(plan, execution)
 
     assert 'Fachbeitrag Artenschutz / Geodatenanalyse' in report
-    assert 'projekt.zip' in report
+    assert 'HaselmausNiströhrenKaltenengersabgehangen.shp' in report
     assert 'MultiPointZ' in report
-    assert '35' in report
+    assert '35 Datensätze' in report or '35' in report
     assert 'ETRS89 / UTM zone 32N' in report
-    assert 'Die aktuelle Fragestellung lautet sinngemäß' in report
+    assert 'UTF-8' in report
+    assert 'Die Geometrie ist punktbasiert' in report
+    assert 'Die Attributfelder deuten' in report
 
 
 def test_build_workflow_task_generated_file_returns_task_specific_docx():

@@ -470,6 +470,7 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
                 result = {
                     **result,
                     "content": file_context.strip(),
+                    "file_context": file_context.strip(),
                     "status": "done",
                     "fallback_used": "file_context",
                 }
