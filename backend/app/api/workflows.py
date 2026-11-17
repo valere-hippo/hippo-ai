@@ -18,7 +18,7 @@ from app.schemas.workflow import (
 )
 from app.services.permissions import has_project_permission
 from app.services.workflow_planner import build_workflow_metadata
-from app.services.workflow_executor import execute_workflow, queue_workflow_execution
+from app.services.workflow_executor import execute_workflow, queue_workflow_execution, schedule_workflow_execution_fallback
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -182,5 +182,6 @@ async def run_workflow(workflow_id: int, db: DbSession, current_user=Depends(get
     await _assert_project_access(db, current_user, project)
     if background:
         await queue_workflow_execution(db, workflow_id)
+        await schedule_workflow_execution_fallback(workflow_id)
         return {"workflow_id": workflow_id, "status": "queued"}
     return await execute_workflow(db, workflow_id)

@@ -27,7 +27,7 @@ from app.services.conversation_memory import build_conversation_memory_context, 
 from app.services.project_storage import build_project_files_context
 from app.services.project_report_fallback import build_project_report_generated_file, build_project_report_fallback, _is_valid_report_text
 from app.services.workflow_orchestration import ensure_workflow_for_message
-from app.services.workflow_executor import queue_workflow_execution
+from app.services.workflow_executor import queue_workflow_execution, schedule_workflow_execution_fallback
 from app.services.workflow_planner import summarize_workflow_execution, build_workflow_summary_generated_file, build_workflow_task_generated_files, has_workflow_markers
 from app.services.project_skills import build_project_skills_context
 from app.services.project_tools import build_tools_context
@@ -577,6 +577,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
         if workflow_id <= 0:
             raise HTTPException(status_code=500, detail="Workflow-ID missing from workflow plan")
         await queue_workflow_execution(db, workflow_id)
+        await schedule_workflow_execution_fallback(workflow_id)
         workflow_queued = True
         reply_text = (
             "Analyse lancée en arrière-plan. "

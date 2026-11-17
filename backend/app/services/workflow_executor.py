@@ -254,11 +254,56 @@ async def claim_next_queued_workflow(db: AsyncSession) -> int | None:
     return workflow.id
 
 
+async def claim_workflow_if_queued(db: AsyncSession, workflow_id: int) -> bool:
+    result = await db.execute(
+        select(AIWorkflow)
+        .where(AIWorkflow.id == workflow_id)
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    workflow = result.scalar_one_or_none()
+    if workflow is None or workflow.status != "queued":
+        return False
+    workflow.status = "running"
+    workflow.updated_at = datetime.utcnow()
+    await db.commit()
+    return True
+
+
+async def execute_workflow_by_id_if_queued(workflow_id: int) -> dict[str, Any] | None:
+    async with AsyncSessionLocal() as db:
+        claimed = await claim_workflow_if_queued(db, workflow_id)
+        if not claimed:
+            return None
+        result = await execute_workflow(db, workflow_id)
+        await _persist_workflow_result_message(db, workflow_id, result)
+        return result
+
+
 async def execute_workflow_by_id(workflow_id: int) -> dict[str, Any]:
     async with AsyncSessionLocal() as db:
         result = await execute_workflow(db, workflow_id)
         await _persist_workflow_result_message(db, workflow_id, result)
         return result
+
+
+async def schedule_workflow_execution_fallback(workflow_id: int, *, delay_seconds: float = 2.0) -> None:
+    async def _runner() -> None:
+        if delay_seconds > 0:
+            await asyncio.sleep(delay_seconds)
+        try:
+            result = await execute_workflow_by_id_if_queued(workflow_id)
+            if result is None:
+                logger.info("Workflow fallback skipped for workflow %s (already claimed or finished)", workflow_id)
+            else:
+                logger.info("Workflow fallback executed workflow %s", workflow_id)
+        except Exception as exc:
+            logger.exception("Workflow fallback failed for workflow %s: %s", workflow_id, exc)
+
+    try:
+        asyncio.create_task(_runner())
+    except RuntimeError:
+        logger.warning("No running event loop available for workflow fallback %s", workflow_id)
 
 
 async def _persist_workflow_result_message(db: AsyncSession, workflow_id: int, execution_result: dict[str, Any]) -> None:
