@@ -547,6 +547,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                     "source": "auto",
                     "project_folder_context": '' if direct_file_mode else project_files_context,
                     "project_source_prefixes": payload.project_source_prefixes,
+                    "analysis_attachment_context": stored_message_content if fileAnalysisRequested and payload.attachments else '',
                     "analysis_attachments": [attachment.model_dump() for attachment in payload.attachments or []] if fileAnalysisRequested and payload.attachments else [],
                 },
                 final_model_tag=chat_profile.model_name if chat_profile and chat_profile.model_name else None,

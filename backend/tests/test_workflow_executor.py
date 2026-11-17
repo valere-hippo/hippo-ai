@@ -14,6 +14,19 @@ def test_task_source_prefixes_cover_common_input_kinds():
     assert 'text' in workflow_executor._task_source_prefixes(text_task)
 
 
+def test_build_task_file_context_prefers_direct_attachment_context():
+    workflow = SimpleNamespace(id=8, workflow_metadata={'analysis_attachment_context': 'REAL_ATTACHMENT_CONTEXT'}, project_id=7)
+    task = SimpleNamespace(input_kind='images', instruction='Analyse die Bilder', title='Bilder')
+
+    class FakeDB:
+        async def execute(self, stmt):
+            raise AssertionError('db should not be queried when direct attachment context exists')
+
+    result = asyncio.run(workflow_executor.build_task_file_context(FakeDB(), workflow, task))
+
+    assert result == 'REAL_ATTACHMENT_CONTEXT'
+
+
 def test_build_task_file_context_falls_back_when_prefix_filter_finds_nothing():
     project = SimpleNamespace(id=7, watched_folder='/data/shared-project', pcloud_path=None, pcloud_folder_id=None)
     task = SimpleNamespace(input_kind='images', instruction='Analyse die Bilder', title='Bilder')

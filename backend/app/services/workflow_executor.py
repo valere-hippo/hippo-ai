@@ -124,6 +124,9 @@ def _should_replace_generic_result_with_file_context(content: str, file_context:
 
 async def build_task_file_context(db: AsyncSession, workflow: AIWorkflow, task: AIWorkflowTask) -> str:
     metadata = workflow.workflow_metadata or {}
+    direct_attachment_context = str(metadata.get("analysis_attachment_context") or "").strip()
+    if direct_attachment_context:
+        return direct_attachment_context
     attachments_meta = metadata.get("analysis_attachments") if isinstance(metadata, dict) else None
     if isinstance(attachments_meta, list) and attachments_meta:
         attachments = [
