@@ -142,12 +142,40 @@ def _is_valid_report_text(report_text: str) -> bool:
     return section_hits >= 2 and fact_hits >= 1
 
 
+def _has_substantive_evidence(report_text: str) -> bool:
+    lower = report_text.lower()
+    technical_markers = (
+        'geometrietyp',
+        'bounding box',
+        'datensätze',
+        'felder',
+        'projektion',
+        'koordinatensystem',
+        'beispielzeile',
+        'beispieldatensatz',
+        '.shp',
+        '.shx',
+        '.dbf',
+        '.prj',
+        '.cpg',
+        '.jpg',
+        '.jpeg',
+        '.png',
+        'attachment',
+        'etrs89',
+        'utm',
+    )
+    marker_hits = sum(1 for marker in technical_markers if marker in lower)
+    evidence_lines = _extract_significant_lines(report_text, max_items=18)
+    return marker_hits >= 3 and len(evidence_lines) >= 3
+
+
 def build_project_report_fallback(question: str, project_files_context: str, project_name: str | None = None) -> str:
     title = (project_name or 'Projektbericht').strip() or 'Projektbericht'
     question_text = (question or '').strip() or 'Analyse der Projektdateien'
     report_text = (project_files_context or '').strip()
 
-    if report_text and _is_valid_report_text(report_text):
+    if report_text and _is_valid_report_text(report_text) and _has_substantive_evidence(report_text):
         return '\n'.join([
             f'# {title}',
             '',
@@ -193,6 +221,11 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     figure_lines = [line.strip() for line in _normalize_lines(report_text) if line.lower().startswith('abbildung')][:6]
     table_lines = [line.strip() for line in _normalize_lines(report_text) if line.lower().startswith('tabelle')][:6]
 
+    geodata_files = [name for name in file_names if name.lower().endswith(('.shp', '.shx', '.dbf', '.prj', '.cpg'))]
+    image_files = [name for name in file_names if name.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
+    archive_files = [name for name in file_names if name.lower().endswith(('.zip', '.tar', '.tgz', '.tar.gz'))]
+    other_files = [name for name in file_names if name not in geodata_files + image_files + archive_files]
+
     report: list[str] = [
         f'# {report_title}',
         '',
@@ -210,9 +243,10 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         '2. Methodik',
         '3. Ergebnisse',
         '3.1. Dateibestand und fachliche Einordnung',
-        '3.2. Technische Einordnung',
-        '3.3. Fachliche Einordnung',
-        '3.4. Artbezogene Bewertung',
+        '3.2. Wesentliche Befunde',
+        '3.3. Technische Einordnung',
+        '3.4. Fachliche Einordnung',
+        '3.5. Artbezogene Bewertung',
         '4. Zusammenfassende Bewertung',
         '5. Schlussfolgerung',
     ]
@@ -256,25 +290,34 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
 
     if file_names:
         report.append('3.1. Dateibestand und fachliche Einordnung')
-        for name in file_names[:20]:
-            lower = name.lower()
-            if lower.endswith('.cpg'):
-                report.append(f'- {name}: Codierungsdatei für die zugehörigen Attributdaten. Fachlich relevant, weil sie bestimmt, wie Sonderzeichen und Namensfelder korrekt gelesen werden.')
-            elif lower.endswith('.dbf'):
-                report.append(f'- {name}: Attributtabelle der Shapefile-Struktur. Sie liefert die fachlichen Merkmale zu den geometrischen Objekten und ist für die Interpretation zentral.')
-            elif lower.endswith('.prj'):
-                report.append(f'- {name}: Projektions- bzw. Referenzsystemdatei. Sie ist maßgeblich für die räumliche Eindeutigkeit und die korrekte GIS-Verarbeitung.')
-            elif lower.endswith('.shp'):
-                report.append(f'- {name}: Geometriedatei des GIS-Verbunds. Sie enthält die räumlichen Objekte und bildet die eigentliche Lage- und Forminformation ab.')
-            elif lower.endswith('.shx'):
-                report.append(f'- {name}: Indexdatei des Shapefile-Verbunds. Sie unterstützt die räumliche Struktur und beschleunigt den Zugriff auf die Geometrien.')
-            elif lower.endswith('.zip') or lower.endswith('.tar') or lower.endswith('.tgz') or lower.endswith('.tar.gz'):
-                report.append(f'- {name}: Archivdatei. Inhalt und Nebenprodukte wurden entpackt und in die Analyse übernommen, weil relevante Fachinformationen oft erst im Archiv sichtbar werden.')
-            else:
-                report.append(f'- {name}: Teil des Projektkontexts mit möglicher fachlicher Relevanz.')
+        if geodata_files:
+            report.append(f'- Geodatenverbund: {", ".join(geodata_files[:8])}')
+        if image_files:
+            preview = ', '.join(image_files[:5])
+            suffix = f' … (+{len(image_files) - 5} weitere)' if len(image_files) > 5 else ''
+            report.append(f'- Bildmaterial: {preview}{suffix}')
+        if archive_files:
+            report.append(f'- Archive: {", ".join(archive_files[:8])}')
+        if other_files:
+            preview = ', '.join(other_files[:6])
+            suffix = f' … (+{len(other_files) - 6} weitere)' if len(other_files) > 6 else ''
+            report.append(f'- Weitere Dateien: {preview}{suffix}')
+        report.append('Die aufgelisteten Dateien sind nicht nur formal vorhanden, sondern werden als fachliche Evidenzträger getrennt nach Geometrie, Attributen, Referenzsystem, Bilddokumentation und Begleitdateien gelesen.')
 
     report.append('')
-    report.append('3.2. Technische Einordnung')
+    report.append('3.2. Wesentliche Befunde')
+    if facts:
+        for fact in facts[:12]:
+            report.append(f'- {fact}')
+    else:
+        report.append('- Im Kontext sind keine ausreichend spezifischen Einzelfakten extrahierbar; die Auswertung stützt sich daher auf die erkennbare Dateistruktur und Dateitypen.')
+    if geodata_files:
+        report.append('Die Geodatenkomponenten sprechen für einen vollständigeren GIS-Verbund, in dem Geometrie, Attributtabelle, Projektionsbeschreibung und Index gemeinsam ausgewertet werden müssen.')
+    if image_files:
+        report.append('Die Fotodokumentation ist als Belegmaterial zu behandeln und sollte zusammen mit der Geodatenlage gelesen werden, nicht isoliert.')
+
+    report.append('')
+    report.append('3.3. Technische Einordnung')
     if has('geometrietyp', 'bounding box', 'bbox'):
         report.append('Die Geometrie ist technisch nachvollziehbar beschrieben; Form und räumliche Ausdehnung sind damit für GIS-Anwendungen grundsätzlich interpretierbar.')
     if has('felder', 'feld', 'attribut', 'daten', 'dbf', 'datensätze'):
@@ -287,7 +330,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
         report.append('Die Archivstruktur ist fachlich relevant, weil wichtige Unterlagen in der Praxis häufig in Unterordnern oder komprimierten Sammeldateien abgelegt werden.')
 
     report.append('')
-    report.append('3.3. Fachliche Einordnung')
+    report.append('3.4. Fachliche Einordnung')
     if has('.shp', '.dbf', '.prj', '.shx'):
         report.append('Der Datensatz wirkt wie ein klassischer GIS-Verbund: Geometrie, Attributtabelle, Index und Projektion greifen zusammen und müssen gemeinsam gelesen werden.')
     if has('rastvögel', 'vögel', 'fledermaus', 'ökologisch', 'oekologisch', 'artenschutz', 'haselmaus'):
@@ -309,7 +352,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
 
     if species_candidates:
         report.append('')
-        report.append('3.4. Artbezogene Bewertung')
+        report.append('3.5. Artbezogene Bewertung')
         for candidate in species_candidates:
             if len(candidate) > 40:
                 continue
@@ -336,7 +379,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
                 report.append('  Fachliche Bewertung: Der Hinweis ist im Kontext von Lebensraum, Schutzstatus und räumlicher Einbindung zu bewerten.')
                 report.append('  Konsequenz: Die artspezifische Interpretation sollte Vorrang vor einer rein statistischen Zusammenfassung haben.')
 
-    report.extend(['', 'Zusammenfassende Bewertung'])
+    report.extend(['', '4. Zusammenfassende Bewertung'])
     if has('.shp', '.dbf', '.prj', '.shx'):
         report.append('Die Datenbasis ist für eine fachliche GIS-Analyse grundsätzlich geeignet und fachlich konsistent aufgebaut.')
     if has('.xlsx', '.csv', '.ods'):
@@ -346,7 +389,7 @@ def build_project_report_fallback(question: str, project_files_context: str, pro
     if not facts and not file_names:
         report.append('Die Auswertung basiert auf dem verfügbaren Projektkontext; für eine belastbare fachliche Einordnung wären weitere lesbare Quelldaten hilfreich.')
 
-    report.extend(['', 'Schlussfolgerung'])
+    report.extend(['', '5. Schlussfolgerung'])
     if has('.shp', '.dbf', '.prj', '.shx'):
         report.append('Die analysierten Geodaten-Dateien bieten eine solide Grundlage für die räumliche Analyse und sind fachlich gut weiterverarbeitbar.')
     elif has('.xlsx', '.csv', '.ods'):

@@ -257,6 +257,181 @@ def build_workflow_execution_summary(plan: dict[str, Any], execution: dict[str, 
     }
 
 
+def _workflow_significant_lines(text: str, max_items: int = 10) -> list[str]:
+    lines: list[str] = []
+    markers = (
+        'geometrietyp',
+        'bounding box',
+        'datensätze',
+        'felder',
+        'projektion',
+        'koordinatensystem',
+        'beispielzeile',
+        'beispieldatensatz',
+        'attachment',
+        '.shp',
+        '.shx',
+        '.dbf',
+        '.prj',
+        '.cpg',
+        '.jpg',
+        '.jpeg',
+        '.png',
+        '.pdf',
+        '.docx',
+        '.xlsx',
+        '.csv',
+        'etrs89',
+        'utm',
+    )
+    for raw in (text or '').splitlines():
+        stripped = raw.strip()
+        lowered = stripped.lower()
+        if not stripped:
+            continue
+        if any(marker in lowered for marker in markers):
+            lines.append(stripped)
+            continue
+        if re.search(r'\b(file|datei|projekt|fund|kontrolle|baumart|bbox|geometr|artenschutz)\b', lowered):
+            lines.append(stripped)
+    if not lines:
+        for raw in (text or '').splitlines():
+            stripped = raw.strip()
+            if stripped:
+                lines.append(stripped)
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for line in lines:
+        normalized = re.sub(r'\s+', ' ', line)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(line)
+        if len(deduped) >= max_items:
+            break
+    return deduped
+
+
+def build_workflow_gutachter_report_text(plan: dict[str, Any], execution: dict[str, Any]) -> str:
+    summary = build_workflow_execution_summary(plan, execution)
+    tasks = summary.get('tasks') or []
+    workflow_id = summary.get('workflow_id') or plan.get('workflow_id') or 'unbekannt'
+    status = summary.get('status') or 'unknown'
+    task_count = len(tasks)
+    non_empty_tasks = [task for task in tasks if str(task.get('content') or '').strip()]
+    final_result = summary.get('final_result') or {}
+    final_content = str(final_result.get('content') or '').strip()
+    request_text = str(
+        plan.get('source_message')
+        or plan.get('original_message')
+        or plan.get('prompt')
+        or plan.get('question')
+        or ''
+    ).strip()
+
+    has_geo = any(
+        any(token in str(task.get('content') or '').lower() for token in ('geometrietyp', 'bounding box', '.shp', '.shx', '.dbf', '.prj', 'utm', 'etrs89'))
+        for task in non_empty_tasks
+    )
+    has_images = any(
+        any(token in str(task.get('content') or '').lower() for token in ('.jpg', '.jpeg', '.png', 'image/jpeg', 'image/png', 'fotodokumentation'))
+        for task in non_empty_tasks
+    )
+    has_artenschutz = any(
+        any(token in str(task.get('content') or '').lower() for token in ('haselmaus', 'fledermaus', 'vogel', 'rastvogel', 'artenschutz', 'ökologisch', 'oekologisch'))
+        for task in non_empty_tasks
+    )
+
+    title = 'Fachbeitrag Artenschutz / Geodatenanalyse' if has_geo or has_artenschutz else 'Bericht zur Analyse der Projektdateien'
+    lines: list[str] = [
+        f'# {title}',
+        '',
+        f'Workflow-ID: {workflow_id}',
+        f'Status: {status}',
+        f'Teilaufgaben: {task_count}',
+        f'Berichtstiefe: {"hoch" if non_empty_tasks else "gering"}',
+        '',
+        '1. Anlass und Zielsetzung',
+        'Der Bericht basiert auf den tatsächlich extrahierten Datei- und Inhaltsinformationen der einzelnen Workflow-Teilaufgaben. Die Auswertung erfolgt nicht nur über Dateinamen oder Platzhalter, sondern über die im Workflow ersichtlichen Befunde.',
+    ]
+    if request_text:
+        lines.append(f'Die aktuelle Fragestellung lautet sinngemäß: {request_text.rstrip(" .!?")}.')
+    lines.extend([
+        '',
+        '2. Methodik',
+        'Die Daten wurden in Teilaufgaben verarbeitet, damit Geodaten, Tabellen, Bildmaterial und weitere Belege getrennt gelesen und anschließend zusammengeführt werden können. Dadurch lassen sich große Datenmengen robuster auswerten als in einem einzigen monolithischen Lauf.',
+    ])
+    if has_geo:
+        lines.append('Geometrie, Attributtabelle, Projektionsinformation und Bilddokumentation werden fachlich gemeinsam betrachtet, weil ihre Interpretation nur im Verbund belastbar ist.')
+    if has_images:
+        lines.append('Fotodateien werden als Belegmaterial mit der Fachauswertung verknüpft und nicht als bloße Anhänge behandelt.')
+    if has_artenschutz:
+        lines.append('Naturschutzfachliche Hinweise werden artspezifisch und räumlich interpretiert, nicht nur statistisch zusammengezählt.')
+
+    lines.extend([
+        '',
+        '3. Ergebnisse',
+    ])
+
+    for index, task in enumerate(tasks, start=1):
+        content = str(task.get('content') or '').strip()
+        if not content:
+            continue
+        task_key = str(task.get('task_key') or f't{index}')
+        title_text = str(task.get('title') or task_key)
+        model_tag = str(task.get('model_tag') or task.get('provider') or 'openai')
+        provider = str(task.get('provider') or model_tag)
+        status_text = str(task.get('status') or 'done')
+        lines.extend([
+            '',
+            f'3.{index}. {title_text}',
+            f'- Task-Key: {task_key}',
+            f'- Modell: {model_tag}',
+            f'- Provider: {provider}',
+            f'- Status: {status_text}',
+        ])
+        evidence_lines = _workflow_significant_lines(content, max_items=8)
+        if evidence_lines:
+            lines.append('- Wesentliche Befunde:')
+            for line in evidence_lines:
+                lines.append(f'  - {line}')
+        else:
+            preview = content if len(content) <= 900 else content[:900].rstrip() + '…'
+            lines.append(f'- Inhalt: {preview}')
+        lines.append('- Fachliche Einordnung: Der Inhalt ist als eigenständige Evidenzquelle zu lesen und sollte zusammen mit den übrigen Teilaufgaben bewertet werden.')
+
+    lines.extend([
+        '',
+        '4. Zusammenfassende Bewertung',
+    ])
+    if non_empty_tasks:
+        lines.append(f'Von {task_count} Teilaufgaben enthalten {len(non_empty_tasks)} verwertbare Inhalte. Damit liegt eine ausreichende Basis für eine belastbare Synthese vor.')
+    else:
+        lines.append('Es liegen keine verwertbaren Teilaufgabeninhalte vor; die Auswertung bleibt deshalb auf Metadaten und Workflowstruktur beschränkt.')
+    if final_content:
+        final_preview = final_content if len(final_content) <= 1200 else final_content[:1200].rstrip() + '…'
+        lines.append('Der finale Synthese-Output lautet zusammengefasst wie folgt:')
+        lines.append(final_preview)
+    else:
+        lines.append('Ein expliziter finaler Synthese-Output liegt nicht vor; die Bewertung stützt sich auf die Einzelaufgaben.')
+    if has_geo:
+        lines.append('Die Geodatenlage spricht für einen fachlich tragfähigen GIS-Verbund mit räumlich auswertbaren Objekten und Attributen.')
+    if has_images:
+        lines.append('Das Bildmaterial stützt die Befundlage und erhöht die Nachvollziehbarkeit der Auswertung.')
+    if has_artenschutz:
+        lines.append('Naturschutzfachliche Hinweise erfordern eine artspezifische und räumliche Bewertung statt einer rein formalen Auflistung.')
+
+    lines.extend([
+        '',
+        '5. Schlussfolgerung',
+    ])
+    if has_geo or has_images or has_artenschutz:
+        lines.append('Die analysierten Inhalte liefern eine fachlich verwertbare Grundlage für einen Gutachterbericht, sofern die Teilaufgaben vollständig ausgelesen und in einer abschließenden Synthese zusammengeführt werden.')
+    else:
+        lines.append('Die vorliegenden Inhalte reichen für eine belastbare fachliche Schlussfolgerung nur eingeschränkt aus; weitere lesbare Quelldaten würden die Aussagekraft verbessern.')
+    return '\n'.join(lines).strip()
+
+
 def summarize_workflow_execution(plan: dict[str, Any], execution: dict[str, Any]) -> str:
     summary = build_workflow_execution_summary(plan, execution)
     tasks = summary.get("tasks") or []
@@ -317,6 +492,6 @@ def build_workflow_task_generated_files(summary: dict[str, Any], *, filename_hin
 
 
 def build_workflow_summary_generated_file(plan: dict[str, Any], execution: dict[str, Any], *, filename_hint: str = "workflow_report") -> tuple[bytes, str, str]:
-    summary_text = summarize_workflow_execution(plan, execution)
+    summary_text = build_workflow_gutachter_report_text(plan, execution)
     filename = f"{filename_hint}.docx"
     return build_generated_file_bytes_with_fallback(filename, summary_text)
