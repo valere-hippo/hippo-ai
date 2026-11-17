@@ -2,15 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
-
 from app.services.chat_payloads import build_message_content
-from app.services.provider_clients import build_chat_completion_payload, build_provider_headers
 
 
 DEFAULT_BATCH_MAX_ITEMS = 6
 DEFAULT_BATCH_MAX_CHARS = 18000
-DEFAULT_SEGMENT_MAX_TOKENS = 1400
 
 
 def _attachment_fingerprint(attachment: Any) -> str:
@@ -65,7 +61,7 @@ def split_attachments_for_analysis(
     return batches
 
 
-async def build_segmented_attachment_analysis_context(
+def build_segmented_attachment_analysis_context(
     attachments: list[Any] | None,
     *,
     question: str,
@@ -78,54 +74,36 @@ async def build_segmented_attachment_analysis_context(
     if not batches:
         return ""
 
-    headers = build_provider_headers(api_key)
-    segments: list[str] = []
+    question_text = (question or "").strip()
     batch_total = len(batches)
+    segments: list[str] = []
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(request_timeout_seconds, connect=15.0)) as client:
-        for index, batch in enumerate(batches, start=1):
-            batch_context = build_message_content(question, batch, include_images=True)
-            system_prompt = (
-                "Du liest genau einen Dateisegment-Block aus einem Projekt. "
-                "Lies jede Datei in diesem Segment vollständig, nenne konkrete Fakten, und vermeide generische Einleitungen. "
-                "Wenn mehrere Dateien enthalten sind, behandle sie getrennt mit Dateiname und Inhalt. "
-                "Wenn du etwas nicht lesen kannst, sage es explizit. "
-                "Antworte auf Deutsch und liefere nur inhaltliche Beobachtungen ohne Meta-Kommentare."
-            )
-            user_prompt = (
-                f"Segment {index}/{batch_total}\n"
-                "Analysiere diesen Dateisegment-Block und fasse ihn präzise zusammen. "
-                "Die Antwort wird später mit anderen Segmenten zusammengeführt, also fokussiere auf Fakten, Inhalte und auffällige Details."
-            )
-            payload = build_chat_completion_payload(
-                model_name,
-                [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": [{"type": "text", "text": user_prompt}] if isinstance(batch_context, str) and not batch_context else batch_context},
-                ],
-                max_tokens=DEFAULT_SEGMENT_MAX_TOKENS,
-                temperature=0.1,
-            )
-            response = await client.post(chat_api_url, json=payload, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-            if isinstance(data, dict) and data.get("choices"):
-                content = data["choices"][0]["message"]["content"]
-            else:
-                content = str(data)
-            if isinstance(content, str):
-                text = content.strip()
-            else:
-                text = str(content).strip()
-            if text:
-                file_names = [
-                    _attachment_fingerprint(attachment)
-                    for attachment in batch
-                    if _attachment_fingerprint(attachment)
-                ]
-                header = f"[Segment {index}/{batch_total}]"
-                if file_names:
-                    header += " " + ", ".join(file_names)
-                segments.append(f"{header}\n{text}")
+    for index, batch in enumerate(batches, start=1):
+        file_blocks: list[str] = []
+        for attachment in batch:
+            attachment_context = build_message_content(question_text, [attachment], include_images=True)
+            if isinstance(attachment_context, list):
+                attachment_context = "\n".join(
+                    str(part.get("text") or "") if isinstance(part, dict) else str(part)
+                    for part in attachment_context
+                )
+            attachment_context = str(attachment_context or "").strip()
+            if not attachment_context:
+                continue
+            file_blocks.append(attachment_context)
+        if not file_blocks:
+            continue
+        header = [f"[Segment {index}/{batch_total}]"]
+        if question_text:
+            header.append(f"Fragestellung: {question_text}")
+        names = [
+            _attachment_fingerprint(attachment)
+            for attachment in batch
+            if _attachment_fingerprint(attachment)
+        ]
+        if names:
+            header.append("Dateien: " + ", ".join(names))
+        header.append("Inhalt:")
+        segments.append("\n".join(header + file_blocks))
 
     return "\n\n".join(segments).strip()
