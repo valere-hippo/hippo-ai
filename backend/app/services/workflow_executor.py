@@ -8,6 +8,7 @@ import asyncio
 import base64
 import json
 import logging
+import re
 import httpx
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -98,6 +99,27 @@ def _context_is_uninformative(context: str) -> bool:
             "nicht lesbar",
         )
     )
+
+
+_GENERIC_FILE_REPLY_RE = re.compile(
+    r"(direkten\s+pfad|genauen\s+pfad|bitte\s+gib\s+mir\s+den\s+direkten\s+pfad|kann\s+die\s+dateien\s+nicht|ich\s+kann\s+die\s+dateien\s+nicht|ordnerkontext|dateien\s+nicht\s+direkt|not\s+enough\s+context|no\s+context|please\s+provide\s+the\s+path)",
+    re.IGNORECASE,
+)
+
+
+def _should_replace_generic_result_with_file_context(content: str, file_context: str) -> bool:
+    if not file_context.strip():
+        return False
+    lowered = (content or "").strip().lower()
+    if not lowered:
+        return True
+    if len(lowered) < 220 and _GENERIC_FILE_REPLY_RE.search(lowered):
+        return True
+    if _GENERIC_FILE_REPLY_RE.search(lowered) and _context_is_uninformative(file_context):
+        return True
+    if _GENERIC_FILE_REPLY_RE.search(lowered):
+        return True
+    return False
 
 
 async def build_task_file_context(db: AsyncSession, workflow: AIWorkflow, task: AIWorkflowTask) -> str:
@@ -431,6 +453,17 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
                     error_info.get('error_message'),
                 )
                 return task.task_key, result
+            if _should_replace_generic_result_with_file_context(str(result.get("content") or ""), file_context):
+                logger.info(
+                    "Workflow task %s used file context fallback because provider output was generic",
+                    task.task_key,
+                )
+                result = {
+                    **result,
+                    "content": file_context.strip(),
+                    "status": "done",
+                    "fallback_used": "file_context",
+                }
             task.status = "done"
             task.result_text = result["content"]
             task.result_json = result

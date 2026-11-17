@@ -111,3 +111,17 @@ def test_execute_workflow_by_id_if_queued_runs_only_when_claimed():
     assert result is not None
     assert result['status'] == 'completed'
     assert executed == [13, ('persist', 13, 'completed')]
+
+
+def test_should_replace_generic_result_with_file_context_detects_path_prompt():
+    assert workflow_executor._should_replace_generic_result_with_file_context(
+        'Bitte gib mir den direkten Pfad zur gewünschten Datei.',
+        'HaselmausNiströhrenKaltenengersabgehangen.shp\nGeometrietyp: MultiPointZ',
+    )
+
+
+def test_should_replace_generic_result_with_file_context_keeps_specific_analysis():
+    assert not workflow_executor._should_replace_generic_result_with_file_context(
+        'Die Datei enthält 35 Datensätze und eine Bounding Box.',
+        'HaselmausNiströhrenKaltenengersabgehangen.shp\nGeometrietyp: MultiPointZ',
+    )
