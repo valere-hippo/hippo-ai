@@ -490,7 +490,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         )
 
     explicit_file_request = False
-    if conv_project is not None and not serialized_files:
+    if conv_project is not None and not serialized_files and not workflow_queued:
         try:
             explicit_file_request = looks_like_file_generation_request(payload.message, payload.attachments) or looks_like_project_detailed_report_request(payload.message)
             if explicit_file_request:

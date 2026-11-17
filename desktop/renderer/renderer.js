@@ -3314,6 +3314,17 @@ async function watchWorkflowCompletion(workflowId, conversationId) {
         if (status === 'completed' || status === 'failed' || status === 'needs_model_choice') {
           state.activeWorkflowPolls.delete(numericWorkflowId)
           await new Promise((resolve) => setTimeout(resolve, 1200))
+          const generatedFiles = Array.isArray(workflow?.metadata?.generated_files) ? workflow.metadata.generated_files : []
+          if (generatedFiles.length && deliveryFolder) {
+            try {
+              const savedArtifacts = await saveGeneratedArtifacts(generatedFiles, deliveryFolder)
+              if (savedArtifacts.length) {
+                showToast(`Bericht gespeichert: ${savedArtifacts.length} Datei(en)`)
+              }
+            } catch (error) {
+              console.warn('Saving workflow artifacts failed', error)
+            }
+          }
           if (numericConversationId && Number(state.currentConversationId) === numericConversationId) {
             await openConversationById(numericConversationId)
           }

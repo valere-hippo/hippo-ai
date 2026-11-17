@@ -5,6 +5,7 @@ from typing import Any
 from types import SimpleNamespace
 
 import asyncio
+import base64
 import json
 import logging
 import httpx
@@ -26,7 +27,7 @@ from app.services.provider_clients import (
     resolve_provider_runtime,
 )
 from app.services.workflow_planner import build_workflow_execution_summary
-from app.services.workflow_planner import summarize_workflow_execution
+from app.services.workflow_planner import summarize_workflow_execution, build_workflow_summary_generated_file, build_workflow_task_generated_files
 
 logger = logging.getLogger("hippo-ai.workflow")
 
@@ -433,10 +434,41 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
             "error_message": failed_task.get("error_message"),
             "choices": build_fallback_model_choices(exclude_provider=str(failed_task.get("provider") or "")),
         }
+    generated_files: list[dict[str, str]] = []
+    try:
+        summary_file = build_workflow_summary_generated_file(
+            {"workflow_id": workflow.id, "final_model_tag": workflow.final_model_tag, "tasks": [task.__dict__ for task in tasks]},
+            {"workflow_id": workflow.id, "status": workflow.status, "results": executed},
+            filename_hint="workflow_report",
+        )
+        generated_files.append(
+            {
+                "filename": summary_file[2],
+                "mime_type": summary_file[1],
+                "data_base64": base64.b64encode(summary_file[0]).decode('ascii'),
+            }
+        )
+        for file_data, mime_type, filename in build_workflow_task_generated_files(summary):
+            generated_files.append(
+                {
+                    "filename": filename,
+                    "mime_type": mime_type,
+                    "data_base64": base64.b64encode(file_data).decode('ascii'),
+                }
+            )
+    except Exception as exc:
+        logger.warning("workflow generated file export failed for workflow %s: %s", workflow.id, exc)
+    workflow.workflow_metadata = {
+        **(workflow.workflow_metadata or {}),
+        "execution_summary": summary,
+        "generated_files": generated_files,
+    }
+    await db.commit()
     return {
         "workflow_id": workflow.id,
         "status": workflow.status,
         "results": executed,
         "summary": summary,
         "resolution": resolution,
+        "generated_files": generated_files,
     }
