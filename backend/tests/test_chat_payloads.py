@@ -2,6 +2,8 @@ from types import SimpleNamespace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import base64
+from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from app.services.chat_payloads import (
     attachments_contain_images,
@@ -78,6 +80,30 @@ def test_build_message_content_uses_geo_bundle_context_for_shapefile_attachments
         assert 'Geodatenpaket für' in content
         assert 'Biotopkartierung' in content
         assert 'Datensätze' in content or 'Geometrien' in content
+
+
+def _make_zip_bytes() -> bytes:
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("notes/readme.txt", "Zip archive text")
+        archive.writestr("docs/info.md", "# Info\nArchive content")
+    return buffer.getvalue()
+
+
+def test_build_message_content_uses_zip_archive_context():
+    attachment = SimpleNamespace(
+        filename="bundle.zip",
+        mime_type="application/zip",
+        data_url=None,
+        raw_base64=base64.b64encode(_make_zip_bytes()).decode("ascii"),
+        ocr_text=None,
+    )
+
+    content = build_message_content("Analysiere die Dateien", [attachment], include_images=False)
+    assert isinstance(content, str)
+    assert "Archiv:" in content
+    assert "readme.txt" in content
+    assert "Zip archive text" in content
 
 
 def test_looks_like_image_generation_request_requires_explicit_creation_language():

@@ -3467,7 +3467,7 @@ function isAttachableProjectFile(filename) {
     '.txt', '.md', '.markdown', '.csv', '.json', '.yml', '.yaml', '.xml', '.rtf', '.log', '.ini',
     '.py', '.js', '.ts', '.html', '.htm', '.css', '.pdf', '.docx', '.png', '.jpg', '.jpeg', '.webp',
     '.gif', '.bmp', '.tif', '.tiff', '.shp', '.shx', '.dbf', '.prj', '.cpg', '.gpkg', '.qgz', '.qgs',
-    '.geojson', '.kml', '.kmz', '.svg',
+    '.geojson', '.kml', '.kmz', '.svg', '.zip', '.7z', '.rar', '.tar', '.gz', '.tgz',
   ]).has(ext)
 }
 
