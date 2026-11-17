@@ -407,8 +407,8 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         await schedule_workflow_execution_fallback(workflow_id)
         workflow_queued = True
         reply_text = (
-            "Analyse lancée en arrière-plan. "
-            "Je publie automatiquement le résultat ici dès que le workflow est terminé."
+            "Analyse im Hintergrund gestartet. "
+            "Ich liefere den Bericht automatisch hier im Chat, sobald der Workflow fertig ist."
         )
     else:
         # Call Hippo model endpoint if configured (preferred)

@@ -125,3 +125,10 @@ def test_should_replace_generic_result_with_file_context_keeps_specific_analysis
         'Die Datei enthält 35 Datensätze und eine Bounding Box.',
         'HaselmausNiströhrenKaltenengersabgehangen.shp\nGeometrietyp: MultiPointZ',
     )
+
+
+def test_should_replace_generic_result_with_file_context_detects_generic_fallback_text():
+    assert workflow_executor._should_replace_generic_result_with_file_context(
+        'Im lokalen Projektordner konnten aktuell noch keine Dateien zuverlässig ausgelesen werden. Ordnerpfad: C:\\Users\\ValereYoubi\\Documents\\rast Wenn der Benutzer Dateien erwartet, erkläre, dass der lokale Ordnerkontext fehlt oder der Pfad noch nicht direkt eingebunden wurde, und bitte nur um die direkte Pfadangabe.',
+        'REAL_ATTACHMENT_CONTEXT',
+    )

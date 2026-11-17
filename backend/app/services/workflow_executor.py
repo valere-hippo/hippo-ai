@@ -102,7 +102,7 @@ def _context_is_uninformative(context: str) -> bool:
 
 
 _GENERIC_FILE_REPLY_RE = re.compile(
-    r"(direkten\s+pfad|genauen\s+pfad|bitte\s+gib\s+mir\s+den\s+direkten\s+pfad|kann\s+die\s+dateien\s+nicht|ich\s+kann\s+die\s+dateien\s+nicht|ordnerkontext|dateien\s+nicht\s+direkt|not\s+enough\s+context|no\s+context|please\s+provide\s+the\s+path)",
+    r"(direkten\s+pfad|genauen\s+pfad|bitte\s+gib\s+mir\s+den\s+direkten\s+pfad|kann\s+die\s+dateien\s+nicht|ich\s+kann\s+die\s+dateien\s+nicht|ordnerkontext|dateien\s+nicht\s+direkt|keine\s+dateien\s+zuverlässig\s+ausgelesen|kein\s+zugriff\s+auf\s+den\s+ordner|ordnerpfad:|wenn\s+der\s+benutzer\s+dateien\s+erwartet|not\s+enough\s+context|no\s+context|please\s+provide\s+the\s+path)",
     re.IGNORECASE,
 )
 
@@ -199,6 +199,12 @@ def _build_task_messages(
         context_bits.append(
             "Reale lokale Projektdaten aus dem Dateisystem (dieser Kontext stammt aus echten Dateien und hat Vorrang vor allgemeinen Annahmen):\n"
             f"{file_context.strip()}"
+        )
+    if file_context.strip():
+        context_bits.append(
+            "WICHTIG: Die folgenden Angaben sind bereits extrahierte Dateiinhalte. "
+            "Analysiere sie direkt, nenne konkrete Fakten aus dem Inhalt und gib keinen Pfad-, Scan- oder Kontext-Fallback als Antwort. "
+            "Wenn Geodaten, Archive, Bilder oder Tabellen enthalten sind, beschreibe genau die erkannten Inhalte, Felder, Geometrien, Dateinamen und Befunde."
         )
     if dependency_texts:
         context_bits.append("Abhängigkeiten:")
