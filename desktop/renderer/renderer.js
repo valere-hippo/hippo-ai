@@ -67,6 +67,59 @@ const state = {
 }
 
 const PROJECT_FOLDER_CONTEXT_CACHE_KEY = 'hippo.project.folder.context.cache.v2'
+const WORKFLOW_AUTOPOLL_STORAGE_KEY = 'hippo.workflow.autopoll.v1'
+
+function loadPersistedWorkflowPolls() {
+  try {
+    const raw = localStorage.getItem(WORKFLOW_AUTOPOLL_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((entry) => ({
+        workflowId: Number(entry?.workflowId || 0),
+        conversationId: Number(entry?.conversationId || 0),
+      }))
+      .filter((entry) => Number.isFinite(entry.workflowId) && entry.workflowId > 0)
+  } catch (error) {
+    console.warn('Failed to load pending workflow polls', error)
+    return []
+  }
+}
+
+function savePersistedWorkflowPolls() {
+  try {
+    const entries = []
+    for (const [workflowId, payload] of state.activeWorkflowPolls.entries()) {
+      entries.push({ workflowId, conversationId: Number(payload?.conversationId || 0) || 0 })
+    }
+    localStorage.setItem(WORKFLOW_AUTOPOLL_STORAGE_KEY, JSON.stringify(entries))
+  } catch (error) {
+    console.warn('Failed to save pending workflow polls', error)
+  }
+}
+
+function markWorkflowPollPending(workflowId, conversationId) {
+  const numericWorkflowId = Number(workflowId || 0)
+  if (!Number.isFinite(numericWorkflowId) || numericWorkflowId <= 0) return
+  state.activeWorkflowPolls.set(numericWorkflowId, { conversationId: Number(conversationId || 0) || 0 })
+  savePersistedWorkflowPolls()
+}
+
+function clearWorkflowPollPending(workflowId) {
+  const numericWorkflowId = Number(workflowId || 0)
+  if (!Number.isFinite(numericWorkflowId) || numericWorkflowId <= 0) return
+  state.activeWorkflowPolls.delete(numericWorkflowId)
+  savePersistedWorkflowPolls()
+}
+
+function resumePersistedWorkflowPolls() {
+  const pending = loadPersistedWorkflowPolls()
+  for (const entry of pending) {
+    if (state.activeWorkflowPolls.has(entry.workflowId)) continue
+    void watchWorkflowCompletion(entry.workflowId, entry.conversationId)
+  }
+}
 
 function loadProjectFolderContextSnapshot() {
   try {
@@ -3115,6 +3168,7 @@ async function loadWorkspace() {
   await loadProfiles()
   await loadAdminOverview()
   renderContext()
+  resumePersistedWorkflowPolls()
 }
 
 async function login() {
@@ -3165,6 +3219,10 @@ function logout() {
   state.selectedProjectId = null
   state.currentConversationId = null
   state.draftAttachments = []
+  state.activeWorkflowPolls.clear()
+  try {
+    localStorage.removeItem(WORKFLOW_AUTOPOLL_STORAGE_KEY)
+  } catch (error) {}
   localStorage.removeItem('hippo.token')
   setScreen(false)
   updatePresence()
@@ -3297,14 +3355,14 @@ async function watchWorkflowCompletion(workflowId, conversationId) {
   const numericConversationId = Number(conversationId || 0)
   if (!Number.isFinite(numericWorkflowId) || numericWorkflowId <= 0) return
   if (state.activeWorkflowPolls.has(numericWorkflowId)) return
-  state.activeWorkflowPolls.set(numericWorkflowId, true)
+  markWorkflowPollPending(numericWorkflowId, numericConversationId)
 
   let attempts = 0
   try {
     while (state.activeWorkflowPolls.has(numericWorkflowId)) {
       attempts += 1
       if (attempts > 240) {
-        state.activeWorkflowPolls.delete(numericWorkflowId)
+        clearWorkflowPollPending(numericWorkflowId)
         showToast('Analyse prend plus de temps que prévu', 'error')
         return
       }
@@ -3312,7 +3370,7 @@ async function watchWorkflowCompletion(workflowId, conversationId) {
         const workflow = await apiJson(`/workflows/${numericWorkflowId}`)
         const status = String(workflow?.status || '').toLowerCase()
         if (status === 'completed' || status === 'failed' || status === 'needs_model_choice') {
-          state.activeWorkflowPolls.delete(numericWorkflowId)
+          clearWorkflowPollPending(numericWorkflowId)
           await new Promise((resolve) => setTimeout(resolve, 1200))
           const generatedFiles = Array.isArray(workflow?.metadata?.generated_files) ? workflow.metadata.generated_files : []
           if (generatedFiles.length && deliveryFolder) {
@@ -3344,7 +3402,7 @@ async function watchWorkflowCompletion(workflowId, conversationId) {
       await new Promise((resolve) => setTimeout(resolve, 2500))
     }
   } finally {
-    state.activeWorkflowPolls.delete(numericWorkflowId)
+    clearWorkflowPollPending(numericWorkflowId)
   }
 }
 
@@ -7400,7 +7458,7 @@ async function sendChat() {
       const legacySaved = showGeneratedFile(response.reply || '', deliveryFolder)
       if (legacySaved) return
     }
-    if (response.workflow_id && !response.workflow_summary && !response.workflow_resolution) {
+    if (response.workflow_id) {
       void watchWorkflowCompletion(response.workflow_id, response.conversation_id || state.currentConversationId)
     }
   } catch (error) {

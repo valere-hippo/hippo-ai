@@ -1240,6 +1240,45 @@ def build_generated_file_bytes_with_fallback(filename: str, content: str) -> tup
         return _build_fallback_png_bytes(base_title, content or ""), "image/png", fallback_name
 
 
+REPORT_OUTPUT_EXTENSIONS = (".docx", ".pdf", ".rtf")
+
+
+def detect_requested_report_formats(text: str | None) -> list[str]:
+    lowered = (text or "").lower()
+    formats: list[str] = []
+
+    def add(ext: str) -> None:
+        if ext not in formats:
+            formats.append(ext)
+
+    if re.search(r"\bpdf\b", lowered):
+        add(".pdf")
+    if re.search(r"\b(word|docx|word[-\s]*dokument|word[-\s]*datei|wort|dokument)\b", lowered):
+        add(".docx")
+    if re.search(r"\bdoc\b", lowered):
+        add(".docx")
+        add(".rtf")
+    if re.search(r"\brtf\b", lowered):
+        add(".rtf")
+    if not formats:
+        add(".docx")
+    return formats
+
+
+def build_report_generated_files(base_filename: str, content: str, requested_formats: list[str] | None = None) -> list[tuple[bytes, str, str]]:
+    formats = [fmt.lower().strip() for fmt in (requested_formats or []) if fmt]
+    if not formats:
+        formats = [".docx"]
+    files: list[tuple[bytes, str, str]] = []
+    base_stem = Path(base_filename).stem or "report"
+    for ext in formats:
+        if ext not in REPORT_OUTPUT_EXTENSIONS:
+            continue
+        filename = f"{base_stem}{ext}"
+        files.append(build_generated_file_bytes_with_fallback(filename, content))
+    return files
+
+
 def save_generated_file(folder: str, filename: str, content: str) -> str:
     safe_name = Path(filename).name
     data, _, out_name = build_generated_file_bytes_with_fallback(safe_name, content)

@@ -26,7 +26,7 @@ from app.services.generated_files import build_generated_file_bytes_with_fallbac
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory, save_conversation_memory
 from app.services.project_storage import build_project_files_context
-from app.services.project_report_fallback import build_project_report_generated_file, build_project_report_fallback, _is_valid_report_text
+from app.services.project_report_fallback import build_project_report_generated_files, build_project_report_fallback, _is_valid_report_text
 from app.services.workflow_orchestration import ensure_workflow_for_message
 from app.services.workflow_executor import queue_workflow_execution, schedule_workflow_execution_fallback
 from app.services.workflow_planner import summarize_workflow_execution, build_workflow_summary_generated_file, build_workflow_task_generated_files, has_workflow_markers
@@ -503,19 +503,19 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                         project_files_context or reply_text,
                         project_name=conv_project.name if conv_project else None,
                     )
-                data, mime_type, filename = build_project_report_generated_file(
+                for file_data, mime_type, filename in build_project_report_generated_files(
                     payload.message,
                     report_text,
                     project_name=conv_project.name if conv_project else None,
                     filename_hint='project_report',
-                )
-                serialized_files.append(
-                    {
-                        'filename': filename,
-                        'data_base64': base64.b64encode(data).decode('ascii'),
-                        'mime_type': mime_type,
-                    }
-                )
+                ):
+                    serialized_files.append(
+                        {
+                            'filename': filename,
+                            'mime_type': mime_type,
+                            'data_base64': base64.b64encode(file_data).decode('ascii'),
+                        }
+                    )
                 reply_text = report_text
         except Exception:
             logger.warning('Auto report generation failed for conversation %s', conv_id)

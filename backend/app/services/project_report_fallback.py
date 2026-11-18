@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from app.services.generated_files import build_generated_file_bytes_with_fallback
+from app.services.generated_files import build_generated_file_bytes_with_fallback, build_report_generated_files, detect_requested_report_formats
 
 _GENERIC_PREFIXES = (
     'Der Bericht basiert direkt',
@@ -409,3 +409,15 @@ def build_project_report_generated_file(
     report_body = build_project_report_fallback(question, project_files_context, project_name=project_name)
     safe_name = re.sub(r'[^A-Za-z0-9._-]+', '_', (project_name or filename_hint).strip()).strip('_') or filename_hint
     return build_generated_file_bytes_with_fallback(f'{safe_name}.docx', report_body)
+
+
+def build_project_report_generated_files(
+    question: str,
+    project_files_context: str,
+    project_name: str | None = None,
+    filename_hint: str = 'project_report',
+) -> list[tuple[bytes, str, str]]:
+    report_body = build_project_report_fallback(question, project_files_context, project_name=project_name)
+    safe_name = re.sub(r'[^A-Za-z0-9._-]+', '_', (project_name or filename_hint).strip()).strip('_') or filename_hint
+    requested_formats = detect_requested_report_formats(question)
+    return build_report_generated_files(safe_name, report_body, requested_formats=requested_formats)

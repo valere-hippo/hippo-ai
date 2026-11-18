@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass, asdict
 from typing import Any
 
-from app.services.generated_files import build_generated_file_bytes_with_fallback
+from app.services.generated_files import build_generated_file_bytes_with_fallback, build_report_generated_files, detect_requested_report_formats
 
 MODEL_TAG_ALIASES = {
     "openai": "openai",
@@ -497,3 +497,14 @@ def build_workflow_summary_generated_file(plan: dict[str, Any], execution: dict[
     summary_text = build_workflow_gutachter_report_text(plan, execution)
     filename = f"{filename_hint}.docx"
     return build_generated_file_bytes_with_fallback(filename, summary_text)
+
+
+def build_workflow_summary_generated_files(
+    plan: dict[str, Any],
+    execution: dict[str, Any],
+    *,
+    filename_hint: str = "workflow_report",
+) -> list[tuple[bytes, str, str]]:
+    summary_text = build_workflow_gutachter_report_text(plan, execution)
+    requested_formats = detect_requested_report_formats(str(plan.get('source_message') or ''))
+    return build_report_generated_files(filename_hint, summary_text, requested_formats=requested_formats)

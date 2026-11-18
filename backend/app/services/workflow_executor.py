@@ -31,7 +31,7 @@ from app.services.workflow_planner import build_workflow_execution_summary
 from app.services.workflow_planner import (
     build_workflow_gutachter_report_text,
     summarize_workflow_execution,
-    build_workflow_summary_generated_file,
+    build_workflow_summary_generated_files,
     build_workflow_task_generated_files,
 )
 
@@ -529,18 +529,19 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
         }
     generated_files: list[dict[str, str]] = []
     try:
-        summary_file = build_workflow_summary_generated_file(
-            {"workflow_id": workflow.id, "final_model_tag": workflow.final_model_tag, "tasks": [task.__dict__ for task in tasks]},
+        summary_files = build_workflow_summary_generated_files(
+            {"workflow_id": workflow.id, "final_model_tag": workflow.final_model_tag, "tasks": [task.__dict__ for task in tasks], "source_message": workflow.source_message},
             {"workflow_id": workflow.id, "status": workflow.status, "results": executed},
             filename_hint="workflow_report",
         )
-        generated_files.append(
-            {
-                "filename": summary_file[2],
-                "mime_type": summary_file[1],
-                "data_base64": base64.b64encode(summary_file[0]).decode('ascii'),
-            }
-        )
+        for file_data, mime_type, filename in summary_files:
+            generated_files.append(
+                {
+                    "filename": filename,
+                    "mime_type": mime_type,
+                    "data_base64": base64.b64encode(file_data).decode('ascii'),
+                }
+            )
         for file_data, mime_type, filename in build_workflow_task_generated_files(summary):
             generated_files.append(
                 {
