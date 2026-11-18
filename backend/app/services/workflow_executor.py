@@ -19,6 +19,7 @@ from app.models.project import Project
 from app.models.workflow import AIWorkflow, AIWorkflowTask
 from app.services.conversation_memory import refresh_conversation_memory
 from app.services.attachment_segment_analysis import build_segmented_attachment_analysis_context
+from app.services.generated_files import detect_requested_report_formats
 from app.services.project_storage import build_project_files_context
 from app.services.provider_clients import (
     build_chat_completion_payload,
@@ -527,6 +528,7 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
             "error_message": failed_task.get("error_message"),
             "choices": build_fallback_model_choices(exclude_provider=str(failed_task.get("provider") or "")),
         }
+    requested_formats = detect_requested_report_formats(workflow.source_message)
     generated_files: list[dict[str, str]] = []
     try:
         summary_files = build_workflow_summary_generated_files(
@@ -542,7 +544,7 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
                     "data_base64": base64.b64encode(file_data).decode('ascii'),
                 }
             )
-        for file_data, mime_type, filename in build_workflow_task_generated_files(summary):
+        for file_data, mime_type, filename in build_workflow_task_generated_files(summary, requested_formats=requested_formats):
             generated_files.append(
                 {
                     "filename": filename,

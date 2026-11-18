@@ -459,11 +459,10 @@ def summarize_workflow_execution(plan: dict[str, Any], execution: dict[str, Any]
     return "\n".join(lines).strip()
 
 
-def build_workflow_task_generated_file(task: dict[str, Any], *, workflow_id: int | None = None, filename_hint: str | None = None) -> tuple[bytes, str, str]:
+def build_workflow_task_generated_file(task: dict[str, Any], *, workflow_id: int | None = None, filename_hint: str | None = None, requested_formats: list[str] | None = None) -> tuple[bytes, str, str]:
     task_key = str(task.get('task_key') or 'task').strip() or 'task'
     provider = str(task.get('provider') or task.get('model_tag') or 'openai').strip().lower() or 'openai'
     prefix = filename_hint or f"workflow_{workflow_id or 'x'}_{task_key}_{provider}"
-    filename = f"{prefix}.docx"
     content = str(task.get('content') or '').strip()
     if not content:
         content = str(task.get('title') or task_key).strip() or 'Workflow-Task'
@@ -480,16 +479,32 @@ def build_workflow_task_generated_file(task: dict[str, Any], *, workflow_id: int
     lines.append('')
     lines.append(content)
     body = '\n'.join(lines)
+    formats = [fmt.lower().strip() for fmt in (requested_formats or []) if fmt]
+    if not formats:
+        formats = ['.docx']
+    chosen_format = formats[0]
+    filename = f"{prefix}{chosen_format}"
     return build_generated_file_bytes_with_fallback(filename, body)
 
 
-def build_workflow_task_generated_files(summary: dict[str, Any], *, filename_hint: str | None = None) -> list[tuple[bytes, str, str]]:
+def build_workflow_task_generated_files(summary: dict[str, Any], *, filename_hint: str | None = None, requested_formats: list[str] | None = None) -> list[tuple[bytes, str, str]]:
     workflow_id = summary.get('workflow_id')
     files: list[tuple[bytes, str, str]] = []
+    formats = [fmt.lower().strip() for fmt in (requested_formats or []) if fmt]
+    if not formats:
+        formats = ['.docx']
     for task in summary.get('tasks') or []:
         if not str(task.get('content') or '').strip():
             continue
-        files.append(build_workflow_task_generated_file(task, workflow_id=workflow_id, filename_hint=filename_hint))
+        for ext in formats:
+            files.append(
+                build_workflow_task_generated_file(
+                    task,
+                    workflow_id=workflow_id,
+                    filename_hint=filename_hint,
+                    requested_formats=[ext],
+                )
+            )
     return files
 
 

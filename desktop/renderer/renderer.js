@@ -56,6 +56,7 @@ const state = {
   projectFolderDeepWarmState: new Map(),
   projectRefreshJobs: new Map(),
   activeWorkflowPolls: new Map(),
+  workflowStatusCards: new Map(),
   projectMenuCleanup: null,
   projectQuery: '',
   chatQuery: '',
@@ -103,6 +104,14 @@ function markWorkflowPollPending(workflowId, conversationId) {
   const numericWorkflowId = Number(workflowId || 0)
   if (!Number.isFinite(numericWorkflowId) || numericWorkflowId <= 0) return
   state.activeWorkflowPolls.set(numericWorkflowId, { conversationId: Number(conversationId || 0) || 0 })
+  state.workflowStatusCards.set(numericWorkflowId, {
+    workflowId: numericWorkflowId,
+    conversationId: Number(conversationId || 0) || 0,
+    status: 'running',
+    progress: 8,
+    label: `Workflow #${numericWorkflowId} läuft…`,
+    updatedAt: Date.now(),
+  })
   savePersistedWorkflowPolls()
 }
 
@@ -111,6 +120,26 @@ function clearWorkflowPollPending(workflowId) {
   if (!Number.isFinite(numericWorkflowId) || numericWorkflowId <= 0) return
   state.activeWorkflowPolls.delete(numericWorkflowId)
   savePersistedWorkflowPolls()
+}
+
+function setWorkflowStatusCard(workflowId, update) {
+  const numericWorkflowId = Number(workflowId || 0)
+  if (!Number.isFinite(numericWorkflowId) || numericWorkflowId <= 0) return
+  const current = state.workflowStatusCards.get(numericWorkflowId) || { workflowId: numericWorkflowId }
+  state.workflowStatusCards.set(numericWorkflowId, {
+    ...current,
+    ...update,
+    workflowId: numericWorkflowId,
+    updatedAt: Date.now(),
+  })
+  renderContext()
+}
+
+function removeWorkflowStatusCard(workflowId) {
+  const numericWorkflowId = Number(workflowId || 0)
+  if (!Number.isFinite(numericWorkflowId) || numericWorkflowId <= 0) return
+  state.workflowStatusCards.delete(numericWorkflowId)
+  renderContext()
 }
 
 function resumePersistedWorkflowPolls() {
@@ -1626,6 +1655,70 @@ function renderContext() {
     memoryBody.append(summaryField, factsField, memoryActions)
     memoryDisclosure.append(memorySummary, memoryBody)
     summary.appendChild(memoryDisclosure)
+  }
+
+  const workflowCards = [...state.workflowStatusCards.values()]
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+  for (const workflowCard of workflowCards) {
+    const progressCard = document.createElement('div')
+    progressCard.className = 'project-sync-progress workflow-status-card'
+    if ((workflowCard.status || '').toLowerCase() === 'completed') {
+      progressCard.classList.add('completed')
+    } else if ((workflowCard.status || '').toLowerCase() === 'failed') {
+      progressCard.classList.add('failed')
+    }
+
+    const progressHeader = document.createElement('div')
+    progressHeader.className = 'project-sync-progress-header'
+    const progressTitle = document.createElement('div')
+    progressTitle.className = 'project-sync-progress-title'
+    progressTitle.textContent = workflowCard.label || `Workflow #${workflowCard.workflowId}`
+    const progressMeta = document.createElement('div')
+    progressMeta.className = 'project-sync-progress-meta'
+    const progressValue = Math.max(0, Math.min(100, Number(workflowCard.progress || 0)))
+    progressMeta.textContent = workflowCard.status === 'completed'
+      ? `100% · Bericht bereit`
+      : workflowCard.status === 'failed'
+        ? 'Fehlgeschlagen'
+        : `${progressValue}% · Läuft`
+    progressHeader.append(progressTitle, progressMeta)
+
+    const progressBar = document.createElement('div')
+    progressBar.className = 'project-sync-progress-bar'
+    const progressFill = document.createElement('div')
+    progressFill.className = 'project-sync-progress-fill'
+    progressFill.style.width = `${progressValue}%`
+    progressBar.appendChild(progressFill)
+
+    const progressActions = document.createElement('div')
+    progressActions.className = 'project-sync-progress-actions'
+    if ((workflowCard.status || '').toLowerCase() === 'completed' && workflowCard.conversationId) {
+      const refreshButton = document.createElement('button')
+      refreshButton.type = 'button'
+      refreshButton.className = 'ghost-action'
+      refreshButton.textContent = 'Chat aktualisieren'
+      refreshButton.addEventListener('click', async () => {
+        try {
+          await openConversationById(workflowCard.conversationId)
+        } finally {
+          removeWorkflowStatusCard(workflowCard.workflowId)
+        }
+      })
+      progressActions.appendChild(refreshButton)
+    } else if ((workflowCard.status || '').toLowerCase() === 'failed') {
+      const dismissButton = document.createElement('button')
+      dismissButton.type = 'button'
+      dismissButton.className = 'ghost-action'
+      dismissButton.textContent = 'Ausblenden'
+      dismissButton.addEventListener('click', () => removeWorkflowStatusCard(workflowCard.workflowId))
+      progressActions.appendChild(dismissButton)
+    }
+
+    progressCard.append(progressHeader, progressBar)
+    if (progressActions.childElementCount) {
+      progressCard.appendChild(progressActions)
+    }
+    summary.appendChild(progressCard)
   }
 
   const syncJob = project ? state.projectRefreshJobs.get(project.id) : null
@@ -3220,6 +3313,7 @@ function logout() {
   state.currentConversationId = null
   state.draftAttachments = []
   state.activeWorkflowPolls.clear()
+  state.workflowStatusCards.clear()
   try {
     localStorage.removeItem(WORKFLOW_AUTOPOLL_STORAGE_KEY)
   } catch (error) {}
@@ -3369,29 +3463,68 @@ async function watchWorkflowCompletion(workflowId, conversationId) {
       try {
         const workflow = await apiJson(`/workflows/${numericWorkflowId}`)
         const status = String(workflow?.status || '').toLowerCase()
+        const workflowMetadata = workflow?.metadata || {}
+        const executionSummary = workflowMetadata?.execution_summary || workflowMetadata?.executionSummary || null
+        const workflowReply = String(executionSummary?.final_result?.content || workflowMetadata?.final_reply || '').trim()
+        const generatedFiles = Array.isArray(workflowMetadata?.generated_files) ? workflowMetadata.generated_files : []
+        const progressValue = status === 'completed' ? 100 : Math.min(95, 8 + (attempts * 4))
+        setWorkflowStatusCard(numericWorkflowId, {
+          conversationId: numericConversationId,
+          status: status || 'running',
+          progress: progressValue,
+          label: status === 'completed'
+            ? `Workflow #${numericWorkflowId} bereit`
+            : status === 'failed'
+              ? `Workflow #${numericWorkflowId} fehlgeschlagen`
+              : `Workflow #${numericWorkflowId} läuft…`,
+        })
         if (status === 'completed' || status === 'failed' || status === 'needs_model_choice') {
           clearWorkflowPollPending(numericWorkflowId)
-          await new Promise((resolve) => setTimeout(resolve, 1200))
-          const generatedFiles = Array.isArray(workflow?.metadata?.generated_files) ? workflow.metadata.generated_files : []
-          if (generatedFiles.length && deliveryFolder) {
-            try {
-              const savedArtifacts = await saveGeneratedArtifacts(generatedFiles, deliveryFolder)
-              if (savedArtifacts.length) {
-                showToast(`Bericht gespeichert: ${savedArtifacts.length} Datei(en)`)
-              }
-            } catch (error) {
-              console.warn('Saving workflow artifacts failed', error)
-            }
-          }
-          if (numericConversationId) {
-            await openConversationById(numericConversationId)
-          }
-          await loadConversations()
           if (status === 'completed') {
+            await new Promise((resolve) => setTimeout(resolve, 1200))
+            if (generatedFiles.length && deliveryFolder) {
+              try {
+                const savedArtifacts = await saveGeneratedArtifacts(generatedFiles, deliveryFolder)
+                if (savedArtifacts.length) {
+                  showToast(`Bericht gespeichert: ${savedArtifacts.length} Datei(en)`)
+                }
+              } catch (error) {
+                console.warn('Saving workflow artifacts failed', error)
+              }
+            }
+            const assistantReply = [workflowReply || `Workflow #${numericWorkflowId} ist fertig.`, `Workflow gespeichert (#${numericWorkflowId})`].join('\n\n')
+            if (assistantReply.trim()) {
+              renderMessage('assistant', assistantReply, {
+                generatedFiles,
+                workflowSummary: executionSummary,
+                workflowResolution: workflowMetadata?.resolution || workflowMetadata?.workflow_resolution || null,
+              })
+            }
+            setWorkflowStatusCard(numericWorkflowId, {
+              conversationId: numericConversationId,
+              status: 'completed',
+              progress: 100,
+              label: `Workflow #${numericWorkflowId} bereit`,
+            })
+            await loadConversations()
             showToast('Analyse terminée')
           } else if (status === 'needs_model_choice') {
+            setWorkflowStatusCard(numericWorkflowId, {
+              conversationId: numericConversationId,
+              status: 'failed',
+              progress: 100,
+              label: `Workflow #${numericWorkflowId} braucht Modellauswahl`,
+            })
+            await loadConversations()
             showToast('Analyse terminée: choisis un autre modèle', 'error')
           } else {
+            setWorkflowStatusCard(numericWorkflowId, {
+              conversationId: numericConversationId,
+              status: 'failed',
+              progress: 100,
+              label: `Workflow #${numericWorkflowId} fehlgeschlagen`,
+            })
+            await loadConversations()
             showToast('Analyse terminée avec une erreur', 'error')
           }
           return

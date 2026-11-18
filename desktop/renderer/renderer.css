@@ -832,21 +832,33 @@ textarea {
   gap: 8px;
 }
 
-.project-sync-progress.indeterminate .project-sync-progress-fill {
-  position: absolute;
-  left: 0;
-  width: 35%;
-  animation: project-sync-indeterminate 1.15s linear infinite;
+.project-sync-progress.fill-completed .project-sync-progress-fill,
+.workflow-status-card.completed .project-sync-progress-fill {
+  background: linear-gradient(90deg, rgba(39, 174, 96, 0.96), rgba(46, 204, 113, 0.96));
 }
 
-@keyframes project-sync-indeterminate {
-  from {
-    transform: translateX(-140%);
-  }
-  to {
-    transform: translateX(340%);
-  }
+.workflow-status-card.completed {
+  border-color: rgba(39, 174, 96, 0.26);
+  background: rgba(239, 248, 242, 0.985);
 }
+
+.workflow-status-card.completed .project-sync-progress-meta {
+  color: rgba(39, 174, 96, 0.95);
+  font-weight: 700;
+}
+
+.workflow-status-card.failed {
+  border-color: rgba(255, 107, 122, 0.24);
+}
+
+.workflow-status-card.failed .project-sync-progress-fill {
+  background: linear-gradient(90deg, rgba(255, 107, 122, 0.96), rgba(221, 72, 90, 0.96));
+}
+
+.workflow-status-card .project-sync-progress-actions {
+  margin-top: 2px;
+}
+
 
 
 .topbar-actions {

@@ -22,14 +22,14 @@ from app.services.chat_payloads import (
     looks_like_file_generation_request,
     looks_like_project_detailed_report_request,
 )
-from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files
+from app.services.generated_files import build_generated_file_bytes_with_fallback, extract_generated_files, detect_requested_report_formats
 from app.services.chat_profiles import load_chat_profile, build_chat_profile_context, build_profile_system_prompt
 from app.services.conversation_memory import build_conversation_memory_context, load_conversation_memory, refresh_conversation_memory, save_conversation_memory
 from app.services.project_storage import build_project_files_context
 from app.services.project_report_fallback import build_project_report_generated_files, build_project_report_fallback, _is_valid_report_text
 from app.services.workflow_orchestration import ensure_workflow_for_message
 from app.services.workflow_executor import queue_workflow_execution, schedule_workflow_execution_fallback
-from app.services.workflow_planner import summarize_workflow_execution, build_workflow_summary_generated_file, build_workflow_task_generated_files, has_workflow_markers
+from app.services.workflow_planner import summarize_workflow_execution, build_workflow_summary_generated_file, build_workflow_summary_generated_files, build_workflow_task_generated_files, has_workflow_markers
 from app.services.project_skills import build_project_skills_context
 from app.services.project_tools import build_tools_context
 from app.services.model_registry import resolve_chat_max_tokens
@@ -568,9 +568,10 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             )
     if workflow_plan and workflow_execution_result and isinstance(workflow_execution_result, dict) and explicit_file_request:
         try:
+            requested_formats = detect_requested_report_formats(payload.message)
             workflow_summary = workflow_execution_result.get('summary') if isinstance(workflow_execution_result.get('summary'), dict) else None
             task_sources = workflow_summary or workflow_execution_result.get('summary') or workflow_plan
-            for file_data, mime_type, filename in build_workflow_task_generated_files(task_sources if isinstance(task_sources, dict) else workflow_plan):
+            for file_data, mime_type, filename in build_workflow_task_generated_files(task_sources if isinstance(task_sources, dict) else workflow_plan, requested_formats=requested_formats):
                 serialized_files.append(
                     {
                         'filename': filename,
@@ -578,14 +579,14 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                         'data_base64': base64.b64encode(file_data).decode('ascii'),
                     }
                 )
-            file_data, mime_type, filename = build_workflow_summary_generated_file(workflow_plan, workflow_execution_result)
-            serialized_files.append(
-                {
-                    'filename': filename,
-                    'mime_type': mime_type,
-                    'data_base64': base64.b64encode(file_data).decode('ascii'),
-                }
-            )
+            for file_data, mime_type, filename in build_workflow_summary_generated_files(workflow_plan, workflow_execution_result, filename_hint='workflow_report'):
+                serialized_files.append(
+                    {
+                        'filename': filename,
+                        'mime_type': mime_type,
+                        'data_base64': base64.b64encode(file_data).decode('ascii'),
+                    }
+                )
         except Exception:
             logger.warning('workflow summary export failed for conversation %s', conv_id)
 
