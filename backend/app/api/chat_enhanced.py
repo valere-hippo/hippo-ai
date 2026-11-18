@@ -711,7 +711,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
             }
         )
 
-    explicit_file_request = False
+    explicit_file_request = looks_like_file_generation_request(payload.message, payload.attachments) or looks_like_project_detailed_report_request(payload.message)
     if conv_project is not None and not serialized_files and not workflow_queued:
         try:
             explicit_file_request = looks_like_file_generation_request(payload.message, payload.attachments) or looks_like_project_detailed_report_request(payload.message)

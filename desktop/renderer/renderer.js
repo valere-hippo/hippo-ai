@@ -3383,7 +3383,7 @@ async function watchWorkflowCompletion(workflowId, conversationId) {
               console.warn('Saving workflow artifacts failed', error)
             }
           }
-          if (numericConversationId && Number(state.currentConversationId) === numericConversationId) {
+          if (numericConversationId) {
             await openConversationById(numericConversationId)
           }
           await loadConversations()
