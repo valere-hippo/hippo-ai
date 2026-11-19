@@ -3238,8 +3238,8 @@ function renderDbStatus() {
         : status === 'empty'
           ? 'Leer'
           : status === 'ok' && configured
-            ? 'Disponible'
-            : 'Indisponible'
+            ? 'Verfügbar'
+            : 'Nicht verfügbar'
     return `
       <div class="db-status-model-row">
         <div class="db-status-model-copy">
