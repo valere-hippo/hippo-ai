@@ -7583,8 +7583,8 @@ async function sendChat() {
         attachments,
         desktop_agent: state.desktopAgentMode,
         desktop_profile: state.desktopAgentProfile,
-        project_folder_context: fileAnalysisRequested ? null : (projectFolderContext || null),
-        project_source_prefixes: fileAnalysisRequested ? null : projectSourcePrefixes,
+        project_folder_context: projectFolderContext || null,
+        project_source_prefixes: projectSourcePrefixes,
         file_direct_mode: fileAnalysisRequested && !qgisRequested,
       }),
     })
