@@ -3220,36 +3220,73 @@ function renderDbStatus() {
   const availability = state.modelAvailability
   const hasAdminData = state.user?.role === 'ADMIN' && Boolean(overview)
   const providerRows = Array.isArray(availability?.providers) ? availability.providers : []
-  if (!hasAdminData && !providerRows.length) {
-    els.dbStatus.classList.add('hidden')
-    els.dbStatus.innerHTML = ''
-    return
-  }
-
+  const providerDefinitions = [
+    { provider: 'openai', label: 'OpenAI' },
+    { provider: 'claude', label: 'Anthropic' },
+    { provider: 'deepseek', label: 'DeepSeek' },
+    { provider: 'qwen', label: 'Qwen' },
+    { provider: 'tencent', label: 'Tencent' },
+  ]
+  const providerMap = new Map(providerRows.map((item) => [String(item.provider || '').toLowerCase(), item]))
   const counts = overview?.counts || {}
-  const statusGroups = providerRows.map((item) => {
-    const providerLabel = item.label || item.provider || ''
+  const statusGroups = providerDefinitions.map((definition) => {
+    const item = providerMap.get(definition.provider) || {
+      provider: definition.provider,
+      label: definition.label,
+      configured: false,
+      status: availability ? 'not_configured' : 'loading',
+      model: null,
+    }
     const status = String(item.status || '').toLowerCase()
     const configured = Boolean(item.configured)
-    const pillLabel = status === 'not_configured'
-      ? 'Nicht konfiguriert'
-      : status === 'error'
-        ? 'Fehler'
-        : status === 'empty'
-          ? 'Leer'
-          : status === 'ok' && configured
-            ? 'Verfügbar'
-            : 'Nicht verfügbar'
+    const pillLabel = status === 'ok'
+      ? 'Verfügbar'
+      : status === 'not_configured'
+        ? 'Nicht konfiguriert'
+        : status === 'error'
+          ? 'Fehler'
+          : status === 'empty'
+            ? 'Leer'
+            : status === 'loading'
+              ? 'Wird geladen…'
+              : 'Nicht verfügbar'
     return `
       <div class="db-status-model-row">
         <div class="db-status-model-copy">
-          <strong>${escapeHtml(providerLabel || item.provider || '')}</strong>
+          <strong>${escapeHtml(item.label || definition.label || item.provider || definition.provider || '')}</strong>
           <small>${escapeHtml(item.model ? `Modell: ${item.model}` : (configured ? 'Konfiguriert' : 'Nicht konfiguriert'))}</small>
         </div>
         <span class="context-pill ${status === 'ok' ? '' : 'danger'}">${escapeHtml(pillLabel)}</span>
       </div>
     `
-  }).join('')
+  })
+
+  els.dbStatus.classList.remove('hidden')
+  els.dbStatus.innerHTML = `
+    <div class="db-status-top">
+      <div>
+        <div class="db-status-title">Modelle</div>
+        <div class="db-status-subtitle">Aktive Provider und Modellstatus · ${providerRows.length ? `${providerRows.length} Provider geprüft` : '—'}</div>
+      </div>
+      <div class="db-status-actions">
+        <button id="db-status-refresh" class="item-action-button" type="button" title="Aktualisieren">↻</button>
+        ${hasAdminData ? '<button id="db-status-logs" class="item-action-button" type="button" title="Logs öffnen">Logs</button>' : ''}
+      </div>
+    </div>
+    ${hasAdminData ? `
+      <div class="db-status-chips">
+        <span class="context-pill">U ${counts.users || 0}</span>
+        <span class="context-pill">P ${counts.projects || 0}</span>
+        <span class="context-pill">S ${counts.shared_skills || 0}</span>
+        <span class="context-pill">E ${counts.shared_tools || 0}</span>
+        <span class="context-pill">M ${counts.model_registry || 0}</span>
+        <span class="context-pill">! ${counts.model_errors || 0}</span>
+      </div>
+    ` : ''}
+    <div class="db-status-models">
+      ${statusGroups.join('')}
+    </div>
+  `
   const refreshButton = document.getElementById('db-status-refresh')
   refreshButton?.addEventListener('click', () => Promise.all([loadModelAvailability(), loadAdminOverview()]))
   const logsButton = document.getElementById('db-status-logs')
@@ -3508,6 +3545,9 @@ async function watchWorkflowCompletion(workflowId, conversationId) {
               label: `Workflow #${numericWorkflowId} bereit`,
             })
             await loadConversations()
+            if (numericConversationId) {
+              await openConversationById(numericConversationId)
+            }
             showToast('Analyse terminée')
           } else if (status === 'needs_model_choice') {
             setWorkflowStatusCard(numericWorkflowId, {
