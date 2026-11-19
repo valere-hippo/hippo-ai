@@ -314,6 +314,11 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             or looks_like_file_generation_request(payload.message, payload.attachments)
             or looks_like_project_detailed_report_request(payload.message)
         )
+        explicit_file_request = False
+        explicit_file_request = bool(
+            looks_like_file_generation_request(payload.message, payload.attachments)
+            or looks_like_project_detailed_report_request(payload.message)
+        )
         try:
             direct_context = (payload.project_folder_context or '').strip()
             if conv_project is not None and not payload.attachments:
@@ -406,10 +411,16 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         await queue_workflow_execution(db, workflow_id)
         await schedule_workflow_execution_fallback(workflow_id)
         workflow_queued = True
-        reply_text = (
-            "Analyse im Hintergrund gestartet. "
-            "Ich liefere den Bericht automatisch hier im Chat, sobald der Workflow fertig ist."
-        )
+        if fileAnalysisRequested or explicit_file_request:
+            reply_text = (
+                "Analyse im Hintergrund gestartet. "
+                "Ich liefere den Bericht automatisch hier im Chat, sobald der Workflow fertig ist."
+            )
+        else:
+            reply_text = (
+                "Chat im Hintergrund gestartet. "
+                "Ich liefere die Antwort automatisch hier im Chat, sobald der Workflow fertig ist."
+            )
     else:
         # Call Hippo model endpoint if configured (preferred)
         import httpx
@@ -579,7 +590,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
                         'data_base64': base64.b64encode(file_data).decode('ascii'),
                     }
                 )
-            for file_data, mime_type, filename in build_workflow_summary_generated_files(workflow_plan, workflow_execution_result, filename_hint='workflow_report'):
+            for file_data, mime_type, filename in build_workflow_summary_generated_files(workflow_plan, workflow_execution_result, filename_hint='workflow_report', requested_formats=requested_formats):
                 serialized_files.append(
                     {
                         'filename': filename,

@@ -1812,8 +1812,8 @@ textarea {
   overflow-wrap: anywhere;
 }
 
-.db-status-model-copy span {
-  font-size: 12px;
+.db-status-model-copy small {
+  font-size: 11px;
   color: var(--muted);
   overflow-wrap: anywhere;
 }

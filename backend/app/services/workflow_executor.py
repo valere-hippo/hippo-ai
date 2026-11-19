@@ -535,6 +535,7 @@ async def execute_workflow(db: AsyncSession, workflow_id: int) -> dict[str, Any]
             {"workflow_id": workflow.id, "final_model_tag": workflow.final_model_tag, "tasks": [task.__dict__ for task in tasks], "source_message": workflow.source_message},
             {"workflow_id": workflow.id, "status": workflow.status, "results": executed},
             filename_hint="workflow_report",
+            requested_formats=requested_formats,
         )
         for file_data, mime_type, filename in summary_files:
             generated_files.append(

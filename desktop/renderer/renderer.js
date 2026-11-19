@@ -61,6 +61,7 @@ const state = {
   projectQuery: '',
   chatQuery: '',
   adminOverview: null,
+  modelAvailability: null,
   thinkingMessage: null,
   desktopAgentMode: true,
   desktopAgentProfile: localStorage.getItem('hippo.desktop.profile') || 'generic',
@@ -3175,6 +3176,16 @@ async function loadAdminOverview() {
   renderDbStatus()
 }
 
+async function loadModelAvailability() {
+  try {
+    state.modelAvailability = await apiJson('/models/availability')
+  } catch (error) {
+    console.warn('Failed to load model availability', error)
+    state.modelAvailability = null
+  }
+  renderDbStatus()
+}
+
 async function openAdminLogs() {
   if (state.user?.role !== 'ADMIN') return
   showLoader('Logs werden geladen...')
@@ -3206,60 +3217,76 @@ async function openAdminLogs() {
 function renderDbStatus() {
   if (!els.dbStatus) return
   const overview = state.adminOverview
-  if (state.user?.role !== 'ADMIN' || !overview) {
+  const availability = state.modelAvailability
+  const hasAdminData = state.user?.role === 'ADMIN' && Boolean(overview)
+  const providerRows = Array.isArray(availability?.providers) ? availability.providers : []
+  if (!hasAdminData && !providerRows.length) {
     els.dbStatus.classList.add('hidden')
     els.dbStatus.innerHTML = ''
     return
   }
 
-  const counts = overview.counts || {}
-  const recentModels = Array.isArray(overview.recent_models) ? overview.recent_models : []
+  const counts = overview?.counts || {}
   els.dbStatus.classList.remove('hidden')
   els.dbStatus.innerHTML = `
     <div class="db-status-top">
       <div>
-        <div class="db-status-title">Datenbank</div>
-        <div class="db-status-subtitle">AI & Backend in Echtzeit · ${overview.generated_at ? new Date(overview.generated_at).toLocaleString() : '—'}</div>
+        <div class="db-status-title">Modelle</div>
+        <div class="db-status-subtitle">Aktive Provider und Modellstatus · ${availability?.providers?.length ? `${availability.providers.length} Provider geprüft` : '—'}</div>
       </div>
       <div class="db-status-actions">
         <button id="db-status-refresh" class="item-action-button" type="button" title="Aktualisieren">↻</button>
-        <button id="db-status-logs" class="item-action-button" type="button" title="Logs öffnen">Logs</button>
+        ${hasAdminData ? '<button id="db-status-logs" class="item-action-button" type="button" title="Logs öffnen">Logs</button>' : ''}
       </div>
     </div>
-    <div class="db-status-chips">
-      <span class="context-pill">U ${counts.users || 0}</span>
-      <span class="context-pill">P ${counts.projects || 0}</span>
-      <span class="context-pill">S ${counts.shared_skills || 0}</span>
-      <span class="context-pill">E ${counts.tools || 0}</span>
-      <span class="context-pill">M ${counts.model_registry || 0}</span>
-      <span class="context-pill">! ${counts.model_errors || 0}</span>
-    </div>
+    ${hasAdminData ? `
+      <div class="db-status-chips">
+        <span class="context-pill">U ${counts.users || 0}</span>
+        <span class="context-pill">P ${counts.projects || 0}</span>
+        <span class="context-pill">S ${counts.shared_skills || 0}</span>
+        <span class="context-pill">E ${counts.shared_tools || 0}</span>
+        <span class="context-pill">M ${counts.model_registry || 0}</span>
+        <span class="context-pill">! ${counts.model_errors || 0}</span>
+      </div>
+    ` : ''}
     <div class="db-status-models">
-      ${recentModels.length ? recentModels.map((item) => {
-        const isAvailable = String(item.status || '').toLowerCase() === 'ok'
-        const providerLabel = [item.provider, item.display_name].filter(Boolean).join(' · ')
+      ${providerRows.length ? providerRows.map((item) => {
+        const status = String(item.status || '').toLowerCase()
+        const isOk = status === 'ok'
+        const isConfigured = Boolean(item.configured)
+        const models = Array.isArray(item.available_models) ? item.available_models : []
+        const label = [item.label || item.provider, item.model ? `(${item.model})` : ''].filter(Boolean).join(' ')
+        const pillLabel = status === 'not_configured'
+          ? 'Nicht konfiguriert'
+          : status === 'error'
+            ? 'Fehler'
+            : status === 'empty'
+              ? 'Leer'
+              : isOk
+                ? 'Disponible'
+                : 'Indisponible'
         return `
           <div class="db-status-model-row">
             <div class="db-status-model-copy">
-              <strong>${escapeHtml(item.model_id || '')}</strong>
-              <span>${escapeHtml(providerLabel || '')}</span>
+              <strong>${escapeHtml(item.provider || '')}</strong>
+              <span>${escapeHtml(label || '')}</span>
+              ${models.length ? `<small>${escapeHtml(models.join(' · '))}</small>` : `<small>${escapeHtml(isConfigured ? 'Kein Modell gefunden' : 'Nicht konfiguriert')}</small>`}
             </div>
-            <span class="context-pill ${isAvailable ? '' : 'danger'}">${isAvailable ? 'Disponible' : 'Indisponible'}</span>
+            <span class="context-pill ${isOk ? '' : 'danger'}">${escapeHtml(pillLabel)}</span>
           </div>
         `
-      }).join('') : '<div class="muted-copy">Keine Modelle gefunden.</div>'}
+      }).join('') : '<div class="muted-copy">Keine Modell-Provider konfiguriert.</div>'}
     </div>
   `
   const refreshButton = document.getElementById('db-status-refresh')
-  refreshButton?.addEventListener('click', () => loadAdminOverview())
+  refreshButton?.addEventListener('click', () => Promise.all([loadModelAvailability(), loadAdminOverview()]))
   const logsButton = document.getElementById('db-status-logs')
   logsButton?.addEventListener('click', () => openAdminLogs())
 }
 
 async function loadWorkspace() {
   await Promise.all([loadProjects(), loadConversations(), loadUsers()])
-  await loadProfiles()
-  await loadAdminOverview()
+  await Promise.all([loadProfiles(), loadModelAvailability(), loadAdminOverview()])
   renderContext()
   resumePersistedWorkflowPolls()
 }
@@ -3314,6 +3341,8 @@ function logout() {
   state.draftAttachments = []
   state.activeWorkflowPolls.clear()
   state.workflowStatusCards.clear()
+  state.adminOverview = null
+  state.modelAvailability = null
   try {
     localStorage.removeItem(WORKFLOW_AUTOPOLL_STORAGE_KEY)
   } catch (error) {}

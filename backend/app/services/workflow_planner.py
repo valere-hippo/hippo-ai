@@ -519,7 +519,10 @@ def build_workflow_summary_generated_files(
     execution: dict[str, Any],
     *,
     filename_hint: str = "workflow_report",
+    requested_formats: list[str] | None = None,
 ) -> list[tuple[bytes, str, str]]:
     summary_text = build_workflow_gutachter_report_text(plan, execution)
-    requested_formats = detect_requested_report_formats(str(plan.get('source_message') or ''))
-    return build_report_generated_files(filename_hint, summary_text, requested_formats=requested_formats)
+    formats = [fmt.lower().strip() for fmt in (requested_formats or []) if fmt]
+    if not formats:
+        formats = detect_requested_report_formats(str(plan.get('source_message') or ''))
+    return build_report_generated_files(filename_hint, summary_text, requested_formats=formats)
