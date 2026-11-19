@@ -145,9 +145,11 @@ function removeWorkflowStatusCard(workflowId) {
 
 function resumePersistedWorkflowPolls() {
   const pending = loadPersistedWorkflowPolls()
+  const currentProject = getContextProject()
+  const currentDeliveryFolder = currentProject?.delivery_folder || null
   for (const entry of pending) {
     if (state.activeWorkflowPolls.has(entry.workflowId)) continue
-    void watchWorkflowCompletion(entry.workflowId, entry.conversationId)
+    void watchWorkflowCompletion(entry.workflowId, entry.conversationId, currentDeliveryFolder)
   }
 }
 
@@ -3482,7 +3484,7 @@ async function openConversationById(conversationId) {
   }
 }
 
-async function watchWorkflowCompletion(workflowId, conversationId) {
+async function watchWorkflowCompletion(workflowId, conversationId, deliveryFolder = null) {
   const numericWorkflowId = Number(workflowId || 0)
   const numericConversationId = Number(conversationId || 0)
   if (!Number.isFinite(numericWorkflowId) || numericWorkflowId <= 0) return
@@ -7633,7 +7635,7 @@ async function sendChat() {
       if (legacySaved) return
     }
     if (response.workflow_id) {
-      void watchWorkflowCompletion(response.workflow_id, response.conversation_id || state.currentConversationId)
+      void watchWorkflowCompletion(response.workflow_id, response.conversation_id || state.currentConversationId, deliveryFolder)
     }
   } catch (error) {
     showToast(error.message || 'Chat fehlgeschlagen', 'error')
