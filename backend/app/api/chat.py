@@ -308,6 +308,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         project_context_parts: list[str] = []
         project_files_context = ''
         analysis_attachments = list(payload.attachments or [])
+        workflow_report_requested = False
         fileAnalysisRequested = False
         fileAnalysisRequested = bool(
             getattr(payload, 'file_direct_mode', False)
@@ -319,6 +320,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
             looks_like_file_generation_request(payload.message, payload.attachments)
             or looks_like_project_detailed_report_request(payload.message)
         )
+        workflow_report_requested = bool(fileAnalysisRequested)
         try:
             direct_context = (payload.project_folder_context or '').strip()
             if conv_project is not None and not payload.attachments:
@@ -411,7 +413,7 @@ async def chat(payload: ChatRequest, db: DbSession, current_user: User = Depends
         await queue_workflow_execution(db, workflow_id)
         await schedule_workflow_execution_fallback(workflow_id)
         workflow_queued = True
-        if fileAnalysisRequested or explicit_file_request:
+        if workflow_report_requested:
             reply_text = (
                 "Analyse im Hintergrund gestartet. "
                 "Ich liefere den Bericht automatisch hier im Chat, sobald der Workflow fertig ist."

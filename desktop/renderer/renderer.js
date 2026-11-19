@@ -3227,57 +3227,29 @@ function renderDbStatus() {
   }
 
   const counts = overview?.counts || {}
-  els.dbStatus.classList.remove('hidden')
-  els.dbStatus.innerHTML = `
-    <div class="db-status-top">
-      <div>
-        <div class="db-status-title">Modelle</div>
-        <div class="db-status-subtitle">Aktive Provider und Modellstatus · ${availability?.providers?.length ? `${availability.providers.length} Provider geprüft` : '—'}</div>
+  const statusGroups = providerRows.map((item) => {
+    const providerLabel = item.label || item.provider || ''
+    const status = String(item.status || '').toLowerCase()
+    const configured = Boolean(item.configured)
+    const pillLabel = status === 'not_configured'
+      ? 'Nicht konfiguriert'
+      : status === 'error'
+        ? 'Fehler'
+        : status === 'empty'
+          ? 'Leer'
+          : status === 'ok' && configured
+            ? 'Disponible'
+            : 'Indisponible'
+    return `
+      <div class="db-status-model-row">
+        <div class="db-status-model-copy">
+          <strong>${escapeHtml(providerLabel || item.provider || '')}</strong>
+          <small>${escapeHtml(item.model ? `Modell: ${item.model}` : (configured ? 'Konfiguriert' : 'Nicht konfiguriert'))}</small>
+        </div>
+        <span class="context-pill ${status === 'ok' ? '' : 'danger'}">${escapeHtml(pillLabel)}</span>
       </div>
-      <div class="db-status-actions">
-        <button id="db-status-refresh" class="item-action-button" type="button" title="Aktualisieren">↻</button>
-        ${hasAdminData ? '<button id="db-status-logs" class="item-action-button" type="button" title="Logs öffnen">Logs</button>' : ''}
-      </div>
-    </div>
-    ${hasAdminData ? `
-      <div class="db-status-chips">
-        <span class="context-pill">U ${counts.users || 0}</span>
-        <span class="context-pill">P ${counts.projects || 0}</span>
-        <span class="context-pill">S ${counts.shared_skills || 0}</span>
-        <span class="context-pill">E ${counts.shared_tools || 0}</span>
-        <span class="context-pill">M ${counts.model_registry || 0}</span>
-        <span class="context-pill">! ${counts.model_errors || 0}</span>
-      </div>
-    ` : ''}
-    <div class="db-status-models">
-      ${providerRows.length ? providerRows.map((item) => {
-        const status = String(item.status || '').toLowerCase()
-        const isOk = status === 'ok'
-        const isConfigured = Boolean(item.configured)
-        const models = Array.isArray(item.available_models) ? item.available_models : []
-        const label = [item.label || item.provider, item.model ? `(${item.model})` : ''].filter(Boolean).join(' ')
-        const pillLabel = status === 'not_configured'
-          ? 'Nicht konfiguriert'
-          : status === 'error'
-            ? 'Fehler'
-            : status === 'empty'
-              ? 'Leer'
-              : isOk
-                ? 'Disponible'
-                : 'Indisponible'
-        return `
-          <div class="db-status-model-row">
-            <div class="db-status-model-copy">
-              <strong>${escapeHtml(item.provider || '')}</strong>
-              <span>${escapeHtml(label || '')}</span>
-              ${models.length ? `<small>${escapeHtml(models.join(' · '))}</small>` : `<small>${escapeHtml(isConfigured ? 'Kein Modell gefunden' : 'Nicht konfiguriert')}</small>`}
-            </div>
-            <span class="context-pill ${isOk ? '' : 'danger'}">${escapeHtml(pillLabel)}</span>
-          </div>
-        `
-      }).join('') : '<div class="muted-copy">Keine Modell-Provider konfiguriert.</div>'}
-    </div>
-  `
+    `
+  }).join('')
   const refreshButton = document.getElementById('db-status-refresh')
   refreshButton?.addEventListener('click', () => Promise.all([loadModelAvailability(), loadAdminOverview()]))
   const logsButton = document.getElementById('db-status-logs')

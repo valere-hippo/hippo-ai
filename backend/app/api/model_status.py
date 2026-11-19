@@ -13,7 +13,7 @@ router = APIRouter(prefix="/models", tags=["model-status"])
 
 PROVIDER_LABELS = {
     "openai": "OpenAI",
-    "claude": "Claude",
+    "claude": "Anthropic",
     "deepseek": "DeepSeek",
     "qwen": "Qwen",
     "tencent": "Tencent",
