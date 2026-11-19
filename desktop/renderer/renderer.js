@@ -3270,7 +3270,7 @@ function renderDbStatus() {
       </div>
       <div class="db-status-actions">
         <button id="db-status-refresh" class="item-action-button" type="button" title="Aktualisieren">↻</button>
-        ${hasAdminData ? '<button id="db-status-logs" class="item-action-button" type="button" title="Logs öffnen">Logs</button>' : ''}
+        <button id="db-status-logs" class="item-action-button" type="button" title="Logs öffnen">Logs</button>
       </div>
     </div>
     ${hasAdminData ? `

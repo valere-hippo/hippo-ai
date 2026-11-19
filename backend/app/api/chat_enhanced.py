@@ -552,7 +552,7 @@ async def chat_enhanced(payload: ChatRequest, db: DbSession, current_user: User 
                 source_message=payload.message,
                 metadata={
                     "source": "auto",
-                    "project_folder_context": '' if direct_file_mode else project_files_context,
+                    "project_folder_context": project_files_context or direct_context or None,
                     "project_source_prefixes": payload.project_source_prefixes,
                     "analysis_attachment_context": stored_message_content if fileAnalysisRequested and payload.attachments else '',
                     "analysis_attachments": [attachment.model_dump() for attachment in payload.attachments or []] if fileAnalysisRequested and payload.attachments else [],
