@@ -3477,8 +3477,10 @@ async function openConversationById(conversationId) {
     state.currentConversationMemory = payload.memory || null
     renderConversationMessages(payload.messages || [])
     renderContext()
+    return payload
   } catch (error) {
     showToast(error.message || 'Failed to load conversation', 'error')
+    return null
   } finally {
     hideLoader()
   }
@@ -3532,14 +3534,6 @@ async function watchWorkflowCompletion(workflowId, conversationId, deliveryFolde
                 console.warn('Saving workflow artifacts failed', error)
               }
             }
-            const assistantReply = [workflowReply || `Workflow #${numericWorkflowId} ist fertig.`, `Workflow gespeichert (#${numericWorkflowId})`].join('\n\n')
-            if (assistantReply.trim()) {
-              renderMessage('assistant', assistantReply, {
-                generatedFiles,
-                workflowSummary: executionSummary,
-                workflowResolution: workflowMetadata?.resolution || workflowMetadata?.workflow_resolution || null,
-              })
-            }
             setWorkflowStatusCard(numericWorkflowId, {
               conversationId: numericConversationId,
               status: 'completed',
@@ -3547,8 +3541,19 @@ async function watchWorkflowCompletion(workflowId, conversationId, deliveryFolde
               label: `Workflow #${numericWorkflowId} bereit`,
             })
             await loadConversations()
+            let refreshedConversation = null
             if (numericConversationId) {
-              await openConversationById(numericConversationId)
+              refreshedConversation = await openConversationById(numericConversationId)
+            }
+            if (!refreshedConversation) {
+              const assistantReply = [workflowReply || `Workflow #${numericWorkflowId} ist fertig.`, `Workflow gespeichert (#${numericWorkflowId})`].join('\n\n')
+              if (assistantReply.trim()) {
+                renderMessage('assistant', assistantReply, {
+                  generatedFiles,
+                  workflowSummary: executionSummary,
+                  workflowResolution: workflowMetadata?.resolution || workflowMetadata?.workflow_resolution || null,
+                })
+              }
             }
             showToast('Analyse terminée')
           } else if (status === 'needs_model_choice') {
